@@ -7,7 +7,7 @@ but generates XML programmatically — the template file is never modified.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import re
 import time
 from pathlib import Path
@@ -20,7 +20,7 @@ from kyvos_sm_skills.type_mapping import (
     SQL_TO_KYVOS_XML_MAP,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ── Reference template path (read-only) ──────────────────────────────────────
 

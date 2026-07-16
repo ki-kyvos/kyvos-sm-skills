@@ -227,8 +227,8 @@ class SModelXmlGenerator:
         self.hierarchy_specs = hierarchy_specs or []
         self.semantic_measures = semantic_measures or []
         self.skipped_items = skipped_items if skipped_items is not None else []
-        import logging
-        self.logger = logging.getLogger(__name__)
+        import structlog
+        self.logger = structlog.get_logger(__name__)
 
         self.compatibility_version = compatibility_version
         self.owner_appid = owner_appid

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
 from xml.etree import ElementTree as ET
 
-_logger = logging.getLogger(__name__)
+_logger = structlog.get_logger(__name__)
 
 
 @dataclass

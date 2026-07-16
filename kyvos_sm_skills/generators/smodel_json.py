@@ -8,12 +8,12 @@ sent as a form-encoded ``json`` parameter.
 from __future__ import annotations
 
 import hashlib
-import logging
+import structlog
 import re
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 _AGGREGATION_TYPE_TO_SUMMARYFUNCTION: dict[str, str] = {

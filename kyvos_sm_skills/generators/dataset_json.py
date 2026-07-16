@@ -11,14 +11,14 @@ https://docs.support.kyvosinsights.com/wiki/spaces/KD20265/pages/1102839809
 
 from __future__ import annotations
 
-import logging
+import structlog
 import re
 import uuid
 from typing import Any
 
 from kyvos_sm_skills.models import TableSpec
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class DatasetJsonGenerator:

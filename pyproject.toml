@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: Database",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["pydantic>=2.0"]
+dependencies = ["pydantic>=2.0", "structlog>=24.1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-cov", "ruff", "mypy"]
