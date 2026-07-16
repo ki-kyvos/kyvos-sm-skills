@@ -1,6 +1,7 @@
 """Tests for dataset generators (JSON + XML)."""
 
 import pytest
+
 from kyvos_sm_skills.generators.dataset_json import DatasetJsonGenerator
 from kyvos_sm_skills.generators.dataset_xml import DatasetXmlGenerator
 from kyvos_sm_skills.models import ColumnSpec, TableSpec

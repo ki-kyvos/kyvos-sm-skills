@@ -1,10 +1,9 @@
 """Tests for type mapping utilities."""
 
-import pytest
 
 from kyvos_sm_skills.type_mapping import (
-    SQL_TO_KYVOS_XML_MAP,
     _KYVOS_TYPE_ALIAS,
+    SQL_TO_KYVOS_XML_MAP,
     field_format_value,
     map_sql_to_kyvos_type,
     resolve_sql_type,

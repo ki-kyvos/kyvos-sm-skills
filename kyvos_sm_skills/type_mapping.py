@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── SQL → Kyvos type mapping ──────────────────────────────────────────────────
 # sql_type → (dataTypeName, pigDataType, dataSubTypeName, fieldDataFormatType)
 

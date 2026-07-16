@@ -1,6 +1,5 @@
 """Tests for connection generators (JSON + XML)."""
 
-import json
 import xml.etree.ElementTree as ET
 
 from kyvos_sm_skills.generators.connection_json import generate_connection_json
@@ -57,7 +56,10 @@ class TestConnectionJson:
             name="C", host="h", port=5432, database="d", username="u", password="p",
             db_type="SNOWFLAKE",
         )
-        provider_prop = next(p for p in payload["configuration"]["property"] if p["name"] == "kyvos.connection.provider")
+        provider_prop = next(
+            p for p in payload["configuration"]["property"]
+            if p["name"] == "kyvos.connection.provider"
+        )
         assert provider_prop["value"] == "SNOWFLAKE"
 
 

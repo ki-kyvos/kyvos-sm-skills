@@ -7,22 +7,18 @@ but generates XML programmatically — the template file is never modified.
 
 from __future__ import annotations
 
-import time
+import logging
 import re
+import time
 from pathlib import Path
-from typing import Any
 from xml.dom import minidom
 from xml.etree import ElementTree as ET
 
 from kyvos_sm_skills.models import ColumnSpec, TableSpec
 from kyvos_sm_skills.type_mapping import (
-    SQL_TO_KYVOS_XML_MAP,
     _KYVOS_TYPE_ALIAS,
-    field_format_value,
-    map_sql_to_kyvos_type,
-    resolve_sql_type,
+    SQL_TO_KYVOS_XML_MAP,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +60,7 @@ class DatasetXmlGenerator:
         """
         if not table.columns:
             raise ValueError(f"TableSpec.columns is empty for {table.schema_name}.{table.name}")
-            
+
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -72,7 +68,7 @@ class DatasetXmlGenerator:
         step_id = self._generate_id()
 
         category_id = self.folder_id or f"folder_{self._generate_id()}"
-        
+
         dataset_name = self._format_table_name(table.name)
         role = self._resolve_role(table)
         # sql_query = f"SELECT * FROM {table.schema_name.upper()}.{table.name.upper()}"

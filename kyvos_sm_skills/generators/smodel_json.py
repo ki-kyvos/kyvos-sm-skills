@@ -8,11 +8,10 @@ sent as a form-encoded ``json`` parameter.
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import time
 from typing import Any
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +223,10 @@ class SModelJsonGenerator:
                 h_levels = h_spec.get("levels", [])
                 levels_json: list[dict[str, Any]] = []
                 for idx, level in enumerate(h_levels):
-                    level_name = level if isinstance(level, str) else (level.get("name", "") if isinstance(level, dict) else str(level))
+                    level_name = (
+                    level if isinstance(level, str)
+                    else (level.get("name", "") if isinstance(level, dict) else str(level))
+                )
                     col_type = "CHAR"
                     for c in cols:
                         if c.get("name", "").lower() == level_name.lower():
@@ -350,7 +352,10 @@ class SModelJsonGenerator:
         for hierarchy in self.hierarchy_specs:
             h_name = hierarchy.name if hasattr(hierarchy, "name") else hierarchy.get("name", "")
             h_levels = hierarchy.levels if hasattr(hierarchy, "levels") else hierarchy.get("levels", [])
-            h_source = hierarchy.source_dataset if hasattr(hierarchy, "source_dataset") else hierarchy.get("source_dataset", "")
+            h_source = (
+            hierarchy.source_dataset if hasattr(hierarchy, "source_dataset")
+            else hierarchy.get("source_dataset", "")
+        )
             hierarchy_map.setdefault(h_source, []).append({"name": h_name, "levels": h_levels})
 
         # ------------------------------------------------------------------
@@ -406,7 +411,10 @@ class SModelJsonGenerator:
         # Group measures by source_dataset
         measures_by_dataset: dict[str, list] = {}
         for measure in self.semantic_measures:
-            src_ds = measure.source_dataset if hasattr(measure, "source_dataset") else measure.get("source_dataset", "")
+            src_ds = (
+                measure.source_dataset if hasattr(measure, "source_dataset")
+                else measure.get("source_dataset", "")
+            )
             measures_by_dataset.setdefault(src_ds, []).append(measure)
 
         for ds_name, ds_measures in measures_by_dataset.items():
@@ -427,11 +435,23 @@ class SModelJsonGenerator:
                 measure_counter += 1
 
                 measure_name = measure.name if hasattr(measure, "name") else str(measure.get("name", ""))
-                is_calculated = measure.is_calculated if hasattr(measure, "is_calculated") else measure.get("is_calculated", False)
+                is_calculated = (
+                measure.is_calculated if hasattr(measure, "is_calculated")
+                else measure.get("is_calculated", False)
+            )
                 expression = measure.expression if hasattr(measure, "expression") else measure.get("expression", "")
-                format_string = measure.format_string if hasattr(measure, "format_string") else measure.get("format_string", "#,##0.00")
-                source_column = measure.source_column if hasattr(measure, "source_column") else measure.get("source_column", "")
-                aggregation_type = measure.aggregation_type if hasattr(measure, "aggregation_type") else measure.get("aggregation_type", "sum")
+                format_string = (
+                measure.format_string if hasattr(measure, "format_string")
+                else measure.get("format_string", "#,##0.00")
+            )
+                source_column = (
+                measure.source_column if hasattr(measure, "source_column")
+                else measure.get("source_column", "")
+            )
+                aggregation_type = (
+                measure.aggregation_type if hasattr(measure, "aggregation_type")
+                else measure.get("aggregation_type", "sum")
+            )
 
                 agg_lower = aggregation_type.strip().lower()
                 summary_func = self._summary_function_for(aggregation_type)
@@ -490,8 +510,14 @@ class SModelJsonGenerator:
         # Track which Kyvos dataset names already have non-distinct-count base measures
         ds_has_base_measure: dict[str, bool] = {}
         for measure in self.semantic_measures:
-            is_calc = measure.is_calculated if hasattr(measure, "is_calculated") else measure.get("is_calculated", False)
-            agg = (measure.aggregation_type if hasattr(measure, "aggregation_type") else measure.get("aggregation_type", "sum")).strip().lower()
+            is_calc = (
+            measure.is_calculated if hasattr(measure, "is_calculated")
+            else measure.get("is_calculated", False)
+        )
+            agg = (
+            measure.aggregation_type if hasattr(measure, "aggregation_type")
+            else measure.get("aggregation_type", "sum")
+        ).strip().lower()
             src_ds = measure.source_dataset if hasattr(measure, "source_dataset") else measure.get("source_dataset", "")
             kyvos_name = self._resolve_kyvos_name(src_ds)
             if not is_calc and agg != "distinct_count":
@@ -503,7 +529,10 @@ class SModelJsonGenerator:
             if fact_kyvos.lower() in auto_discovered:
                 continue  # Already auto-discovered for this Kyvos dataset
             if fact_kyvos.lower() in existing_mg_names and ds_has_base_measure.get(fact_kyvos.lower(), False):
-                logger.debug("smodel_json_auto_discover_skip", fact=fact_name, kyvos=fact_kyvos, reason="already_has_base_measures")
+                logger.debug(
+                "smodel_json_auto_discover_skip",
+                fact=fact_name, kyvos=fact_kyvos, reason="already_has_base_measures",
+            )
                 auto_discovered.add(fact_kyvos.lower())
                 continue  # Already has base measures from spec
 
@@ -519,10 +548,16 @@ class SModelJsonGenerator:
             # Collect covered column names from existing spec measures
             covered_cols: set[str] = set()
             for measure in self.semantic_measures:
-                src_ds = measure.source_dataset if hasattr(measure, "source_dataset") else measure.get("source_dataset", "")
+                src_ds = (
+                    measure.source_dataset if hasattr(measure, "source_dataset")
+                    else measure.get("source_dataset", "")
+                )
                 src_kyvos = self._resolve_kyvos_name(src_ds)
                 if src_kyvos.lower() == fact_kyvos.lower():
-                    col = (measure.source_column if hasattr(measure, "source_column") else measure.get("source_column", "") or "").strip().lower()
+                    col = (
+                    measure.source_column if hasattr(measure, "source_column")
+                    else measure.get("source_column", "") or ""
+                ).strip().lower()
                     if col:
                         covered_cols.add(col)
 
@@ -538,7 +573,9 @@ class SModelJsonGenerator:
                     continue
                 if col_name.lower() in fact_join_keys:
                     continue
-                if col_name.lower().endswith("_key") or col_name.lower().endswith("_pk") or col_name.lower().endswith("_fk"):
+                if (col_name.lower().endswith("_key")
+                        or col_name.lower().endswith("_pk")
+                        or col_name.lower().endswith("_fk")):
                     continue
                 auto_cols.append(col)
 

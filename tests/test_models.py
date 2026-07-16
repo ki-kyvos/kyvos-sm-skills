@@ -1,6 +1,5 @@
 """Tests for kyvos_sm_skills.models — Pydantic model validation."""
 
-import pytest
 from kyvos_sm_skills.models import (
     ColumnSpec,
     DatasetSpec,

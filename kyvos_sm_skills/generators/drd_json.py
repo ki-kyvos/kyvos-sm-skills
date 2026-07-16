@@ -7,10 +7,10 @@ sent as a form-encoded ``json`` parameter.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from kyvos_sm_skills.generators.drd_xml import SimpleRel
-import logging
 
 logger = logging.getLogger(__name__)
 

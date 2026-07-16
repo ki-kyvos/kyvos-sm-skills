@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import hashlib
 import re
-from typing import Any
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 from xml.dom import minidom
 
+if TYPE_CHECKING:
+    from kyvos_sm_skills.models import MeasureSpec
 
 # ---------------------------------------------------------
 # helpers
@@ -923,7 +925,9 @@ class SModelXmlGenerator:
         ET.SubElement(all_level, "PROPERTIES")
 
         if is_pc:
-            child_col = hierarchy_def.get("child_column") or (hierarchy_def["levels"][0] if hierarchy_def["levels"] else "Child")
+            child_col = hierarchy_def.get("child_column") or (
+            hierarchy_def["levels"][0] if hierarchy_def["levels"] else "Child"
+        )
             parent_col = hierarchy_def.get("parent_column") or "Parent"
             weight_col = hierarchy_def.get("custom_rollup_weight_column")
             pc_naming = hierarchy_def.get("pc_level_naming_pattern") or "Level_*"
@@ -968,7 +972,9 @@ class SModelXmlGenerator:
             df1 = ET.SubElement(lvl, "DATAFIELD", {"QUERY_NAME": dataset_name, "QUERY_ID": query_id})
             df1.append(_cdata(child_col))
 
-            df2 = ET.SubElement(lvl, "DATAFIELD", {"QUERY_NAME": dataset_name, "QUERY_ID": query_id, "QUERY_ID_PRE": ""})
+            df2 = ET.SubElement(lvl, "DATAFIELD", {
+                "QUERY_NAME": dataset_name, "QUERY_ID": query_id, "QUERY_ID_PRE": "",
+            })
             df2.append(_cdata(child_col))
 
             parent_field = ET.SubElement(
@@ -1005,7 +1011,7 @@ class SModelXmlGenerator:
             for col_name in hierarchy_def["levels"]:
                 if used_level_cols is not None:
                     if col_name in used_level_cols:
-                        continue  # already used as a level in an earlier hierarchy – skip to avoid Kyvos duplicate-name error
+                        continue  # already used as a level – skip to avoid Kyvos duplicate-name error
                     used_level_cols.add(col_name)
                 datatype = col_datatype_by_name.get(col_name, "CHAR")
                 lvl = ET.SubElement(
@@ -1048,7 +1054,9 @@ class SModelXmlGenerator:
                 df1 = ET.SubElement(lvl, "DATAFIELD", {"QUERY_NAME": dataset_name, "QUERY_ID": query_id})
                 df1.append(_cdata(col_name))
 
-                df2 = ET.SubElement(lvl, "DATAFIELD", {"QUERY_NAME": dataset_name, "QUERY_ID": query_id, "QUERY_ID_PRE": ""})
+                df2 = ET.SubElement(lvl, "DATAFIELD", {
+                "QUERY_NAME": dataset_name, "QUERY_ID": query_id, "QUERY_ID_PRE": "",
+            })
                 df2.append(_cdata(col_name))
 
                 _append_empty_cdata(lvl, "PARENTFIELD", {"QUERY_NAME": "", "QUERY_ID": "", "DATA_TYPE": ""})
@@ -1123,19 +1131,19 @@ class SModelXmlGenerator:
             prefixes = ("fact", "dim", "bridge", "snowflake", "dataset")
             max_iterations = 10  # Prevent infinite loops
             iterations = 0
-            
+
             while iterations < max_iterations and value:
                 original_value = value
                 for prefix in prefixes:
                     if value.startswith(prefix):
                         value = value[len(prefix):]
                         break  # Only strip one prefix per iteration
-                
+
                 # If no change was made, we're done
                 if value == original_value:
                     break
                 iterations += 1
-            
+
             return value
 
         left_stripped = strip_known_prefixes(left)
@@ -1390,14 +1398,18 @@ class SModelXmlGenerator:
             expr = getattr(m, "expression", "") or ""
             for ref in re.findall(r"DistinctCount\s*\(\s*\[([^\]]+)\]", expr, re.IGNORECASE):
                 ref_lower = ref.strip().lower()
-                if ref_lower not in existing_mg_names and (ref_lower in nodes_by_name or ref_lower in self.dataset_name_to_id):
+                if ref_lower not in existing_mg_names and (
+            ref_lower in nodes_by_name or ref_lower in self.dataset_name_to_id
+        ):
                     orphan_ds_names.add(ref_lower)
             # Case 2: base measures with aggregation_type=distinct_count
             agg = (getattr(m, "aggregation_type", "") or "").strip().lower()
             if agg == "distinct_count":
                 src_ds = (getattr(m, "source_dataset", "") or "").strip().lower()
                 distinct_count_measures_found.append(f"{m.name}(src={src_ds})")
-                if src_ds and src_ds not in existing_mg_names and (src_ds in nodes_by_name or src_ds in self.dataset_name_to_id):
+                if src_ds and src_ds not in existing_mg_names and (
+            src_ds in nodes_by_name or src_ds in self.dataset_name_to_id
+        ):
                     orphan_ds_names.add(src_ds)
 
         self.logger.info(

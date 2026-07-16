@@ -6,8 +6,6 @@ kept minimal and self-contained — no dependency on any external project.
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 

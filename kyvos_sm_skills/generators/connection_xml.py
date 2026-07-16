@@ -36,15 +36,15 @@ def generate_connection_xml(
     """
     # Build JDBC URL
     jdbc_url = f"jdbc:postgresql://{host}:{port}/{database}"
-    
+
     # Create CONNECTION element (root element, no RESPONSE wrapper)
     connection = ET.Element("CONNECTION")
     connection.set("NAME", name)
     connection.set("ACCESSRIGHTS", "1")
-    
+
     # Create configuration element
     config = ET.SubElement(connection, "configuration")
-    
+
     # Define properties
     properties = [
         ("kyvos.connection.isEncryptedConnection", "true", "false"),
@@ -63,22 +63,22 @@ def generate_connection_xml(
         ("kyvos.connection.defaultsqlengine", "false", "false"),
         ("kyvos.connection.name", name, "false"),
     ]
-    
+
     # Add each property
     for prop_name, prop_value, encrypted in properties:
         prop = ET.SubElement(config, "property")
-        
+
         name_elem = ET.SubElement(prop, "name")
         name_elem.text = prop_name
-        
+
         value_elem = ET.SubElement(prop, "value")
         value_elem.text = prop_value
-        
+
         encrypted_elem = ET.SubElement(prop, "encrypted")
         encrypted_elem.text = encrypted
-    
+
     # Convert to string with proper formatting
     ET.indent(connection, space="    ")
     xml_string = ET.tostring(connection, encoding="unicode", method="xml")
-    
+
     return xml_string

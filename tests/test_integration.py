@@ -1,6 +1,5 @@
 """Integration tests: full pipeline from schema to semantic model."""
 
-import json
 
 from kyvos_sm_skills.generators.connection_json import generate_connection_json
 from kyvos_sm_skills.generators.dataset_json import DatasetJsonGenerator
@@ -82,7 +81,7 @@ class TestFullPipeline:
             dataset_name_to_id[ds_name] = ds_id
             dataset_aliases[table.name] = ds_name
 
-            from kyvos_sm_skills.type_mapping import resolve_sql_type, SQL_TO_KYVOS_XML_MAP
+            from kyvos_sm_skills.type_mapping import SQL_TO_KYVOS_XML_MAP, resolve_sql_type
             cols = []
             for col in table.columns:
                 canonical = resolve_sql_type(col.data_type)
@@ -140,9 +139,21 @@ class TestFullPipeline:
                 HierarchySpec(name="Calendar", levels=["year", "quarter", "month"], source_dataset="DimDate"),
             ],
             semantic_measures=[
-                MeasureSpec(name="Total Sales", expression="", source_dataset="FactSales", source_column="sales_amount", aggregation_type="sum"),
-                MeasureSpec(name="Total Quantity", expression="", source_dataset="FactSales", source_column="quantity", aggregation_type="sum"),
-                MeasureSpec(name="Avg Sale", expression="[Measures].[Total Sales] / [Measures].[Total Quantity]", is_calculated=True, source_dataset="FactSales"),
+                MeasureSpec(
+                    name="Total Sales", expression="",
+                    source_dataset="FactSales", source_column="sales_amount",
+                    aggregation_type="sum",
+                ),
+                MeasureSpec(
+                    name="Total Quantity", expression="",
+                    source_dataset="FactSales", source_column="quantity",
+                    aggregation_type="sum",
+                ),
+                MeasureSpec(
+                    name="Avg Sale",
+                    expression="[Measures].[Total Sales] / [Measures].[Total Quantity]",
+                    is_calculated=True, source_dataset="FactSales",
+                ),
             ],
             fact_dataset_names=fact_names,
             connected_dim_names=dim_names,
@@ -166,8 +177,16 @@ class TestFullPipeline:
                 HierarchySpec(name="Calendar", levels=["year", "quarter", "month"], source_dataset="DimDate"),
             ],
             semantic_measures=[
-                MeasureSpec(name="Total Sales", expression="", source_dataset="FactSales", source_column="sales_amount", aggregation_type="sum"),
-                MeasureSpec(name="Total Quantity", expression="", source_dataset="FactSales", source_column="quantity", aggregation_type="sum"),
+                MeasureSpec(
+                    name="Total Sales", expression="",
+                    source_dataset="FactSales", source_column="sales_amount",
+                    aggregation_type="sum",
+                ),
+                MeasureSpec(
+                    name="Total Quantity", expression="",
+                    source_dataset="FactSales", source_column="quantity",
+                    aggregation_type="sum",
+                ),
             ],
         )
         sm_xml = sm_xml_gen.generate()
@@ -175,9 +194,10 @@ class TestFullPipeline:
 
     def test_no_app_imports(self):
         """Verify no app.* imports exist in the package."""
-        import kyvos_sm_skills
         import inspect
         import os
+
+        import kyvos_sm_skills
 
         pkg_dir = os.path.dirname(inspect.getfile(kyvos_sm_skills))
         for root, dirs, files in os.walk(pkg_dir):

@@ -11,12 +11,12 @@ https://docs.support.kyvosinsights.com/wiki/spaces/KD20265/pages/1102839809
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from typing import Any
 
 from kyvos_sm_skills.models import TableSpec
-import logging
 
 logger = logging.getLogger(__name__)
 

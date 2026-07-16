@@ -45,9 +45,21 @@ def _dataset_columns():
 
 def _measures():
     return [
-        MeasureSpec(name="Total Sales", expression="", source_dataset="FactSales", source_column="sales_amount", aggregation_type="sum"),
-        MeasureSpec(name="Total Quantity", expression="", source_dataset="FactSales", source_column="quantity", aggregation_type="sum"),
-        MeasureSpec(name="Avg Order Value", expression="[Measures].[Total Sales] / [Measures].[Total Quantity]", is_calculated=True, source_dataset="FactSales"),
+        MeasureSpec(
+            name="Total Sales", expression="",
+            source_dataset="FactSales", source_column="sales_amount",
+            aggregation_type="sum",
+        ),
+        MeasureSpec(
+            name="Total Quantity", expression="",
+            source_dataset="FactSales", source_column="quantity",
+            aggregation_type="sum",
+        ),
+        MeasureSpec(
+            name="Avg Order Value",
+            expression="[Measures].[Total Sales] / [Measures].[Total Quantity]",
+            is_calculated=True, source_dataset="FactSales",
+        ),
     ]
 
 
