@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimProduct",
+  "datasetId": "0c6d8636b4c84d8a",
+  "folderName": "adventure-works",
+  "folderId": "folder_21c1eaabedda4078",
+  "datasetDetails": {
+    "connectionName": "AdventureWorksConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM adventure_works.dim_product"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

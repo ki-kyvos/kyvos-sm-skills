@@ -1,0 +1,427 @@
+{
+  "name": "AdventureWorksModel",
+  "folderName": "Semantic Models",
+  "folderId": "folder_sm",
+  "specific": {
+    "attrs": {
+      "drdName": "AdventureWorksDRD",
+      "drdId": "drd_001",
+      "modelType": "BASE",
+      "rawDataQuerying": "Disable",
+      "rawDataConnectionMode": "MANUAL",
+      "rawDataConnectionName": "AdventureWorksConnection"
+    },
+    "smObject": {
+      "dimensions": [
+        {
+          "name": "DimProduct",
+          "id": "DIM_913834",
+          "uniqueName": "DIM_913834",
+          "type": "Regular",
+          "scdType": "2",
+          "materialize": "",
+          "isAccessible": true,
+          "isVisible": true,
+          "dimToFactMapping": "ONE_TO_MANY",
+          "incrementalUpdateProperties": {
+            "processingMode": 1
+          },
+          "dataSources": [
+            {
+              "id": "ds_557338",
+              "type": "REFERENCED"
+            }
+          ],
+          "hierarchies": [
+            {
+              "name": "Product Category",
+              "uniqueName": "HIER_398184",
+              "isDefault": true,
+              "hasAll": false,
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "",
+              "hasAlternatePath": false,
+              "hasParentChildRelation": false,
+              "pcLevelCount": -1,
+              "qualifyMembers": {
+                "type": "ALL_PARENTS",
+                "value": ""
+              },
+              "dataField": {
+                "queryName": "",
+                "content": "",
+                "queryId": ""
+              },
+              "levels": [
+                {
+                  "name": "category",
+                  "uniqueName": "DIMENSION_LEVEL_204430",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimProduct",
+                    "content": "category",
+                    "queryId": "ds_557338"
+                  }
+                },
+                {
+                  "name": "subcategory",
+                  "uniqueName": "DIMENSION_LEVEL_651448",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimProduct",
+                    "content": "subcategory",
+                    "queryId": "ds_557338"
+                  }
+                },
+                {
+                  "name": "color",
+                  "uniqueName": "DIMENSION_LEVEL_021615",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimProduct",
+                    "content": "color",
+                    "queryId": "ds_557338"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": [
+            {
+              "name": "product_pk",
+              "uniqueName": "DIMENSION_ATTRIBUTE_990040",
+              "dataType": "NUMBER",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimProduct",
+                "content": "product_pk",
+                "queryId": "ds_557338"
+              }
+            },
+            {
+              "name": "product_name",
+              "uniqueName": "DIMENSION_ATTRIBUTE_084649",
+              "dataType": "CHAR",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimProduct",
+                "content": "product_name",
+                "queryId": "ds_557338"
+              }
+            },
+            {
+              "name": "list_price",
+              "uniqueName": "DIMENSION_ATTRIBUTE_794073",
+              "dataType": "NUMBER",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimProduct",
+                "content": "list_price",
+                "queryId": "ds_557338"
+              }
+            }
+          ]
+        },
+        {
+          "name": "DimDate",
+          "id": "DIM_659347",
+          "uniqueName": "DIM_659347",
+          "type": "Regular",
+          "scdType": "2",
+          "materialize": "",
+          "isAccessible": true,
+          "isVisible": true,
+          "dimToFactMapping": "ONE_TO_MANY",
+          "incrementalUpdateProperties": {
+            "processingMode": 1
+          },
+          "dataSources": [
+            {
+              "id": "ds_863863",
+              "type": "REFERENCED"
+            }
+          ],
+          "hierarchies": [
+            {
+              "name": "Calendar",
+              "uniqueName": "HIER_396716",
+              "isDefault": true,
+              "hasAll": false,
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "",
+              "hasAlternatePath": false,
+              "hasParentChildRelation": false,
+              "pcLevelCount": -1,
+              "qualifyMembers": {
+                "type": "ALL_PARENTS",
+                "value": ""
+              },
+              "dataField": {
+                "queryName": "",
+                "content": "",
+                "queryId": ""
+              },
+              "levels": [
+                {
+                  "name": "year",
+                  "uniqueName": "DIMENSION_LEVEL_015043",
+                  "dataType": "NUMBER",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "year",
+                    "queryId": "ds_863863"
+                  }
+                },
+                {
+                  "name": "quarter",
+                  "uniqueName": "DIMENSION_LEVEL_314240",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "quarter",
+                    "queryId": "ds_863863"
+                  }
+                },
+                {
+                  "name": "month",
+                  "uniqueName": "DIMENSION_LEVEL_725346",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "month",
+                    "queryId": "ds_863863"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": [
+            {
+              "name": "date_pk",
+              "uniqueName": "DIMENSION_ATTRIBUTE_896165",
+              "dataType": "NUMBER",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimDate",
+                "content": "date_pk",
+                "queryId": "ds_863863"
+              }
+            },
+            {
+              "name": "month_name",
+              "uniqueName": "DIMENSION_ATTRIBUTE_653116",
+              "dataType": "CHAR",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimDate",
+                "content": "month_name",
+                "queryId": "ds_863863"
+              }
+            }
+          ]
+        }
+      ],
+      "measures": {
+        "measure": [
+          {
+            "id": "MEASURE_0",
+            "name": "Total Sales",
+            "uniqueName": "MEASURE_0",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": true,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "0",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactInternetSales",
+              "content": "sales_amount",
+              "queryId": "ds_958791"
+            }
+          },
+          {
+            "id": "MEASURE_1",
+            "name": "Total Order Quantity",
+            "uniqueName": "MEASURE_1",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "0",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactInternetSales",
+              "content": "order_quantity",
+              "queryId": "ds_958791"
+            }
+          },
+          {
+            "id": "MEASURE_2",
+            "name": "Avg Unit Price",
+            "uniqueName": "MEASURE_2",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "1",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactInternetSales",
+              "content": "unit_price",
+              "queryId": "ds_958791"
+            }
+          },
+          {
+            "id": "MEASURE_3",
+            "name": "Avg Discount",
+            "uniqueName": "MEASURE_3",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "1",
+            "format": {
+              "useDefault": "0",
+              "content": "0.00%"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactInternetSales",
+              "content": "discount_pct",
+              "queryId": "ds_958791"
+            }
+          },
+          {
+            "id": "MEASURE_4",
+            "name": "Revenue per Unit",
+            "uniqueName": "MEASURE_4",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "",
+              "content": "",
+              "queryId": ""
+            },
+            "expression": {
+              "nonEmptyBehavior": "BY_MEASURE",
+              "content": "[Measures].[Total Sales] / [Measures].[Total Order Quantity]"
+            }
+          }
+        ]
+      },
+      "measureGroups": {
+        "measureGroup": [
+          {
+            "name": "FactInternetSales",
+            "materialize": "YES",
+            "measureId": [
+              "MEASURE_0",
+              "MEASURE_1",
+              "MEASURE_2",
+              "MEASURE_3",
+              "MEASURE_4"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

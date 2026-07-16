@@ -1,0 +1,83 @@
+{
+  "name": "HealthcareConnection",
+  "accessRights": "1",
+  "configuration": {
+    "property": [
+      {
+        "name": "kyvos.connection.isEncryptedConnection",
+        "value": "true",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.provider",
+        "value": "POSTGRES",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.properties.version",
+        "value": "11",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.rawdata.enabled",
+        "value": "true",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.sqlEngineType",
+        "value": "POSTGRES",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.rawdata.supported.engines",
+        "value": "POSTGRES",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.url",
+        "value": "jdbc:postgresql://localhost:5432/healthcare",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.lastUpdateTimestamp",
+        "value": "1784202425543",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.build.spark.read.method",
+        "value": "JAVA_JDBC",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.user",
+        "value": "demo_user",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.isRead",
+        "value": "true",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.password",
+        "value": "demo_pass",
+        "encrypted": "true"
+      },
+      {
+        "name": "kyvos.connection.driver",
+        "value": "org.postgresql.Driver",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.defaultsqlengine",
+        "value": "false",
+        "encrypted": "false"
+      },
+      {
+        "name": "kyvos.connection.name",
+        "value": "HealthcareConnection",
+        "encrypted": "false"
+      }
+    ]
+  }
+}

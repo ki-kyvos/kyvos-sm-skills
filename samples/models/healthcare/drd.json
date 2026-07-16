@@ -1,0 +1,92 @@
+{
+  "relationshipName": "HealthcareDRD",
+  "relationshipId": "",
+  "relationshipFolderName": "DRDs",
+  "relationshipFolderId": "folder_drd",
+  "details": {
+    "datasets": [
+      {
+        "datasetName": "DimDate",
+        "datasetId": "ds_863863",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimDate",
+        "isFact": false
+      },
+      {
+        "datasetName": "DimPatient",
+        "datasetId": "ds_769641",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimPatient",
+        "isFact": false
+      },
+      {
+        "datasetName": "FactAdmissions",
+        "datasetId": "ds_706470",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "FactAdmissions",
+        "isFact": true
+      }
+    ],
+    "relations": [
+      {
+        "firstDataset": "FactAdmissions",
+        "secondDataset": "DimPatient",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "patient_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "patient_pk"
+            }
+          }
+        ]
+      },
+      {
+        "firstDataset": "FactAdmissions",
+        "secondDataset": "DimDate",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "date_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "date_pk"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimProduct",
+  "datasetId": "8b54b5712af240e3",
+  "folderName": "retail-ecommerce",
+  "folderId": "folder_d88c174c4d2a485d",
+  "datasetDetails": {
+    "connectionName": "RetailEcomConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM retail_ecom.dim_product"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

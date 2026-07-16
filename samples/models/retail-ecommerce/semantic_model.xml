@@ -1,0 +1,580 @@
+<IRO ID="SMODEL_OBJECT_1784202425554" NAME="RetailEcommerceModel" TYPE="ANALYTICAL" SUBTYPE="CUBE" CATEGORY_ID="folder_sm" FOLDER_NAME="Semantic Models" FOLDER_ID="folder_sm" ACCESSRIGHTS="1" OWNERAPPID="Admin" OWNERAPPNAME="Admin" REPOSITDATE="07/16/2026 11:47:05 UTC" LINKED_ENTITY_ID="" ISPUBLIC="true" ENTITY_STATE="" DESIGN_SOURCE="DESIGNER">
+    <COMMON>
+        <DESC><![CDATA[]]></DESC>
+        <TAGS><![CDATA[]]></TAGS>
+        <COMPATIBILITY_VERSION><![CDATA[1]]></COMPATIBILITY_VERSION>
+    </COMMON>
+    <SPECIFIC>
+        <ATTRS>
+            <ATTR NAME="CUBEUNIQUENAME">
+                <VALUE><![CDATA[]]></VALUE>
+            </ATTR>
+            <ATTR NAME="CONNECTION_NAME">
+                <VALUE><![CDATA[RetailEcomConnection]]></VALUE>
+            </ATTR>
+            <ATTR NAME="ISBOUND">
+                <VALUE><![CDATA[false]]></VALUE>
+            </ATTR>
+            <ATTR NAME="RAW_DATA_QUERYING">
+                <VALUE><![CDATA[0]]></VALUE>
+            </ATTR>
+            <ATTR NAME="RAW_DATA_CONNECTION_MODE">
+                <VALUE><![CDATA[DEFAULT]]></VALUE>
+            </ATTR>
+            <ATTR NAME="MODEL_TYPE">
+                <VALUE><![CDATA[BASE]]></VALUE>
+            </ATTR>
+            <ATTR NAME="DRD_ID">
+                <VALUE><![CDATA[drd_001]]></VALUE>
+            </ATTR>
+            <ATTR NAME="DRD_NAME">
+                <VALUE><![CDATA[RetailEcommerceDRD]]></VALUE>
+            </ATTR>
+            <ATTR NAME="CO_TYPE">
+                <VALUE><![CDATA[INTERNAL]]></VALUE>
+            </ATTR>
+        </ATTRS>
+        <CUBEOBJECT VIEW_TYPE="">
+            <LAYOUT_PROPERTY>
+                <COLUMN_DETAILS><![CDATA[[{"panels":[],"style":{}},{"panels":[],"style":{"width":272.222}}]]]></COLUMN_DETAILS>
+                <PANEL_DETAILS><![CDATA[{"sourceFields":{"style":{"height":539},"id":"sourceFields"},"filters":{"style":{"height":214},"id":"filters"},"properties":{"style":{"height":324},"id":"properties"}}]]></PANEL_DETAILS>
+                <SLIDING_WINDOWS/>
+            </LAYOUT_PROPERTY>
+            <AGGREGATION_STRATEGY TYPE="CONFIGURATION_DRIVEN">
+                <CONFIGURATION_DRIVEN>
+                    <ENTITY_PROPS_VALUES>
+                        <PROPERTY>
+                            <NAME><![CDATA[kyvos.build.precompute.level.threshold]]></NAME>
+                            <VALUE><![CDATA[]]></VALUE>
+                            <MODE><![CDATA[DEFAULT]]></MODE>
+                        </PROPERTY>
+                        <PROPERTY>
+                            <NAME><![CDATA[kyvos.build.dimensions.materialize]]></NAME>
+                            <VALUE><![CDATA[]]></VALUE>
+                            <MODE><![CDATA[DEFAULT]]></MODE>
+                        </PROPERTY>
+                        <PROPERTY>
+                            <NAME><![CDATA[kyvos.build.precompute.degree]]></NAME>
+                            <VALUE><![CDATA[]]></VALUE>
+                            <MODE><![CDATA[DEFAULT]]></MODE>
+                        </PROPERTY>
+                        <PROPERTY>
+                            <NAME><![CDATA[kyvos.build.precompute.hierarchy.levels]]></NAME>
+                            <VALUE><![CDATA[]]></VALUE>
+                            <MODE><![CDATA[DEFAULT]]></MODE>
+                        </PROPERTY>
+                    </ENTITY_PROPS_VALUES>
+                </CONFIGURATION_DRIVEN>
+            </AGGREGATION_STRATEGY>
+            <WRITEBACK_SETTINGS ENABLED="false">
+                <IDENTIFIER_ELEMENTS/>
+            </WRITEBACK_SETTINGS>
+            <DIMENSIONS>
+                <DIMENSION ID="Dim_Measures" DIM_TO_FACT_MAPPING="ONE_TO_MANY" RESTRICT="false" RESTRICTVALUES="false" IS_ACCESSIBLE="true" ISVISIBLE="true" MATERIALIZE="" CUBE_VIEW_TYPE="">
+                    <INCREMENTAL_UPDATE_PROPERTIES PROCESSING_MODE="1"/>
+                    <UNIQUENAME><![CDATA[Measures]]></UNIQUENAME>
+                    <NAME><![CDATA[Measures]]></NAME>
+                    <TYPE><![CDATA[MEASURE]]></TYPE>
+                    <PREDEF_TIME_HIERARCHY><![CDATA[]]></PREDEF_TIME_HIERARCHY>
+                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                    <DEFAULTHIERARCHYUNIQUENAME><![CDATA[Measures]]></DEFAULTHIERARCHYUNIQUENAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <DATASOURCES/>
+                    <HIERARCHIES>
+                        <HIERARCHY HASALL="false" ISVISIBLE="true" ISDEFAULT="false" IS_CUSTOMCALENDAR="false" HAS_ALTERNATE_PATH="false" HAS_PARENTCHILD_RELATION="false" PC_LEVEL_COUNT="-1" IS_ACCESSIBLE="true" CUBE_VIEW_TYPE="" MATERIALIZE="" DISPLAY_FOLDER="">
+                            <UNIQUENAME><![CDATA[Measures]]></UNIQUENAME>
+                            <NAME><![CDATA[]]></NAME>
+                            <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                            <TAGS><![CDATA[]]></TAGS>
+                            <DEFAULTMEMBERUNIQUENAME><![CDATA[]]></DEFAULTMEMBERUNIQUENAME>
+                            <ALLMEMBERUNIQUENAME><![CDATA[]]></ALLMEMBERUNIQUENAME>
+                            <PREDEF_TIME_HIERARCHY><![CDATA[]]></PREDEF_TIME_HIERARCHY>
+                            <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                            <QUALIFY_MEMBERS TYPE="ALL_PARENTS"><![CDATA[]]></QUALIFY_MEMBERS>
+                            <LEVELS>
+                                <LEVEL DATATYPE="Regular" ISALL="false" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[MeasuresLevel]]></UNIQUENAME>
+                                    <NAME><![CDATA[]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                            </LEVELS>
+                        </HIERARCHY>
+                    </HIERARCHIES>
+                    <ATTRS>
+                        <ATTR DATATYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_DELETED="false" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" DISPLAY_FOLDER="" MATERIALIZE="" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                            <UNIQUENAME><![CDATA[Attribute]]></UNIQUENAME>
+                            <NAME><![CDATA[Attribute]]></NAME>
+                            <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                            <TAGS><![CDATA[]]></TAGS>
+                            <TYPE><![CDATA[]]></TYPE>
+                            <DATAFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DATAFIELD>
+                            <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                            <GEOROLE><![CDATA[]]></GEOROLE>
+                            <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                            <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                            <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                            <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                            <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                            <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                            <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                            <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                            <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                            <MEMBER_PROPERTIES/>
+                        </ATTR>
+                    </ATTRS>
+                    <CALC_MEMBERS/>
+                    <SCD TYPE="2"/>
+                </DIMENSION>
+                <DIMENSION ID="DIM_508369" DIM_TO_FACT_MAPPING="ONE_TO_MANY" RESTRICT="false" RESTRICTVALUES="false" IS_ACCESSIBLE="true" ISVISIBLE="true" MATERIALIZE="" CUBE_VIEW_TYPE="">
+                    <INCREMENTAL_UPDATE_PROPERTIES PROCESSING_MODE="1"/>
+                    <UNIQUENAME><![CDATA[DIM_508369]]></UNIQUENAME>
+                    <NAME><![CDATA[DimDate]]></NAME>
+                    <TYPE><![CDATA[Regular]]></TYPE>
+                    <PREDEF_TIME_HIERARCHY><![CDATA[]]></PREDEF_TIME_HIERARCHY>
+                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                    <DEFAULTHIERARCHYUNIQUENAME><![CDATA[H_875901]]></DEFAULTHIERARCHYUNIQUENAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <DATASOURCES>
+                        <DATASOURCE ID="ds_863863_1" TYPE="REFERENCED"/>
+                    </DATASOURCES>
+                    <HIERARCHIES>
+                        <HIERARCHY HASALL="false" ISVISIBLE="true" ISDEFAULT="false" IS_CUSTOMCALENDAR="false" HAS_ALTERNATE_PATH="false" HAS_PARENTCHILD_RELATION="false" PC_LEVEL_COUNT="-1" IS_ACCESSIBLE="true" CUBE_VIEW_TYPE="" MATERIALIZE="" DISPLAY_FOLDER="">
+                            <UNIQUENAME><![CDATA[H_875901]]></UNIQUENAME>
+                            <NAME><![CDATA[Calendar]]></NAME>
+                            <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                            <TAGS><![CDATA[]]></TAGS>
+                            <DEFAULTMEMBERUNIQUENAME><![CDATA[]]></DEFAULTMEMBERUNIQUENAME>
+                            <ALLMEMBERUNIQUENAME><![CDATA[]]></ALLMEMBERUNIQUENAME>
+                            <PREDEF_TIME_HIERARCHY><![CDATA[]]></PREDEF_TIME_HIERARCHY>
+                            <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                            <QUALIFY_MEMBERS TYPE="ALL_PARENTS"><![CDATA[]]></QUALIFY_MEMBERS>
+                            <LEVELS>
+                                <LEVEL DATATYPE="" ISALL="true" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_LEVEL_089805]]></UNIQUENAME>
+                                    <NAME><![CDATA[Hierarchy.ALL]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                                <LEVEL DATATYPE="NUMBER" ISALL="false" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_958693]]></UNIQUENAME>
+                                    <NAME><![CDATA[year]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="DimDate" QUERY_ID="ds_863863_1"><![CDATA[year]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="DimDate" QUERY_ID="ds_863863_1" QUERY_ID_PRE=""><![CDATA[year]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[2]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                                <LEVEL DATATYPE="CHAR" ISALL="false" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_456817]]></UNIQUENAME>
+                                    <NAME><![CDATA[quarter]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="DimDate" QUERY_ID="ds_863863_1"><![CDATA[quarter]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="DimDate" QUERY_ID="ds_863863_1" QUERY_ID_PRE=""><![CDATA[quarter]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                                <LEVEL DATATYPE="CHAR" ISALL="false" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_167672]]></UNIQUENAME>
+                                    <NAME><![CDATA[month]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="DimDate" QUERY_ID="ds_863863_1"><![CDATA[month]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="DimDate" QUERY_ID="ds_863863_1" QUERY_ID_PRE=""><![CDATA[month]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                            </LEVELS>
+                        </HIERARCHY>
+                    </HIERARCHIES>
+                    <ATTRS>
+                        <ATTR DATATYPE="CHAR" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_DELETED="false" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" DISPLAY_FOLDER="" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                            <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_925014]]></UNIQUENAME>
+                            <NAME><![CDATA[month_name]]></NAME>
+                            <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                            <TAGS><![CDATA[]]></TAGS>
+                            <TYPE><![CDATA[Regular]]></TYPE>
+                            <DATAFIELD QUERY_NAME="DimDate" QUERY_ID="ds_863863_1" QUERY_ID_PRE=""><![CDATA[month_name]]></DATAFIELD>
+                            <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                            <GEOROLE><![CDATA[]]></GEOROLE>
+                            <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                            <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                            <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                            <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                            <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                            <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                            <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                            <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                            <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                            <MEMBER_PROPERTIES/>
+                        </ATTR>
+                    </ATTRS>
+                    <CALC_MEMBERS/>
+                    <SCD TYPE="2"/>
+                </DIMENSION>
+                <DIMENSION ID="DIM_376212" DIM_TO_FACT_MAPPING="ONE_TO_MANY" RESTRICT="false" RESTRICTVALUES="false" IS_ACCESSIBLE="true" ISVISIBLE="true" MATERIALIZE="" CUBE_VIEW_TYPE="">
+                    <INCREMENTAL_UPDATE_PROPERTIES PROCESSING_MODE="1"/>
+                    <UNIQUENAME><![CDATA[DIM_376212]]></UNIQUENAME>
+                    <NAME><![CDATA[DimProduct]]></NAME>
+                    <TYPE><![CDATA[Regular]]></TYPE>
+                    <PREDEF_TIME_HIERARCHY><![CDATA[]]></PREDEF_TIME_HIERARCHY>
+                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                    <DEFAULTHIERARCHYUNIQUENAME><![CDATA[H_264994]]></DEFAULTHIERARCHYUNIQUENAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <DATASOURCES>
+                        <DATASOURCE ID="ds_557338_2" TYPE="REFERENCED"/>
+                    </DATASOURCES>
+                    <HIERARCHIES>
+                        <HIERARCHY HASALL="false" ISVISIBLE="true" ISDEFAULT="false" IS_CUSTOMCALENDAR="false" HAS_ALTERNATE_PATH="false" HAS_PARENTCHILD_RELATION="false" PC_LEVEL_COUNT="-1" IS_ACCESSIBLE="true" CUBE_VIEW_TYPE="" MATERIALIZE="" DISPLAY_FOLDER="">
+                            <UNIQUENAME><![CDATA[H_264994]]></UNIQUENAME>
+                            <NAME><![CDATA[Product Hierarchy]]></NAME>
+                            <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                            <TAGS><![CDATA[]]></TAGS>
+                            <DEFAULTMEMBERUNIQUENAME><![CDATA[]]></DEFAULTMEMBERUNIQUENAME>
+                            <ALLMEMBERUNIQUENAME><![CDATA[]]></ALLMEMBERUNIQUENAME>
+                            <PREDEF_TIME_HIERARCHY><![CDATA[]]></PREDEF_TIME_HIERARCHY>
+                            <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                            <QUALIFY_MEMBERS TYPE="ALL_PARENTS"><![CDATA[]]></QUALIFY_MEMBERS>
+                            <LEVELS>
+                                <LEVEL DATATYPE="" ISALL="true" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_LEVEL_306461]]></UNIQUENAME>
+                                    <NAME><![CDATA[Hierarchy.ALL]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                                <LEVEL DATATYPE="CHAR" ISALL="false" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_457077]]></UNIQUENAME>
+                                    <NAME><![CDATA[category]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2"><![CDATA[category]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2" QUERY_ID_PRE=""><![CDATA[category]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                                <LEVEL DATATYPE="CHAR" ISALL="false" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_710876]]></UNIQUENAME>
+                                    <NAME><![CDATA[subcategory]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2"><![CDATA[subcategory]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2" QUERY_ID_PRE=""><![CDATA[subcategory]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                                <LEVEL DATATYPE="CHAR" ISALL="false" SHOW_VALUES="0" MAPTYPE="" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" IS_DELETED="false" HIDE_MEMBER="0" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                                    <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_494503]]></UNIQUENAME>
+                                    <NAME><![CDATA[brand]]></NAME>
+                                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                                    <TAGS><![CDATA[]]></TAGS>
+                                    <MEMBER_PROPERTIES/>
+                                    <FULLY_QUALIFIED_NAME><![CDATA[]]></FULLY_QUALIFIED_NAME>
+                                    <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                                    <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                                    <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                                    <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                                    <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                                    <GEOROLE><![CDATA[]]></GEOROLE>
+                                    <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                                    <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2"><![CDATA[brand]]></DATAFIELD>
+                                    <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2" QUERY_ID_PRE=""><![CDATA[brand]]></DATAFIELD>
+                                    <PARENTFIELD QUERY_NAME="" QUERY_ID="" DATA_TYPE=""><![CDATA[]]></PARENTFIELD>
+                                    <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                                    <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                                    <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                                    <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                                    <PROPERTIES/>
+                                </LEVEL>
+                            </LEVELS>
+                        </HIERARCHY>
+                    </HIERARCHIES>
+                    <ATTRS>
+                        <ATTR DATATYPE="CHAR" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_DELETED="false" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" DISPLAY_FOLDER="" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                            <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_579747]]></UNIQUENAME>
+                            <NAME><![CDATA[product_id]]></NAME>
+                            <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                            <TAGS><![CDATA[]]></TAGS>
+                            <TYPE><![CDATA[Regular]]></TYPE>
+                            <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2" QUERY_ID_PRE=""><![CDATA[product_id]]></DATAFIELD>
+                            <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                            <GEOROLE><![CDATA[]]></GEOROLE>
+                            <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                            <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                            <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                            <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                            <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                            <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                            <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                            <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                            <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                            <MEMBER_PROPERTIES/>
+                        </ATTR>
+                        <ATTR DATATYPE="CHAR" IS_ACCESSIBLE="true" ISVISIBLE="true" IS_DELETED="false" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" DISPLAY_FOLDER="" MATERIALIZE="YES" PROCESS_TYPE="DATA_AND_METADATA" AGGREGATION_TYPE="BOTH">
+                            <UNIQUENAME><![CDATA[DIMENSION_ATTRIBUTE_973232]]></UNIQUENAME>
+                            <NAME><![CDATA[product_name]]></NAME>
+                            <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                            <TAGS><![CDATA[]]></TAGS>
+                            <TYPE><![CDATA[Regular]]></TYPE>
+                            <DATAFIELD QUERY_NAME="DimProduct" QUERY_ID="ds_557338_2" QUERY_ID_PRE=""><![CDATA[product_name]]></DATAFIELD>
+                            <DISPLAYFIELD QUERY_NAME="" QUERY_ID="" QUERY_ID_PRE=""><![CDATA[]]></DISPLAYFIELD>
+                            <GEOROLE><![CDATA[]]></GEOROLE>
+                            <MAPLEVEL><![CDATA[]]></MAPLEVEL>
+                            <HASTIMEINDATEFORMAT><![CDATA[false]]></HASTIMEINDATEFORMAT>
+                            <DATEDATATYPE><![CDATA[]]></DATEDATATYPE>
+                            <FIELDDATATYPE><![CDATA[]]></FIELDDATATYPE>
+                            <SUBDATATYPE><![CDATA[]]></SUBDATATYPE>
+                            <DISPLAYFIELDDATATYPE><![CDATA[]]></DISPLAYFIELDDATATYPE>
+                            <DISPLAYFIELDSUBDATATYPE><![CDATA[NONE]]></DISPLAYFIELDSUBDATATYPE>
+                            <DATEFORMAT><![CDATA[]]></DATEFORMAT>
+                            <FORMATTYPE><![CDATA[]]></FORMATTYPE>
+                            <MEMBER_PROPERTIES/>
+                        </ATTR>
+                    </ATTRS>
+                    <CALC_MEMBERS/>
+                    <SCD TYPE="2"/>
+                </DIMENSION>
+            </DIMENSIONS>
+            <MEASURE_GROUPS>
+                <DATASOURCES>
+                    <DATASOURCE ID="ds_098545_3" NAME="FactSales"/>
+                </DATASOURCES>
+                <MEASURE_GROUP NAME="FactSales" IS_ACCESSIBLE="true" ISVISIBLE="true" MATERIALIZE="">
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <MEASURE_ID><![CDATA[MEASURE_190329]]></MEASURE_ID>
+                    <MEASURE_ID><![CDATA[MEASURE_153849]]></MEASURE_ID>
+                    <MEASURE_ID><![CDATA[MEASURE_345135]]></MEASURE_ID>
+                    <MEASURE_ID><![CDATA[MEASURE_016095]]></MEASURE_ID>
+                    <MEASURE_ID><![CDATA[MEASURE_809486]]></MEASURE_ID>
+                    <MEASURE_ID><![CDATA[MEASURE_248132]]></MEASURE_ID>
+                </MEASURE_GROUP>
+            </MEASURE_GROUPS>
+            <MEASURES>
+                <MEASURE ID="MEASURE_190329" TYPE="STANDARD" DATATYPE="NUMBER" SUBTYPE="" ISVISIBLE="true" ISDEFAULT="true" RESTRICT="false" SOLVE_ORDER="0" ISADJUSTMENT="false" ADJUSTMENT_TYPE="NEGATIVE" DISPLAY_FOLDER="" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" COLOR="" IS_ACCESSIBLE="true" MATERIALIZE="">
+                    <UNIQUENAME><![CDATA[MEASURE_190329]]></UNIQUENAME>
+                    <NAME><![CDATA[Total Sales]]></NAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <FORMAT USEDEFAULT="0"><![CDATA[#,##0.00]]></FORMAT>
+                    <FORMATTYPE><![CDATA[2]]></FORMATTYPE>
+                    <UNIT/>
+                    <SUMMARYFUNCTION><![CDATA[0]]></SUMMARYFUNCTION>
+                    <ACTUALSUMMARYFUNCTION><![CDATA[0]]></ACTUALSUMMARYFUNCTION>
+                    <DATAFIELD QUERY_NAME="FactSales" QUERY_ID="ds_098545_3"><![CDATA[sales_amount]]></DATAFIELD>
+                    <MINON_MAXON_DATAFIELD QUERY_NAME="FactSales" QUERY_ID="ds_098545_3"><![CDATA[]]></MINON_MAXON_DATAFIELD>
+                    <EXPRESSION NON_EMPTY_BEHAVIOR="BY_MEASURE"><![CDATA[]]></EXPRESSION>
+                    <NON_EMPTY_MEASURES><![CDATA[]]></NON_EMPTY_MEASURES>
+                    <IS_BOUNDARY_DIST_COUNT><![CDATA[false]]></IS_BOUNDARY_DIST_COUNT>
+                    <DICTIONARY_TYPE><![CDATA[INDEX]]></DICTIONARY_TYPE>
+                </MEASURE>
+                <MEASURE ID="MEASURE_153849" TYPE="STANDARD" DATATYPE="NUMBER" SUBTYPE="" ISVISIBLE="true" ISDEFAULT="false" RESTRICT="false" SOLVE_ORDER="0" ISADJUSTMENT="false" ADJUSTMENT_TYPE="NEGATIVE" DISPLAY_FOLDER="" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" COLOR="" IS_ACCESSIBLE="true" MATERIALIZE="">
+                    <UNIQUENAME><![CDATA[MEASURE_153849]]></UNIQUENAME>
+                    <NAME><![CDATA[Total Quantity]]></NAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <FORMAT USEDEFAULT="0"><![CDATA[#,##0]]></FORMAT>
+                    <FORMATTYPE><![CDATA[2]]></FORMATTYPE>
+                    <UNIT/>
+                    <SUMMARYFUNCTION><![CDATA[0]]></SUMMARYFUNCTION>
+                    <ACTUALSUMMARYFUNCTION><![CDATA[0]]></ACTUALSUMMARYFUNCTION>
+                    <DATAFIELD QUERY_NAME="FactSales" QUERY_ID="ds_098545_3"><![CDATA[quantity]]></DATAFIELD>
+                    <MINON_MAXON_DATAFIELD QUERY_NAME="FactSales" QUERY_ID="ds_098545_3"><![CDATA[]]></MINON_MAXON_DATAFIELD>
+                    <EXPRESSION NON_EMPTY_BEHAVIOR="BY_MEASURE"><![CDATA[]]></EXPRESSION>
+                    <NON_EMPTY_MEASURES><![CDATA[]]></NON_EMPTY_MEASURES>
+                    <IS_BOUNDARY_DIST_COUNT><![CDATA[false]]></IS_BOUNDARY_DIST_COUNT>
+                    <DICTIONARY_TYPE><![CDATA[INDEX]]></DICTIONARY_TYPE>
+                </MEASURE>
+                <MEASURE ID="MEASURE_345135" TYPE="STANDARD" DATATYPE="NUMBER" SUBTYPE="" ISVISIBLE="true" ISDEFAULT="false" RESTRICT="false" SOLVE_ORDER="0" ISADJUSTMENT="false" ADJUSTMENT_TYPE="NEGATIVE" DISPLAY_FOLDER="" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" COLOR="" IS_ACCESSIBLE="true" MATERIALIZE="">
+                    <UNIQUENAME><![CDATA[MEASURE_345135]]></UNIQUENAME>
+                    <NAME><![CDATA[Total Discount]]></NAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <FORMAT USEDEFAULT="0"><![CDATA[#,##0.00]]></FORMAT>
+                    <FORMATTYPE><![CDATA[2]]></FORMATTYPE>
+                    <UNIT/>
+                    <SUMMARYFUNCTION><![CDATA[0]]></SUMMARYFUNCTION>
+                    <ACTUALSUMMARYFUNCTION><![CDATA[0]]></ACTUALSUMMARYFUNCTION>
+                    <DATAFIELD QUERY_NAME="FactSales" QUERY_ID="ds_098545_3"><![CDATA[discount_amount]]></DATAFIELD>
+                    <MINON_MAXON_DATAFIELD QUERY_NAME="FactSales" QUERY_ID="ds_098545_3"><![CDATA[]]></MINON_MAXON_DATAFIELD>
+                    <EXPRESSION NON_EMPTY_BEHAVIOR="BY_MEASURE"><![CDATA[]]></EXPRESSION>
+                    <NON_EMPTY_MEASURES><![CDATA[]]></NON_EMPTY_MEASURES>
+                    <IS_BOUNDARY_DIST_COUNT><![CDATA[false]]></IS_BOUNDARY_DIST_COUNT>
+                    <DICTIONARY_TYPE><![CDATA[INDEX]]></DICTIONARY_TYPE>
+                </MEASURE>
+                <MEASURE ID="MEASURE_016095" TYPE="STANDARD" DATATYPE="NUMBER" SUBTYPE="" ISVISIBLE="true" ISDEFAULT="false" RESTRICT="false" SOLVE_ORDER="0" ISADJUSTMENT="false" ADJUSTMENT_TYPE="NEGATIVE" DISPLAY_FOLDER="" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" COLOR="" IS_ACCESSIBLE="true" MATERIALIZE="">
+                    <UNIQUENAME><![CDATA[MEASURE_016095]]></UNIQUENAME>
+                    <NAME><![CDATA[Net Sales]]></NAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <FORMAT USEDEFAULT="0"><![CDATA[#,##0.00]]></FORMAT>
+                    <FORMATTYPE><![CDATA[2]]></FORMATTYPE>
+                    <UNIT/>
+                    <SUMMARYFUNCTION><![CDATA[]]></SUMMARYFUNCTION>
+                    <ACTUALSUMMARYFUNCTION><![CDATA[]]></ACTUALSUMMARYFUNCTION>
+                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                    <MINON_MAXON_DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></MINON_MAXON_DATAFIELD>
+                    <EXPRESSION NON_EMPTY_BEHAVIOR="BY_MEASURE"><![CDATA[[Measures].[Total Sales] - [Measures].[Total Discount]]]></EXPRESSION>
+                    <NON_EMPTY_MEASURES><![CDATA[]]></NON_EMPTY_MEASURES>
+                    <IS_BOUNDARY_DIST_COUNT><![CDATA[false]]></IS_BOUNDARY_DIST_COUNT>
+                    <DICTIONARY_TYPE><![CDATA[INDEX]]></DICTIONARY_TYPE>
+                </MEASURE>
+                <MEASURE ID="MEASURE_809486" TYPE="STANDARD" DATATYPE="NUMBER" SUBTYPE="" ISVISIBLE="true" ISDEFAULT="false" RESTRICT="false" SOLVE_ORDER="0" ISADJUSTMENT="false" ADJUSTMENT_TYPE="NEGATIVE" DISPLAY_FOLDER="" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" COLOR="" IS_ACCESSIBLE="true" MATERIALIZE="">
+                    <UNIQUENAME><![CDATA[MEASURE_809486]]></UNIQUENAME>
+                    <NAME><![CDATA[Avg Order Value]]></NAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <FORMAT USEDEFAULT="0"><![CDATA[#,##0.00]]></FORMAT>
+                    <FORMATTYPE><![CDATA[2]]></FORMATTYPE>
+                    <UNIT/>
+                    <SUMMARYFUNCTION><![CDATA[]]></SUMMARYFUNCTION>
+                    <ACTUALSUMMARYFUNCTION><![CDATA[]]></ACTUALSUMMARYFUNCTION>
+                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                    <MINON_MAXON_DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></MINON_MAXON_DATAFIELD>
+                    <EXPRESSION NON_EMPTY_BEHAVIOR="BY_MEASURE"><![CDATA[[Measures].[Total Sales] / [Measures].[Total Quantity]]]></EXPRESSION>
+                    <NON_EMPTY_MEASURES><![CDATA[]]></NON_EMPTY_MEASURES>
+                    <IS_BOUNDARY_DIST_COUNT><![CDATA[false]]></IS_BOUNDARY_DIST_COUNT>
+                    <DICTIONARY_TYPE><![CDATA[INDEX]]></DICTIONARY_TYPE>
+                </MEASURE>
+                <MEASURE ID="MEASURE_248132" TYPE="STANDARD" DATATYPE="NUMBER" SUBTYPE="" ISVISIBLE="true" ISDEFAULT="false" RESTRICT="false" SOLVE_ORDER="0" ISADJUSTMENT="false" ADJUSTMENT_TYPE="NEGATIVE" DISPLAY_FOLDER="" IS_KEYELEMENT="false" IS_VISIBLE_CONVERSATIONAL="true" COLOR="" IS_ACCESSIBLE="true" MATERIALIZE="">
+                    <UNIQUENAME><![CDATA[MEASURE_248132]]></UNIQUENAME>
+                    <NAME><![CDATA[Discount Rate]]></NAME>
+                    <DESCRIPTION><![CDATA[]]></DESCRIPTION>
+                    <TAGS><![CDATA[]]></TAGS>
+                    <FORMAT USEDEFAULT="0"><![CDATA[0.00%]]></FORMAT>
+                    <FORMATTYPE><![CDATA[2]]></FORMATTYPE>
+                    <UNIT/>
+                    <SUMMARYFUNCTION><![CDATA[]]></SUMMARYFUNCTION>
+                    <ACTUALSUMMARYFUNCTION><![CDATA[]]></ACTUALSUMMARYFUNCTION>
+                    <DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></DATAFIELD>
+                    <MINON_MAXON_DATAFIELD QUERY_NAME="" QUERY_ID=""><![CDATA[]]></MINON_MAXON_DATAFIELD>
+                    <EXPRESSION NON_EMPTY_BEHAVIOR="BY_MEASURE"><![CDATA[[Measures].[Total Discount] / [Measures].[Total Sales]]]></EXPRESSION>
+                    <NON_EMPTY_MEASURES><![CDATA[]]></NON_EMPTY_MEASURES>
+                    <IS_BOUNDARY_DIST_COUNT><![CDATA[false]]></IS_BOUNDARY_DIST_COUNT>
+                    <DICTIONARY_TYPE><![CDATA[INDEX]]></DICTIONARY_TYPE>
+                </MEASURE>
+            </MEASURES>
+            <LINK_DESIGN_LAYOUT/>
+        </CUBEOBJECT>
+        <DELTA_INFO/>
+    </SPECIFIC>
+</IRO>

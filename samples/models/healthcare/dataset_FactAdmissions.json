@@ -1,0 +1,23 @@
+{
+  "datasetName": "FactAdmissions",
+  "datasetId": "b1a505c877eb41f6",
+  "folderName": "healthcare",
+  "folderId": "folder_b636496786954dff",
+  "datasetDetails": {
+    "connectionName": "HealthcareConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM healthcare.fact_admissions"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

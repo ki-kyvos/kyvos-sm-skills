@@ -1,0 +1,388 @@
+{
+  "name": "RetailBankingModel",
+  "folderName": "Semantic Models",
+  "folderId": "folder_sm",
+  "specific": {
+    "attrs": {
+      "drdName": "RetailBankingDRD",
+      "drdId": "drd_001",
+      "modelType": "BASE",
+      "rawDataQuerying": "Disable",
+      "rawDataConnectionMode": "MANUAL",
+      "rawDataConnectionName": "RetailBankingConnection"
+    },
+    "smObject": {
+      "dimensions": [
+        {
+          "name": "DimCustomer",
+          "id": "DIM_756031",
+          "uniqueName": "DIM_756031",
+          "type": "Regular",
+          "scdType": "2",
+          "materialize": "",
+          "isAccessible": true,
+          "isVisible": true,
+          "dimToFactMapping": "ONE_TO_MANY",
+          "incrementalUpdateProperties": {
+            "processingMode": 1
+          },
+          "dataSources": [
+            {
+              "id": "ds_927968",
+              "type": "REFERENCED"
+            }
+          ],
+          "hierarchies": [
+            {
+              "name": "Customer Geography",
+              "uniqueName": "HIER_140501",
+              "isDefault": true,
+              "hasAll": false,
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "",
+              "hasAlternatePath": false,
+              "hasParentChildRelation": false,
+              "pcLevelCount": -1,
+              "qualifyMembers": {
+                "type": "ALL_PARENTS",
+                "value": ""
+              },
+              "dataField": {
+                "queryName": "",
+                "content": "",
+                "queryId": ""
+              },
+              "levels": [
+                {
+                  "name": "region",
+                  "uniqueName": "DIMENSION_LEVEL_790567",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimCustomer",
+                    "content": "region",
+                    "queryId": "ds_927968"
+                  }
+                },
+                {
+                  "name": "segment",
+                  "uniqueName": "DIMENSION_LEVEL_043680",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimCustomer",
+                    "content": "segment",
+                    "queryId": "ds_927968"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": [
+            {
+              "name": "customer_pk",
+              "uniqueName": "DIMENSION_ATTRIBUTE_426155",
+              "dataType": "NUMBER",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimCustomer",
+                "content": "customer_pk",
+                "queryId": "ds_927968"
+              }
+            },
+            {
+              "name": "customer_id",
+              "uniqueName": "DIMENSION_ATTRIBUTE_386246",
+              "dataType": "CHAR",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimCustomer",
+                "content": "customer_id",
+                "queryId": "ds_927968"
+              }
+            },
+            {
+              "name": "customer_name",
+              "uniqueName": "DIMENSION_ATTRIBUTE_402032",
+              "dataType": "CHAR",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimCustomer",
+                "content": "customer_name",
+                "queryId": "ds_927968"
+              }
+            }
+          ]
+        },
+        {
+          "name": "DimDate",
+          "id": "DIM_462762",
+          "uniqueName": "DIM_462762",
+          "type": "Regular",
+          "scdType": "2",
+          "materialize": "",
+          "isAccessible": true,
+          "isVisible": true,
+          "dimToFactMapping": "ONE_TO_MANY",
+          "incrementalUpdateProperties": {
+            "processingMode": 1
+          },
+          "dataSources": [
+            {
+              "id": "ds_863863",
+              "type": "REFERENCED"
+            }
+          ],
+          "hierarchies": [
+            {
+              "name": "Calendar",
+              "uniqueName": "HIER_396716",
+              "isDefault": true,
+              "hasAll": false,
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "",
+              "hasAlternatePath": false,
+              "hasParentChildRelation": false,
+              "pcLevelCount": -1,
+              "qualifyMembers": {
+                "type": "ALL_PARENTS",
+                "value": ""
+              },
+              "dataField": {
+                "queryName": "",
+                "content": "",
+                "queryId": ""
+              },
+              "levels": [
+                {
+                  "name": "year",
+                  "uniqueName": "DIMENSION_LEVEL_015043",
+                  "dataType": "NUMBER",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "year",
+                    "queryId": "ds_863863"
+                  }
+                },
+                {
+                  "name": "quarter",
+                  "uniqueName": "DIMENSION_LEVEL_314240",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "quarter",
+                    "queryId": "ds_863863"
+                  }
+                },
+                {
+                  "name": "month",
+                  "uniqueName": "DIMENSION_LEVEL_725346",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "month",
+                    "queryId": "ds_863863"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": [
+            {
+              "name": "date_pk",
+              "uniqueName": "DIMENSION_ATTRIBUTE_896165",
+              "dataType": "NUMBER",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimDate",
+                "content": "date_pk",
+                "queryId": "ds_863863"
+              }
+            },
+            {
+              "name": "month_name",
+              "uniqueName": "DIMENSION_ATTRIBUTE_653116",
+              "dataType": "CHAR",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimDate",
+                "content": "month_name",
+                "queryId": "ds_863863"
+              }
+            }
+          ]
+        }
+      ],
+      "measures": {
+        "measure": [
+          {
+            "id": "MEASURE_0",
+            "name": "Total Transaction Amount",
+            "uniqueName": "MEASURE_0",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": true,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "0",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactTransactions",
+              "content": "transaction_amount",
+              "queryId": "ds_914591"
+            }
+          },
+          {
+            "id": "MEASURE_1",
+            "name": "Total Fees",
+            "uniqueName": "MEASURE_1",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "0",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactTransactions",
+              "content": "fee_amount",
+              "queryId": "ds_914591"
+            }
+          },
+          {
+            "id": "MEASURE_2",
+            "name": "Transaction Count",
+            "uniqueName": "MEASURE_2",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "0",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactTransactions",
+              "content": "transaction_count",
+              "queryId": "ds_914591"
+            }
+          },
+          {
+            "id": "MEASURE_3",
+            "name": "Net Revenue",
+            "uniqueName": "MEASURE_3",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "",
+              "content": "",
+              "queryId": ""
+            },
+            "expression": {
+              "nonEmptyBehavior": "BY_MEASURE",
+              "content": "[Measures].[Total Transaction Amount] + [Measures].[Total Fees]"
+            }
+          }
+        ]
+      },
+      "measureGroups": {
+        "measureGroup": [
+          {
+            "name": "FactTransactions",
+            "materialize": "YES",
+            "measureId": [
+              "MEASURE_0",
+              "MEASURE_1",
+              "MEASURE_2",
+              "MEASURE_3"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

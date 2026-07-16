@@ -1,0 +1,92 @@
+{
+  "relationshipName": "TelecomDRD",
+  "relationshipId": "",
+  "relationshipFolderName": "DRDs",
+  "relationshipFolderId": "folder_drd",
+  "details": {
+    "datasets": [
+      {
+        "datasetName": "DimDate",
+        "datasetId": "ds_863863",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimDate",
+        "isFact": false
+      },
+      {
+        "datasetName": "DimRegion",
+        "datasetId": "ds_121956",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimRegion",
+        "isFact": false
+      },
+      {
+        "datasetName": "FactUsage",
+        "datasetId": "ds_845272",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "FactUsage",
+        "isFact": true
+      }
+    ],
+    "relations": [
+      {
+        "firstDataset": "FactUsage",
+        "secondDataset": "DimRegion",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "region_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "region_pk"
+            }
+          }
+        ]
+      },
+      {
+        "firstDataset": "FactUsage",
+        "secondDataset": "DimDate",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "date_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "date_pk"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

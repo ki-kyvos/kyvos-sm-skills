@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimPatient",
+  "datasetId": "fe612a36ed904a89",
+  "folderName": "healthcare",
+  "folderId": "folder_f39fe444048d46e6",
+  "datasetDetails": {
+    "connectionName": "HealthcareConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM healthcare.dim_patient"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

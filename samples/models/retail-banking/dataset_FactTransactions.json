@@ -1,0 +1,23 @@
+{
+  "datasetName": "FactTransactions",
+  "datasetId": "c1dabe0a0ead4cce",
+  "folderName": "retail-banking",
+  "folderId": "folder_baf99991cdf54abb",
+  "datasetDetails": {
+    "connectionName": "RetailBankingConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM retail_banking.fact_transactions"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

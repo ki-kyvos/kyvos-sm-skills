@@ -1,0 +1,92 @@
+{
+  "relationshipName": "RetailBankingDRD",
+  "relationshipId": "",
+  "relationshipFolderName": "DRDs",
+  "relationshipFolderId": "folder_drd",
+  "details": {
+    "datasets": [
+      {
+        "datasetName": "DimCustomer",
+        "datasetId": "ds_927968",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimCustomer",
+        "isFact": false
+      },
+      {
+        "datasetName": "DimDate",
+        "datasetId": "ds_863863",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimDate",
+        "isFact": false
+      },
+      {
+        "datasetName": "FactTransactions",
+        "datasetId": "ds_914591",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "FactTransactions",
+        "isFact": true
+      }
+    ],
+    "relations": [
+      {
+        "firstDataset": "FactTransactions",
+        "secondDataset": "DimCustomer",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "customer_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "customer_pk"
+            }
+          }
+        ]
+      },
+      {
+        "firstDataset": "FactTransactions",
+        "secondDataset": "DimDate",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "date_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "date_pk"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

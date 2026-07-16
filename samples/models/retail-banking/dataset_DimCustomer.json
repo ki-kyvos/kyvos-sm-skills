@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimCustomer",
+  "datasetId": "717464f613244e95",
+  "folderName": "retail-banking",
+  "folderId": "folder_d307a28ccc014c9c",
+  "datasetDetails": {
+    "connectionName": "RetailBankingConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM retail_banking.dim_customer"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

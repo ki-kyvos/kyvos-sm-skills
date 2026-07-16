@@ -1,0 +1,23 @@
+{
+  "datasetName": "FactSales",
+  "datasetId": "95ac9ee95b444cdb",
+  "folderName": "retail-ecommerce",
+  "folderId": "folder_31b756c2335e4f75",
+  "datasetDetails": {
+    "connectionName": "RetailEcomConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM retail_ecom.fact_sales"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

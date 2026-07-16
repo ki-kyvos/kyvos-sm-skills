@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimDate",
+  "datasetId": "0edec8b0bcd045ac",
+  "folderName": "healthcare",
+  "folderId": "folder_5615ef7e482d4f02",
+  "datasetDetails": {
+    "connectionName": "HealthcareConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM healthcare.dim_date"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

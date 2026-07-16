@@ -1,0 +1,45 @@
+[project]
+name = "kyvos-sm-skills"
+version = "0.1.0"
+description = "Claude skills + generators for Kyvos semantic model creation"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.11"
+authors = [{name = "Kyvos Open Source"}]
+keywords = ["kyvos", "semantic-model", "claude", "ai", "bi", "olap"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = ["pydantic>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov", "ruff", "mypy"]
+
+[project.urls]
+Homepage = "https://github.com/<ORG>/kyvos-sm-skills"
+Repository = "https://github.com/<ORG>/kyvos-sm-skills"
+Issues = "https://github.com/<ORG>/kyvos-sm-skills/issues"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["kyvos_sm_skills*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

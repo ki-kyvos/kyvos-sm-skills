@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimDate",
+  "datasetId": "59875cb6a12c4283",
+  "folderName": "adventure-works",
+  "folderId": "folder_57db391ffc024bb5",
+  "datasetDetails": {
+    "connectionName": "AdventureWorksConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM adventure_works.dim_date"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

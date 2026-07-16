@@ -1,0 +1,706 @@
+{
+  "lastModifiedTimeStamp": "1731400794014",
+  "ownerAppId": "Admin",
+  "description": "",
+  "sortObj": "",
+  "type": "DRD_OBJECT",
+  "categoryName": "Adventure Works Trial",
+  "tags": "",
+  "layout": {
+    "columns": [
+      {
+        "panels": [],
+        "style": {}
+      },
+      {
+        "panels": [],
+        "style": {
+          "width": 343.944
+        }
+      }
+    ],
+    "panels": {
+      "files": {
+        "style": {
+          "height": 855
+        },
+        "id": "files"
+      },
+      "datasets": {
+        "style": {},
+        "id": "datasets"
+      },
+      "properties": {
+        "style": {
+          "height": 665.99
+        },
+        "id": "properties",
+        "autoFit": false
+      }
+    }
+  },
+  "relationships": [
+    {
+      "secondNodeId": "16124254370525127075079141922285_14",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "salesterritorykey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "salesterritorykey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124246825960127081072115099166_19",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124246825960127081072115099166_19",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124244235286127048078114432767_11",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "customerkey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "customerkey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16243739432324127074048196452553_29",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16243739432324127074048196452553_29",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124254370525127075079141922285_14",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "salesterritorykey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "salesterritorykey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16243739432324127074048196452553_29",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16243739432324127074048196452553_29",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124243594339127073068134924610_3",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "currencykey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "currencykey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124251614478127080047146610140_8",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124251614478127080047146610140_8",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124243594339127073068134924610_3",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "currencykey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "currencykey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16243739432324127074048196452553_29",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16243739432324127074048196452553_29",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124254748048127041070133187930_9",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "scenariokey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "scenariokey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124256403414127060036130252302_4",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124256403414127060036130252302_4",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124246825960127081072115099166_19",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "employeekey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "employeekey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124258023299127062054139810618_21",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124258023299127062054139810618_21",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124251614478127080047146610140_8",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "organizationkey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "organizationkey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124256403414127060036130252302_4",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124256403414127060036130252302_4",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16293653567195127077049112444111_31",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "productsubcategorykey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "productsubcategorykey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16293615031059127049074170045515_30",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16293615031059127049074170045515_30",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16293615031059127049074170045515_30",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "productkey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "productkey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16243739432324127074048196452553_29",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16243739432324127074048196452553_29",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124245237099127016021119183682_1",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "orderdatekey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "datekey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16243739432324127074048196452553_29",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16243739432324127074048196452553_29",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124243594339127073068134924610_3",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "currencykey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "currencykey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124255918738127051055177678254_2",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124255918738127051055177678254_2",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124245237099127016021119183682_1",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "datekey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "datekey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124255918738127051055177678254_2",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124255918738127051055177678254_2",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124245237099127016021119183682_27",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "duedatekey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "datekey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16243739432324127074048196452553_29",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16243739432324127074048196452553_29",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124246302888127040033126248643_6",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "departmentgroupkey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "departmentgroupkey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124256403414127060036130252302_4",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124256403414127060036130252302_4",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124245237099127016021119183682_1",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "datekey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "datekey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124258023299127062054139810618_21",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124258023299127062054139810618_21",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124245237099127016021119183682_28",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "shipdatekey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "datekey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16243739432324127074048196452553_29",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16243739432324127074048196452553_29",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124245237099127016021119183682_1",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "datekey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "datekey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124256403414127060036130252302_4",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124256403414127060036130252302_4",
+      "type": "ONE_TO_MANY"
+    },
+    {
+      "secondNodeId": "16124226128082127033074146488940_5",
+      "joinObj": {
+        "joinByList": [
+          {
+            "firstNodeField": "accountkey",
+            "secondNodeSecondaryField": "",
+            "secondNodeField": "accountkey",
+            "operator": "EQUAL_TO",
+            "firstNodeSecondaryField": ""
+          }
+        ],
+        "type": "INNER"
+      },
+      "sourceNodeId": "16124256403414127060036130252302_4",
+      "name": "undefined",
+      "description": "",
+      "firstNodeId": "16124256403414127060036130252302_4",
+      "type": "ONE_TO_MANY"
+    }
+  ],
+  "nodes": [
+    {
+      "aliasName": "DimProduct",
+      "dataSetId": "17313353054074127082083141734249",
+      "id": "16293615031059127049074170045515_30",
+      "type": ""
+    },
+    {
+      "aliasName": "DimDate",
+      "dataSetId": "17313348281331127012081181394288",
+      "id": "16124245237099127016021119183682_28",
+      "type": ""
+    },
+    {
+      "aliasName": "FactCurrencyRate",
+      "dataSetId": "17313356653258127076084160923939",
+      "id": "16124255918738127051055177678254_2",
+      "type": "FACT"
+    },
+    {
+      "aliasName": "DimDate2",
+      "dataSetId": "17313433855597127091055115876291",
+      "id": "16124245237099127016021119183682_27",
+      "type": ""
+    },
+    {
+      "aliasName": "DimProductSubCategory",
+      "dataSetId": "17313353670961127053024133238076",
+      "id": "16293653567195127077049112444111_31",
+      "type": ""
+    },
+    {
+      "aliasName": "DimDate1",
+      "dataSetId": "17313433828004127061029145329359",
+      "id": "16124245237099127016021119183682_1",
+      "type": ""
+    },
+    {
+      "aliasName": "DimEmployee",
+      "dataSetId": "17313350604922127077058132391993",
+      "id": "16124246825960127081072115099166_19",
+      "type": ""
+    },
+    {
+      "aliasName": "DimDepartmentGroup",
+      "dataSetId": "17313349924373127061060129245370",
+      "id": "16124246302888127040033126248643_6",
+      "type": ""
+    },
+    {
+      "aliasName": "DimAccount",
+      "dataSetId": "17313323193736127013015130559065",
+      "id": "16124226128082127033074146488940_5",
+      "type": ""
+    },
+    {
+      "aliasName": "DimCurrency",
+      "dataSetId": "17313327018404127010036159895064",
+      "id": "16124243594339127073068134924610_3",
+      "type": ""
+    },
+    {
+      "aliasName": "DimPromotion",
+      "dataSetId": "17313354675153127060073133796109",
+      "id": "16124253089349127076050193869792_13",
+      "type": ""
+    },
+    {
+      "aliasName": "FactSalesQuota",
+      "dataSetId": "17313356791568127021075188444068",
+      "id": "16124258023299127062054139810618_21",
+      "type": "FACT"
+    },
+    {
+      "aliasName": "DimOrganization",
+      "dataSetId": "17313351897686127027047188356617",
+      "id": "16124251614478127080047146610140_8",
+      "type": ""
+    },
+    {
+      "aliasName": "DimScenario",
+      "dataSetId": "17313356297165127079038162369832",
+      "id": "16124254748048127041070133187930_9",
+      "type": ""
+    },
+    {
+      "aliasName": "FactSales",
+      "dataSetId": "17313356747967127088089142599672",
+      "id": "16243739432324127074048196452553_29",
+      "type": "FACT"
+    },
+    {
+      "aliasName": "FactFinance",
+      "dataSetId": "17313356705363127098042179168955",
+      "id": "16124256403414127060036130252302_4",
+      "type": "FACT"
+    },
+    {
+      "aliasName": "DimSalesTerritory",
+      "dataSetId": "17313355923493127014057198413353",
+      "id": "16124254370525127075079141922285_14",
+      "type": ""
+    },
+    {
+      "aliasName": "DimReseller",
+      "dataSetId": "17313355267768127060053132653710",
+      "id": "16124253572011127097026134711084_20",
+      "type": ""
+    },
+    {
+      "aliasName": "DimCustomer",
+      "dataSetId": "17313341830808127022078145128195",
+      "id": "16124244235286127048078114432767_11",
+      "type": ""
+    }
+  ],
+  "ownerAppName": "Admin",
+  "lineType": "NOODLE",
+  "cached": false,
+  "name": "Adventure Works NoSpark",
+  "viewType": "TABULAR",
+  "ownerOrgId": "",
+  "isPublic": true,
+  "repositDate": "11/12/2024 08:39:54 UTC",
+  "subType": "",
+  "id": "17313320634065127036034196486354",
+  "accessRights": "1",
+  "categoryId": "folder_17098099614591127052025165563553",
+  "nodesLayoutMap": {
+    "16293615031059127049074170045515_30": {
+      "top": "470.02429962158203",
+      "left": "155",
+      "width": "200",
+      "nodeId": "16293615031059127049074170045515_30",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124245237099127016021119183682_28": {
+      "top": "257.02429962158203",
+      "left": "738",
+      "width": "200",
+      "nodeId": "16124245237099127016021119183682_28",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124255918738127051055177678254_2": {
+      "top": "9.00695",
+      "left": "703.997",
+      "width": "200",
+      "nodeId": "16124255918738127051055177678254_2",
+      "isCollapse": "false",
+      "height": "225"
+    },
+    "16124245237099127016021119183682_27": {
+      "top": "22.0174",
+      "left": "256.99",
+      "width": "200",
+      "nodeId": "16124245237099127016021119183682_27",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16293653567195127077049112444111_31": {
+      "top": "550.024299621582",
+      "left": "137",
+      "width": "200",
+      "nodeId": "16293653567195127077049112444111_31",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124245237099127016021119183682_1": {
+      "top": "142.003",
+      "left": "5",
+      "width": "200",
+      "nodeId": "16124245237099127016021119183682_1",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124246825960127081072115099166_19": {
+      "top": "1169.35",
+      "left": "694.986",
+      "width": "200",
+      "nodeId": "16124246825960127081072115099166_19",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124246302888127040033126248643_6": {
+      "top": "4.0243",
+      "left": "28.9757",
+      "width": "200",
+      "nodeId": "16124246302888127040033126248643_6",
+      "isCollapse": "false",
+      "height": "128"
+    },
+    "16124226128082127033074146488940_5": {
+      "top": "327.983",
+      "left": "284.997",
+      "width": "200",
+      "nodeId": "16124226128082127033074146488940_5",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124243594339127073068134924610_3": {
+      "top": "426.021",
+      "left": "698.99",
+      "width": "200",
+      "nodeId": "16124243594339127073068134924610_3",
+      "isCollapse": "false",
+      "height": "168.993"
+    },
+    "16124253089349127076050193869792_13": {
+      "top": "830.802",
+      "left": "12",
+      "width": "200",
+      "nodeId": "16124253089349127076050193869792_13",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124258023299127062054139810618_21": {
+      "top": "1494.9",
+      "left": "30.9896",
+      "width": "200",
+      "nodeId": "16124258023299127062054139810618_21",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124251614478127080047146610140_8": {
+      "top": "467.997",
+      "left": "5.9653",
+      "width": "200",
+      "nodeId": "16124251614478127080047146610140_8",
+      "isCollapse": "false",
+      "height": "183.993"
+    },
+    "16124254748048127041070133187930_9": {
+      "top": "664.219",
+      "left": "6.98267",
+      "width": "200",
+      "nodeId": "16124254748048127041070133187930_9",
+      "isCollapse": "false",
+      "height": "143.993"
+    },
+    "16243739432324127074048196452553_29": {
+      "top": "500.02429962158203",
+      "left": "142",
+      "width": "200",
+      "nodeId": "16243739432324127074048196452553_29",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124256403414127060036130252302_4": {
+      "top": "4.0243",
+      "left": "486.944",
+      "width": "200",
+      "nodeId": "16124256403414127060036130252302_4",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124254370525127075079141922285_14": {
+      "top": "877.351",
+      "left": "245.99",
+      "width": "200",
+      "nodeId": "16124254370525127075079141922285_14",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124253572011127097026134711084_20": {
+      "top": "1271.57",
+      "left": "500.997",
+      "width": "200",
+      "nodeId": "16124253572011127097026134711084_20",
+      "isCollapse": "false",
+      "height": "300"
+    },
+    "16124244235286127048078114432767_11": {
+      "top": "610.347",
+      "left": "700.99",
+      "width": "200",
+      "nodeId": "16124244235286127048078114432767_11",
+      "isCollapse": "false",
+      "height": "300"
+    }
+  }
+}

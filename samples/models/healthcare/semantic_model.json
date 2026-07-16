@@ -1,0 +1,371 @@
+{
+  "name": "HealthcareModel",
+  "folderName": "Semantic Models",
+  "folderId": "folder_sm",
+  "specific": {
+    "attrs": {
+      "drdName": "HealthcareDRD",
+      "drdId": "drd_001",
+      "modelType": "BASE",
+      "rawDataQuerying": "Disable",
+      "rawDataConnectionMode": "MANUAL",
+      "rawDataConnectionName": "HealthcareConnection"
+    },
+    "smObject": {
+      "dimensions": [
+        {
+          "name": "DimPatient",
+          "id": "DIM_107443",
+          "uniqueName": "DIM_107443",
+          "type": "Regular",
+          "scdType": "2",
+          "materialize": "",
+          "isAccessible": true,
+          "isVisible": true,
+          "dimToFactMapping": "ONE_TO_MANY",
+          "incrementalUpdateProperties": {
+            "processingMode": 1
+          },
+          "dataSources": [
+            {
+              "id": "ds_769641",
+              "type": "REFERENCED"
+            }
+          ],
+          "hierarchies": [
+            {
+              "name": "Patient Demographics",
+              "uniqueName": "HIER_876769",
+              "isDefault": true,
+              "hasAll": false,
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "",
+              "hasAlternatePath": false,
+              "hasParentChildRelation": false,
+              "pcLevelCount": -1,
+              "qualifyMembers": {
+                "type": "ALL_PARENTS",
+                "value": ""
+              },
+              "dataField": {
+                "queryName": "",
+                "content": "",
+                "queryId": ""
+              },
+              "levels": [
+                {
+                  "name": "age_group",
+                  "uniqueName": "DIMENSION_LEVEL_395219",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimPatient",
+                    "content": "age_group",
+                    "queryId": "ds_769641"
+                  }
+                },
+                {
+                  "name": "gender",
+                  "uniqueName": "DIMENSION_LEVEL_156512",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimPatient",
+                    "content": "gender",
+                    "queryId": "ds_769641"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": [
+            {
+              "name": "patient_pk",
+              "uniqueName": "DIMENSION_ATTRIBUTE_517550",
+              "dataType": "NUMBER",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimPatient",
+                "content": "patient_pk",
+                "queryId": "ds_769641"
+              }
+            },
+            {
+              "name": "patient_id",
+              "uniqueName": "DIMENSION_ATTRIBUTE_737754",
+              "dataType": "CHAR",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimPatient",
+                "content": "patient_id",
+                "queryId": "ds_769641"
+              }
+            },
+            {
+              "name": "patient_name",
+              "uniqueName": "DIMENSION_ATTRIBUTE_402609",
+              "dataType": "CHAR",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimPatient",
+                "content": "patient_name",
+                "queryId": "ds_769641"
+              }
+            }
+          ]
+        },
+        {
+          "name": "DimDate",
+          "id": "DIM_506075",
+          "uniqueName": "DIM_506075",
+          "type": "Regular",
+          "scdType": "2",
+          "materialize": "",
+          "isAccessible": true,
+          "isVisible": true,
+          "dimToFactMapping": "ONE_TO_MANY",
+          "incrementalUpdateProperties": {
+            "processingMode": 1
+          },
+          "dataSources": [
+            {
+              "id": "ds_863863",
+              "type": "REFERENCED"
+            }
+          ],
+          "hierarchies": [
+            {
+              "name": "Calendar",
+              "uniqueName": "HIER_396716",
+              "isDefault": true,
+              "hasAll": false,
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "",
+              "hasAlternatePath": false,
+              "hasParentChildRelation": false,
+              "pcLevelCount": -1,
+              "qualifyMembers": {
+                "type": "ALL_PARENTS",
+                "value": ""
+              },
+              "dataField": {
+                "queryName": "",
+                "content": "",
+                "queryId": ""
+              },
+              "levels": [
+                {
+                  "name": "year",
+                  "uniqueName": "DIMENSION_LEVEL_015043",
+                  "dataType": "NUMBER",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "year",
+                    "queryId": "ds_863863"
+                  }
+                },
+                {
+                  "name": "quarter",
+                  "uniqueName": "DIMENSION_LEVEL_314240",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "quarter",
+                    "queryId": "ds_863863"
+                  }
+                },
+                {
+                  "name": "month",
+                  "uniqueName": "DIMENSION_LEVEL_725346",
+                  "dataType": "CHAR",
+                  "isAll": false,
+                  "isVisible": true,
+                  "isAccessible": true,
+                  "materialize": "YES",
+                  "aggregationType": "BOTH",
+                  "processType": "DATA_AND_METADATA",
+                  "dataField": {
+                    "queryName": "DimDate",
+                    "content": "month",
+                    "queryId": "ds_863863"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": [
+            {
+              "name": "date_pk",
+              "uniqueName": "DIMENSION_ATTRIBUTE_896165",
+              "dataType": "NUMBER",
+              "type": "Regular",
+              "isVisible": true,
+              "isAccessible": true,
+              "materialize": "YES",
+              "aggregationType": "BOTH",
+              "processType": "DATA_AND_METADATA",
+              "processMetadata": "YES",
+              "dataField": {
+                "queryName": "DimDate",
+                "content": "date_pk",
+                "queryId": "ds_863863"
+              }
+            }
+          ]
+        }
+      ],
+      "measures": {
+        "measure": [
+          {
+            "id": "MEASURE_0",
+            "name": "Total Admissions",
+            "uniqueName": "MEASURE_0",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": true,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "0",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactAdmissions",
+              "content": "admission_count",
+              "queryId": "ds_706470"
+            }
+          },
+          {
+            "id": "MEASURE_1",
+            "name": "Avg Length of Stay",
+            "uniqueName": "MEASURE_1",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "1",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactAdmissions",
+              "content": "length_of_stay",
+              "queryId": "ds_706470"
+            }
+          },
+          {
+            "id": "MEASURE_2",
+            "name": "Total Cost",
+            "uniqueName": "MEASURE_2",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "0",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "FactAdmissions",
+              "content": "total_cost",
+              "queryId": "ds_706470"
+            }
+          },
+          {
+            "id": "MEASURE_3",
+            "name": "Cost per Admission",
+            "uniqueName": "MEASURE_3",
+            "type": "STANDARD",
+            "dataType": "NUMBER",
+            "formatType": "2",
+            "isDefault": false,
+            "isVisible": true,
+            "isAccessible": true,
+            "summaryFunction": "",
+            "format": {
+              "useDefault": "0",
+              "content": "#,##0.00"
+            },
+            "materialize": "YES",
+            "dataField": {
+              "queryName": "",
+              "content": "",
+              "queryId": ""
+            },
+            "expression": {
+              "nonEmptyBehavior": "BY_MEASURE",
+              "content": "[Measures].[Total Cost] / [Measures].[Total Admissions]"
+            }
+          }
+        ]
+      },
+      "measureGroups": {
+        "measureGroup": [
+          {
+            "name": "FactAdmissions",
+            "materialize": "YES",
+            "measureId": [
+              "MEASURE_0",
+              "MEASURE_1",
+              "MEASURE_2",
+              "MEASURE_3"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

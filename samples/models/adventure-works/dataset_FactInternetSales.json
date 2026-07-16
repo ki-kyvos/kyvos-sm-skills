@@ -1,0 +1,23 @@
+{
+  "datasetName": "FactInternetSales",
+  "datasetId": "72495fd6af2e4f41",
+  "folderName": "adventure-works",
+  "folderId": "folder_08e16c342d1d4e48",
+  "datasetDetails": {
+    "connectionName": "AdventureWorksConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM adventure_works.fact_internet_sales"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

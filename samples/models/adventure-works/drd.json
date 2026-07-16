@@ -1,0 +1,92 @@
+{
+  "relationshipName": "AdventureWorksDRD",
+  "relationshipId": "",
+  "relationshipFolderName": "DRDs",
+  "relationshipFolderId": "folder_drd",
+  "details": {
+    "datasets": [
+      {
+        "datasetName": "DimDate",
+        "datasetId": "ds_863863",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimDate",
+        "isFact": false
+      },
+      {
+        "datasetName": "DimProduct",
+        "datasetId": "ds_557338",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "DimProduct",
+        "isFact": false
+      },
+      {
+        "datasetName": "FactInternetSales",
+        "datasetId": "ds_958791",
+        "datasetFolderName": "",
+        "datasetFolderId": "",
+        "alias": "FactInternetSales",
+        "isFact": true
+      }
+    ],
+    "relations": [
+      {
+        "firstDataset": "FactInternetSales",
+        "secondDataset": "DimProduct",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "product_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "product_pk"
+            }
+          }
+        ]
+      },
+      {
+        "firstDataset": "FactInternetSales",
+        "secondDataset": "DimDate",
+        "joinType": "MANY_TO_ONE",
+        "joinKeys": [
+          {
+            "node1Key": {
+              "id": "",
+              "type": "",
+              "content": "date_fk"
+            },
+            "node1SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "operator": "EQUAL_TO",
+            "node2SecondaryKey": {
+              "id": "",
+              "type": ""
+            },
+            "node2Key": {
+              "id": "",
+              "type": "",
+              "content": "date_pk"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

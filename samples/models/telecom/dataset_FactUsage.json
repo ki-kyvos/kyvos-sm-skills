@@ -1,0 +1,23 @@
+{
+  "datasetName": "FactUsage",
+  "datasetId": "68276aa7ab264b03",
+  "folderName": "telecom",
+  "folderId": "folder_24388251b49d42ff",
+  "datasetDetails": {
+    "connectionName": "TelecomConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM telecom.fact_usage"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

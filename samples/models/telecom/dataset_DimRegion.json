@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimRegion",
+  "datasetId": "4ac65d40ec9c44ab",
+  "folderName": "telecom",
+  "folderId": "folder_e7961b74165945af",
+  "datasetDetails": {
+    "connectionName": "TelecomConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM telecom.dim_region"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

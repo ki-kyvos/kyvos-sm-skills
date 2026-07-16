@@ -1,0 +1,7 @@
+# Default owner for all files
+* @kyvos-admin
+
+# Reviewers by area
+# /kyvos_*/generators/   @reviewer-generators
+# /tests/                @reviewer-tests
+# /skills/               @reviewer-skills

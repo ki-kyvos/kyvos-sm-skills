@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimDate",
+  "datasetId": "81fccf8c30a84121",
+  "folderName": "telecom",
+  "folderId": "folder_eb26917481364037",
+  "datasetDetails": {
+    "connectionName": "TelecomConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM telecom.dim_date"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}

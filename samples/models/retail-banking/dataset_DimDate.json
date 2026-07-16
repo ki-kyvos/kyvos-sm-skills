@@ -1,0 +1,23 @@
+{
+  "datasetName": "DimDate",
+  "datasetId": "96f704e700524125",
+  "folderName": "retail-banking",
+  "folderId": "folder_e7ceee7f31ce49ec",
+  "datasetDetails": {
+    "connectionName": "RetailBankingConnection",
+    "inputType": "SQL",
+    "sqlDetails": {
+      "sql": "SELECT * FROM retail_banking.dim_date"
+    },
+    "parameters": [],
+    "partitionDetails": {
+      "metadataMode": "AUTO",
+      "columnName": "",
+      "tableName": "",
+      "tableRecordCount": "",
+      "numberOfPartitions": "",
+      "columnMaxValue": "",
+      "columnMinValue": ""
+    }
+  }
+}
