@@ -408,6 +408,9 @@ class SModelJsonGenerator:
         # Track which datasets already have a measure group
         existing_mg_names: set[str] = set()
 
+        # Track all measure names to ensure global uniqueness
+        used_measure_names: set[str] = set()
+
         # Group measures by source_dataset
         measures_by_dataset: dict[str, list] = {}
         for measure in self.semantic_measures:
@@ -463,6 +466,40 @@ class SModelJsonGenerator:
                 # dataType regardless of the source column's type.
                 col_datatype = "NUMBER"
 
+                # For count/distinct_count measures with no source_column,
+                # use a fallback column (PK or first non-FK column) as dataField anchor
+                effective_source_column = source_column or ""
+                if not effective_source_column and agg_lower in ("count", "distinct_count"):
+                    fact_cols = self._cols_for(kyvos_ds_name) or self._cols_for(ds_name)
+                    if fact_cols:
+                        pk_cols = [c for c in fact_cols if c.get("isPrimaryKey", False)]
+                        non_fk_cols = [c for c in fact_cols if not c.get("isForeignKey", False)]
+                        # If no PK/FK metadata available, use name-based heuristics
+                        if not pk_cols and not non_fk_cols:
+                            pk_cols = [c for c in fact_cols if c.get("name", "").lower().endswith("_key") or c.get("name", "").lower().endswith("_pk")]
+                            non_fk_cols = [c for c in fact_cols if not (c.get("name", "").lower().endswith("_key") or c.get("name", "").lower().endswith("_fk"))]
+                        fallback_col = (pk_cols or non_fk_cols or fact_cols)[0]
+                        effective_source_column = fallback_col.get("name", "")
+                        logger.info(
+                            "smodel_json_count_measure_fallback_column",
+                            measure=measure_name,
+                            fallback_column=effective_source_column,
+                            dataset=kyvos_ds_name,
+                        )
+
+                # Ensure measure name is globally unique — qualify with fact table prefix if duplicate
+                original_name = measure_name
+                if measure_name.lower() in used_measure_names:
+                    fact_prefix = self._strip_table_prefix(kyvos_ds_name).replace("_", " ").title()
+                    measure_name = f"{fact_prefix} {measure_name}"
+                    logger.warning(
+                        "smodel_json_duplicate_measure_renamed",
+                        original_name=original_name,
+                        new_name=measure_name,
+                        dataset=kyvos_ds_name,
+                    )
+                used_measure_names.add(measure_name.lower())
+
                 measure_obj: dict[str, Any] = {
                     "id": measure_id,
                     "name": measure_name,
@@ -476,7 +513,7 @@ class SModelJsonGenerator:
                     "summaryFunction": summary_func,
                     "format": _format_obj(format_string or "#,##0.00"),
                     "materialize": "YES",
-                    "dataField": _data_field(kyvos_ds_name, source_column or "", dataset_id),
+                    "dataField": _data_field(kyvos_ds_name, effective_source_column, dataset_id),
                 }
 
                 if is_calculated and expression:
@@ -617,6 +654,12 @@ class SModelJsonGenerator:
                     agg_type = "count"
                 summary_func = self._summary_function_for(agg_type)
 
+                # Ensure measure name is globally unique
+                if measure_name.lower() in used_measure_names:
+                    fact_prefix = self._strip_table_prefix(fact_kyvos).replace("_", " ").title()
+                    measure_name = f"{fact_prefix} {measure_name}"
+                used_measure_names.add(measure_name.lower())
+
                 measures_json.append({
                     "id": measure_id,
                     "name": measure_name,
@@ -709,6 +752,12 @@ class SModelJsonGenerator:
 
                 dm_name = getattr(dm, "name", f"DistinctCount_{col_name}")
 
+                # Ensure measure name is globally unique
+                if dm_name.lower() in used_measure_names:
+                    ds_prefix = self._strip_table_prefix(ds_name_proper).replace("_", " ").title()
+                    dm_name = f"{ds_prefix} {dm_name}"
+                used_measure_names.add(dm_name.lower())
+
                 measures_json.append({
                     "id": measure_id,
                     "name": dm_name,
@@ -733,6 +782,10 @@ class SModelJsonGenerator:
             # Row-count companion measure
             anchor_col = companion_cols[0]
             companion_measure_name = f"{ds_name_proper} Record Count"
+            if companion_measure_name.lower() in used_measure_names:
+                ds_prefix = self._strip_table_prefix(ds_name_proper).replace("_", " ").title()
+                companion_measure_name = f"{ds_prefix} Record Count"
+            used_measure_names.add(companion_measure_name.lower())
             companion_mid = f"MEASURE_{measure_counter}"
             measure_counter += 1
             is_default = not default_measure_assigned
