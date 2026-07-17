@@ -11,6 +11,7 @@ import hashlib
 import structlog
 import re
 import time
+import xml.etree.ElementTree as ET
 from typing import Any
 
 logger = structlog.get_logger(__name__)
@@ -88,7 +89,39 @@ class SModelJsonGenerator:
         self._name_to_id_ci: dict[str, str] = {
             k.lower(): v for k, v in self.dataset_name_to_id.items()
         }
+        self._drd_node_ids = self._parse_drd_node_ids(drd_xml)
         self.smodel_id: str = ""
+
+    @staticmethod
+    def _parse_drd_node_ids(drd_xml: str) -> dict[str, str]:
+        if not drd_xml:
+            return {}
+        try:
+            root = ET.fromstring(drd_xml)
+        except ET.ParseError:
+            return {}
+
+        node_ids: dict[str, str] = {}
+        for node in root.findall(".//NODES/NODE"):
+            node_id = (node.get("ID") or "").strip()
+            dataset = node.find("./REL_DATASET")
+            if not node_id or dataset is None:
+                continue
+            dataset_id = (dataset.get("ID") or "").strip()
+            alias = (dataset.findtext("./ALIAS_NAME") or "").strip()
+            if dataset_id:
+                node_ids[dataset_id.lower()] = node_id
+            if alias:
+                node_ids[alias.lower()] = node_id
+        return node_ids
+
+    def _resolve_drd_node_id(self, ds_name: str, dataset_id: str) -> str:
+        kyvos_name = self._resolve_kyvos_name(ds_name)
+        for candidate in (ds_name, kyvos_name, dataset_id):
+            node_id = self._drd_node_ids.get(candidate.lower())
+            if node_id:
+                return node_id
+        return dataset_id
 
     def _cols_for(self, ds_name: str) -> list[dict]:
         """Get columns for a dataset, case-insensitive lookup."""
@@ -211,6 +244,7 @@ class SModelJsonGenerator:
         """
         dim_id = _safe_id("DIM", f"{ds_name}{time.time()}")
         dim_name = ds_name
+        drd_node_id = self._resolve_drd_node_id(ds_name, dataset_id)
 
         # Build hierarchies for this dimension
         hiers: list[dict[str, Any]] = []
@@ -242,7 +276,7 @@ class SModelJsonGenerator:
                         "materialize": "YES",
                         "aggregationType": "BOTH",
                         "processType": "DATA_AND_METADATA",
-                        "dataField": _data_field(ds_name, level_name, dataset_id),
+                        "dataField": _data_field(ds_name, level_name, drd_node_id),
                     })
                 hiers.append({
                     "name": h_name,
@@ -277,7 +311,7 @@ class SModelJsonGenerator:
                     "materialize": "YES",
                     "aggregationType": "BOTH",
                     "processType": "DATA_AND_METADATA",
-                    "dataField": _data_field(ds_name, col_name, dataset_id),
+                    "dataField": _data_field(ds_name, col_name, drd_node_id),
                 })
             if levels_json:
                 h_name = f"H_{dim_name}"
@@ -318,7 +352,7 @@ class SModelJsonGenerator:
                 "aggregationType": "BOTH",
                 "processType": "DATA_AND_METADATA",
                 "processMetadata": "YES",
-                "dataField": _data_field(ds_name, col_name, dataset_id),
+                "dataField": _data_field(ds_name, col_name, drd_node_id),
             })
 
         return {
@@ -423,6 +457,7 @@ class SModelJsonGenerator:
         for ds_name, ds_measures in measures_by_dataset.items():
             kyvos_ds_name = self._resolve_kyvos_name(ds_name)
             dataset_id = self._resolve_dataset_id(ds_name)
+            drd_node_id = self._resolve_drd_node_id(kyvos_ds_name, dataset_id)
             if not dataset_id:
                 logger.warning(
                     "smodel_measure_dataset_id_empty",
@@ -462,8 +497,6 @@ class SModelJsonGenerator:
                 if is_default:
                     default_measure_assigned = True
 
-                # Count and distinct-count measures should always use NUMBER
-                # dataType regardless of the source column's type.
                 col_datatype = "NUMBER"
 
                 # For count/distinct_count measures with no source_column,
@@ -485,6 +518,20 @@ class SModelJsonGenerator:
                             measure=measure_name,
                             fallback_column=effective_source_column,
                             dataset=kyvos_ds_name,
+                        )
+
+                if agg_lower in ("count", "distinct_count") and effective_source_column:
+                    source_col = next(
+                        (
+                            col for col in (self._cols_for(kyvos_ds_name) or self._cols_for(ds_name))
+                            if col.get("name", "").lower() == effective_source_column.lower()
+                        ),
+                        None,
+                    )
+                    if source_col:
+                        col_datatype = source_col.get(
+                            "dataType",
+                            source_col.get("datatype", source_col.get("dataTypeName", "NUMBER")),
                         )
 
                 # Ensure measure name is globally unique — qualify with fact table prefix if duplicate
@@ -513,7 +560,7 @@ class SModelJsonGenerator:
                     "summaryFunction": summary_func,
                     "format": _format_obj(format_string or "#,##0.00"),
                     "materialize": "YES",
-                    "dataField": _data_field(kyvos_ds_name, effective_source_column, dataset_id),
+                    "dataField": _data_field(kyvos_ds_name, effective_source_column, drd_node_id),
                 }
 
                 if is_calculated and expression:
@@ -525,9 +572,9 @@ class SModelJsonGenerator:
                     measure_obj["dataField"] = _data_field("", "", "")
 
                 if agg_lower == "distinct_count":
-                    measure_obj["isBoundaryDistCount"] = True
+                    measure_obj["isBoundaryDistCount"] = False
                     measure_obj["distinctCountType"] = "EXACT"
-                    measure_obj["distCountDatasetNodeId"] = dataset_id
+                    measure_obj["distCountDatasetNodeId"] = drd_node_id
                     measure_obj["distCountDatasetNodeName"] = kyvos_ds_name
 
                 measures_json.append(measure_obj)
@@ -579,6 +626,7 @@ class SModelJsonGenerator:
                 continue
 
             dataset_id = self._resolve_dataset_id(fact_name)
+            drd_node_id = self._resolve_drd_node_id(fact_kyvos, dataset_id)
             if not dataset_id:
                 continue
 
@@ -673,7 +721,7 @@ class SModelJsonGenerator:
                     "summaryFunction": summary_func,
                     "format": _format_obj("#,##0.00"),
                     "materialize": "YES",
-                    "dataField": _data_field(fact_kyvos, col_name, dataset_id),
+                    "dataField": _data_field(fact_kyvos, col_name, drd_node_id),
                 })
                 mg_measure_ids.append(measure_id)
 
@@ -717,7 +765,8 @@ class SModelJsonGenerator:
                     ds_lower,
                 ),
             )
-            node_id = self._resolve_dataset_id(ds_name_proper)
+            dataset_id = self._resolve_dataset_id(ds_name_proper)
+            node_id = self._resolve_drd_node_id(ds_name_proper, dataset_id)
 
             companion_cols = self._cols_for(ds_name_proper)
             if not companion_cols:
@@ -772,7 +821,7 @@ class SModelJsonGenerator:
                     "format": _format_obj("#,##0"),
                     "materialize": "YES",
                     "dataField": _data_field(ds_name_proper, col_name or col.get("name", ""), node_id),
-                    "isBoundaryDistCount": True,
+                    "isBoundaryDistCount": False,
                     "distinctCountType": "EXACT",
                     "distCountDatasetNodeId": node_id,
                     "distCountDatasetNodeName": ds_name_proper,
