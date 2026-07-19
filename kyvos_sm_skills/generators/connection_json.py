@@ -20,6 +20,8 @@ def generate_connection_json(
     password: str,
     db_type: str = "POSTGRES",
     db_version: str = "11",
+    jdbc_url_override: str = "",
+    driver_override: str = "",
 ) -> dict[str, Any]:
     """Generate Kyvos connection JSON payload.
 
@@ -32,11 +34,17 @@ def generate_connection_json(
         password: Database password.
         db_type: Database type (default: POSTGRES).
         db_version: Database version (default: 11).
+        jdbc_url_override: If set, use this JDBC URL instead of the default
+            PostgreSQL template. Resolved by the caller (SDK registry or
+            skill snippet) — this module never imports the registry.
+        driver_override: If set, use this driver class instead of
+            ``org.postgresql.Driver``.
 
     Returns:
         Dict matching the Kyvos 2026.5 connection JSON shape.
     """
-    jdbc_url = f"jdbc:postgresql://{host}:{port}/{database}"
+    jdbc_url = jdbc_url_override or f"jdbc:postgresql://{host}:{port}/{database}"
+    driver_class = driver_override or "org.postgresql.Driver"
     now_ms = str(int(time.time() * 1000))
 
     properties = [
@@ -52,7 +60,7 @@ def generate_connection_json(
         {"name": "kyvos.connection.user", "value": username, "encrypted": "false"},
         {"name": "kyvos.connection.isRead", "value": "true", "encrypted": "false"},
         {"name": "kyvos.connection.password", "value": password, "encrypted": "true"},
-        {"name": "kyvos.connection.driver", "value": "org.postgresql.Driver", "encrypted": "false"},
+        {"name": "kyvos.connection.driver", "value": driver_class, "encrypted": "false"},
         {"name": "kyvos.connection.defaultsqlengine", "value": "false", "encrypted": "false"},
         {"name": "kyvos.connection.name", "value": name, "encrypted": "false"},
     ]

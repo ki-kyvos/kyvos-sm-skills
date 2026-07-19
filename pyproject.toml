@@ -1,6 +1,6 @@
 [project]
 name = "kyvos-sm-skills"
-version = "0.1.0"
+version = "0.2.0"
 description = "Claude skills + generators for Kyvos semantic model creation"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -21,6 +21,16 @@ dependencies = ["pydantic>=2.0", "structlog>=24.1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-cov", "ruff", "mypy"]
+sdk = ["kyvos-sdk-python>=0.6.0"]
+# Optional: for multi-PBIT deployment workflows
+parser = ["kyvos-xmla-parser>=0.2.0"]
+datagen = ["kyvos-data-gen>=0.2.0"]
+# All workflow dependencies in one extra
+all = [
+    "kyvos-sdk-python>=0.6.0",
+    "kyvos-xmla-parser>=0.2.0",
+    "kyvos-data-gen>=0.2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/<ORG>/kyvos-sm-skills"

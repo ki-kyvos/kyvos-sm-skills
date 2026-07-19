@@ -18,6 +18,8 @@ def generate_connection_xml(
     password: str,
     db_type: str = "POSTGRES",
     db_version: str = "11",
+    jdbc_url_override: str = "",
+    driver_override: str = "",
 ) -> str:
     """Generate Kyvos connection XML payload.
 
@@ -30,12 +32,18 @@ def generate_connection_xml(
         password: Database password
         db_type: Database type (default: POSTGRES)
         db_version: Database version (default: 11)
+        jdbc_url_override: If set, use this JDBC URL instead of the default
+            PostgreSQL template. Resolved by the caller (SDK registry or
+            skill snippet) — this module never imports the registry.
+        driver_override: If set, use this driver class instead of
+            ``org.postgresql.Driver``.
 
     Returns:
         XML string for Kyvos connection creation API
     """
     # Build JDBC URL
-    jdbc_url = f"jdbc:postgresql://{host}:{port}/{database}"
+    jdbc_url = jdbc_url_override or f"jdbc:postgresql://{host}:{port}/{database}"
+    driver_class = driver_override or "org.postgresql.Driver"
 
     # Create CONNECTION element (root element, no RESPONSE wrapper)
     connection = ET.Element("CONNECTION")
@@ -59,7 +67,7 @@ def generate_connection_xml(
         ("kyvos.connection.user", username, "false"),
         ("kyvos.connection.isRead", "true", "false"),
         ("kyvos.connection.password", password, "false"),
-        ("kyvos.connection.driver", "org.postgresql.Driver", "false"),
+        ("kyvos.connection.driver", driver_class, "false"),
         ("kyvos.connection.defaultsqlengine", "false", "false"),
         ("kyvos.connection.name", name, "false"),
     ]
