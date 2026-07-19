@@ -68,19 +68,22 @@ Kyvos CONNECTION XML with configuration > property elements.
 
 ## Backend
 
-Python generators:
-- **JSON:** `kyvos_sm_skills.generators.connection_json.generate_connection_json`
-- **XML:** `kyvos_sm_skills.generators.connection_xml.generate_connection_xml`
+Use the SDK's pure compiler to generate deterministic XML or JSON payloads. The compiler returns a `CompiledArtifact` with `payload`, `content_hash`, `diagnostics`, and `capability_requirements`.
 
 ```python
-from kyvos_sm_skills.generators.connection_json import generate_connection_json
+from kyvos_sdk.compiler import compile_connection
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
 
-payload = generate_connection_json(
+artifact = compile_connection(
     name="PostgresConnection",
     host="localhost",
     port=5432,
     database="sales_dw",
     username="analytics_user",
     password="secure_pass",
+    db_type="POSTGRES",
+    db_version="14",
+    fmt=ArtifactFormat.JSON,  # or ArtifactFormat.XML
 )
+payload = artifact.payload
 ```

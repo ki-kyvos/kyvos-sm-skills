@@ -35,24 +35,24 @@ You understand:
 
 ### JSON Format (Kyvos 2026.5+)
 
+Complete JSON / `iro` wrapper produced by the SDK compiler:
+
 ```json
 {
-  "relationshipName": "drd_name",
-  "relationshipId": "",
-  "relationshipFolderName": "folder_name",
-  "relationshipFolderId": "folder_id",
-  "details": {
-    "datasets": [
-      {"datasetName": "name", "datasetId": "id", "alias": "name", "isFact": true}
-    ],
-    "relations": [
-      {
-        "firstDataset": "name",
-        "secondDataset": "name",
-        "joinType": "ONE_TO_MANY",
-        "joinKeys": [{"node1Key": {...}, "node2Key": {...}, "operator": "EQUAL_TO"}]
+  "iro": {
+    "name": "drd_name",
+    "folderName": "folder_name",
+    "folderId": "folder_id",
+    "specific": {
+      "drdObject": {
+        "nodes": [
+          {"relDataset": {"datasetId": "id", "aliasName": "name", "type": "FACT"}}
+        ],
+        "relations": [
+          {"sourceId": "", "node1Id": "id", "node2Id": "id"}
+        ]
       }
-    ]
+    }
   }
 }
 ```
@@ -80,20 +80,31 @@ Kyvos IRO XML with DRDOBJECT containing NODES and RELATIONS sections.
 
 ## Backend
 
-Python generators:
-- **JSON:** `kyvos_sm_skills.generators.drd_json.DrdJsonGenerator`
-- **XML:** `kyvos_sm_skills.generators.drd_xml.DrdXmlGenerator`
+Use the SDK's pure compiler to generate deterministic XML or JSON payloads. The compiler consumes a `DrdGraph` contract and returns a `CompiledArtifact`.
 
 ```python
-from kyvos_sm_skills.generators.drd_json import DrdJsonGenerator
-from kyvos_sm_skills.generators.drd_xml import SimpleRel
+from kyvos_sdk.compiler import compile_drd
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
+from kyvos_sdk.contracts.identity import DrdGraph, DrdNode, DrdRelation
 
-gen = DrdJsonGenerator(drd_folder_id="folder_123", drd_folder_name="DRDs")
-payload = gen.generate(
-    drd_name="SalesDRD",
-    dataset_name_to_id={"FactSales": "ds_001", "DimProduct": "ds_002"},
-    relationships=[SimpleRel("fact_sales", "product_key", "dim_product", "product_key")],
-    dataset_aliases={"fact_sales": "FactSales", "dim_product": "DimProduct"},
-    fact_dataset_names={"FactSales"},
+graph = DrdGraph(
+    name="SalesDRD",
+    folder_id="folder_123",
+    folder_name="DRDs",
+    nodes=[
+        DrdNode(node_id="n1", dataset_id="ds_001", alias="FactSales", node_type="fact"),
+        DrdNode(node_id="n2", dataset_id="ds_002", alias="DimProduct", node_type=""),
+    ],
+    relations=[
+        DrdRelation(
+            source_node_id="n1",
+            target_node_id="n2",
+            source_column="product_key",
+            target_column="product_key",
+        ),
+    ],
 )
+
+artifact = compile_drd(graph, fmt=ArtifactFormat.JSON)  # or ArtifactFormat.XML
+payload = artifact.payload
 ```

@@ -84,18 +84,28 @@ Kyvos IRO XML with QO > TRANSFORMATION > STEPS > FETCH section containing column
 
 ## Backend
 
-Python generators:
-- **JSON:** `kyvos_sm_skills.generators.dataset_json.DatasetJsonGenerator`
-- **XML:** `kyvos_sm_skills.generators.dataset_xml.DatasetXmlGenerator`
+Use the SDK's pure compiler to generate deterministic XML or JSON payloads. The compiler returns a `CompiledArtifact` with `payload`, `content_hash`, `diagnostics`, and `capability_requirements`.
 
 ```python
-from kyvos_sm_skills.generators.dataset_json import DatasetJsonGenerator
-from kyvos_sm_skills.models import TableSpec, ColumnSpec
+from kyvos_sdk.compiler import compile_dataset
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
+from kyvos_sdk.contracts.domain import ColumnSpec, TableSpec
 
-gen = DatasetJsonGenerator(connection_name="PostgresConnection")
-table = TableSpec(name="fact_sales", schema_name="public", table_type="fact", columns=[
-    ColumnSpec(name="sales_key", data_type="INTEGER", is_primary_key=True),
-    ColumnSpec(name="sales_amount", data_type="NUMERIC(15,2)"),
-])
-payload = gen.generate_json_payload(table)
+table = TableSpec(
+    name="fact_sales",
+    schema_name="public",
+    table_type="fact",
+    columns=[
+        ColumnSpec(name="sales_key", data_type="INTEGER", is_primary_key=True),
+        ColumnSpec(name="sales_amount", data_type="NUMERIC(15,2)"),
+    ],
+)
+artifact = compile_dataset(
+    table,
+    connection_name="PostgresConnection",
+    folder_id="folder_123",
+    folder_name="Demo",
+    fmt=ArtifactFormat.JSON,  # or ArtifactFormat.XML
+)
+payload = artifact.payload
 ```

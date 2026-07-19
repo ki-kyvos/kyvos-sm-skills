@@ -2,19 +2,24 @@
 
 ## Overview
 
-The `skills/` directory contains 7 markdown skill files that serve as prompt-based definitions for Claude (or any LLM) to generate Kyvos-compatible semantic model components.
+The `skills/` directory contains markdown skill files that serve as prompt-based definitions for Claude (or any LLM) to generate and deploy Kyvos-compatible semantic model components.
 
 ## Skill Files
 
 | File | Purpose | Input | Output |
 |------|---------|-------|--------|
-| `generate-semantic-model.md` | Complete SM generation | Schema + relationships + measures | SM JSON/XML payload |
+| `deploy-from-xmla.md` | End-to-end XMLA → Kyvos deployment | XMLA file path + config | Created entity IDs/names |
+| `deploy-from-pbit.md` | End-to-end .pbit → Kyvos deployment | PBIT file path + config | Created entity IDs/names |
+| `discover-sm-from-warehouse.md` | Warehouse inspection → recommended SMs | Warehouse connection + config | Deployed SM summaries |
+| `generate-sm-from-intent.md` | Natural language intent → generated data + SM | Intent + warehouse config | Created entity IDs/names |
+| `generate-semantic-model.md` | SM payload generation | Schema + relationships + measures | SM JSON/XML payload |
 | `generate-dataset.md` | Dataset payload generation | TableSpec | Dataset JSON/XML |
 | `generate-drd.md` | DRD payload generation | Relationships + dataset IDs | DRD JSON/XML |
 | `generate-connection.md` | Connection payload generation | DB connection params | Connection JSON/XML |
 | `convert-dax-to-mdx.md` | DAX to MDX conversion | DAX measures | MDX measures |
-| `design-star-schema.md` | Schema design from domain | Domain description | Star schema JSON |
+| `design-star-schema.md` | Schema design from domain | Domain description | Star/snowflake/multifact schema JSON |
 | `design-measures.md` | Measure design from schema | Schema + domain | Measures JSON |
+| `inspect-warehouse-schema.md` | Warehouse schema introspection | DB connection params | Schema summary + pattern detection |
 
 ## How to Use
 
@@ -58,10 +63,11 @@ For a complete semantic model from scratch:
 5. **Generate DRD:** Use `generate-drd.md` with relationships from step 1
 6. **Generate semantic model:** Use `generate-semantic-model.md` with all prior outputs
 7. **(Optional) Convert DAX:** Use `convert-dax-to-mdx.md` if migrating from Power BI
+8. **Deploy:** Use `deploy-from-xmla.md` or `deploy-from-pbit.md` for end-to-end provisioning
 
-### 4. Using with the Python Generators
+### 4. Using with the Python Compilers
 
-The skill files include `## Backend` sections showing how to use the Python generators directly. This is useful for:
+The skill files include `## Backend` sections showing how to use the SDK's pure compilers directly. This is useful for:
 
 - Deterministic payload generation (no LLM needed)
 - Validating LLM-generated specs
@@ -69,13 +75,11 @@ The skill files include `## Backend` sections showing how to use the Python gene
 
 ```python
 # Use the skill's input schema to structure your data,
-# then pass it to the Python generator
-from kyvos_sm_skills.generators.smodel_json import SModelJsonGenerator
+# then pass it to the SDK compiler or contract adapter
+from kyvos_sdk.compiler import compile_semantic_model
 
-gen = SModelJsonGenerator(
-    # ... parameters from skill input schema ...
-)
-payload = gen.generate()
+artifact = compile_semantic_model(...)
+payload = artifact.payload
 ```
 
 ## Skill File Structure

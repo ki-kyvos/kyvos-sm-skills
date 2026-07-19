@@ -89,23 +89,47 @@ print(f"Parsed PBIT: {len(spec.tables)} tables, "
 
 ```python
 from kyvos_sdk.client import KyvosService
-from kyvos_sdk.provisioning import ProvisioningClient, FolderType
+from kyvos_sdk.provisioning import ProvisioningClient
+from kyvos_sdk.contracts.identity import FolderType
 
 svc = KyvosService(config=config)
 svc.initialize()
 prov = ProvisioningClient(svc)
 ```
 
-### Step 4: Create folder
+### Step 4: Create folders
+
+Three separate folders are required — one per entity type. All are created with upsert semantics (existing folder is reused).
 
 ```python
-folder_result = prov.create_folder(config.folder_name, FolderType.RDATASET)
-if not folder_result.succeeded:
+# Dataset folder
+dataset_folder_result = prov.create_folder(config.folder_name, FolderType.RDATASET)
+if not dataset_folder_result.succeeded:
     raise RuntimeError(
-        f"Folder creation failed: {[d.message for d in folder_result.diagnostics]}"
+        f"Dataset folder creation failed: {[d.message for d in dataset_folder_result.diagnostics]}"
     )
-folder_id = folder_result.primary_entity_id
-print(f"Folder: {config.folder_name} (id={folder_id})")
+folder_id = dataset_folder_result.primary_entity_id
+print(f"Dataset folder: {config.folder_name} (id={folder_id})")
+
+# DRD folder
+drd_folder_name = f"{config.folder_name} DRD"
+drd_folder_result = prov.create_folder(drd_folder_name, FolderType.DATASET_RELATIONSHIP)
+if not drd_folder_result.succeeded:
+    raise RuntimeError(
+        f"DRD folder creation failed: {[d.message for d in drd_folder_result.diagnostics]}"
+    )
+drd_folder_id = drd_folder_result.primary_entity_id
+print(f"DRD folder: {drd_folder_name} (id={drd_folder_id})")
+
+# Semantic model folder
+smodel_folder_name = f"{config.folder_name} SModel"
+smodel_folder_result = prov.create_folder(smodel_folder_name, FolderType.SMODEL)
+if not smodel_folder_result.succeeded:
+    raise RuntimeError(
+        f"Semantic model folder creation failed: {[d.message for d in smodel_folder_result.diagnostics]}"
+    )
+smodel_folder_id = smodel_folder_result.primary_entity_id
+print(f"Semantic model folder: {smodel_folder_name} (id={smodel_folder_id})")
 ```
 
 ### Step 5: Create connection
@@ -149,20 +173,22 @@ print(f"Connection: {config.warehouse_connection_name} (id={connection_id})")
 ```python
 from kyvos_sm_skills.contract_adapter import compile_dataset_artifact
 
-dataset_name_to_id = {}
+dataset_name_to_id = {}   # server-assigned CamelCase name → dataset ID
+dataset_aliases = {}       # XMLA/PBIT snake_case name → server-assigned name
 created_entities = []
 
 for table in spec.tables:
     if config.skip_hidden_tables and table.is_hidden:
         continue
 
-    ds_result = prov.create_dataset(
+    ds_artifact = compile_dataset_artifact(
         table,
-        config.warehouse_connection_name,
-        folder_id,
-        config.folder_name,
-        use_json=(config.payload_format == "json"),
+        connection_name=config.warehouse_connection_name,
+        folder_id=folder_id,
+        folder_name=config.folder_name,
+        fmt=config.payload_format,
     )
+    ds_result = prov.apply_artifact(ds_artifact)
 
     if not ds_result.succeeded:
         raise RuntimeError(
@@ -171,15 +197,30 @@ for table in spec.tables:
             f"Created so far: {dataset_name_to_id}"
         )
 
-    dataset_name_to_id[table.name] = ds_result.primary_entity_id
+    server_name = ds_result.primary_entity_name
+    ds_id = ds_result.primary_entity_id
+
+    dataset_name_to_id[server_name] = ds_id
+    if table.name != server_name:
+        dataset_aliases[table.name] = server_name
+
     created_entities.append({
         "entity_type": "DATASET",
-        "id": ds_result.primary_entity_id,
-        "name": ds_result.primary_entity_name,
+        "id": ds_id,
+        "name": server_name,
     })
 
-    prov.refresh_dataset_columns(ds_result.primary_entity_id)
-    print(f"  Dataset: {ds_result.primary_entity_name} (id={ds_result.primary_entity_id})")
+    prov.refresh_dataset_columns(ds_id)
+    print(f"  Dataset: {server_name} (id={ds_id})")
+
+# Fetch column details for semantic model compilation
+dataset_cols = {}
+for ds_info in created_entities:
+    if ds_info["entity_type"] != "DATASET":
+        continue
+    cols = prov.get_dataset_column_details(config.folder_name, ds_info["name"])
+    if cols:
+        dataset_cols[ds_info["name"]] = cols
 ```
 
 ### Step 7: Build DRD graph + create DRD
@@ -193,10 +234,11 @@ drd_id = f"drd_{config.folder_name}"
 drd_artifact = compile_drd_artifact(
     drd_name=drd_name,
     drd_id=drd_id,
-    folder_id=folder_id,
-    folder_name=config.folder_name,
+    folder_id=drd_folder_id,
+    folder_name=drd_folder_name,
     dataset_name_to_id=dataset_name_to_id,
     relationships=spec.semantic_model.relationships,
+    dataset_aliases=dataset_aliases,
     fmt=config.payload_format,
 )
 
@@ -205,7 +247,16 @@ if not drd_result.succeeded:
     raise RuntimeError(
         f"DRD creation failed: {[d.message for d in drd_result.diagnostics]}"
     )
-print(f"DRD: {drd_name}")
+
+# Use the server-assigned DRD entity ID for the semantic model
+server_drd_id = drd_result.primary_entity_id
+server_drd_name = drd_result.primary_entity_name or drd_name
+created_entities.append({
+    "entity_type": "DRD",
+    "id": server_drd_id,
+    "name": server_drd_name,
+})
+print(f"DRD: {server_drd_name} (id={server_drd_id})")
 ```
 
 ### Step 8: Compile + create semantic model
@@ -215,13 +266,15 @@ from kyvos_sm_skills.contract_adapter import compile_smodel_artifact
 
 sm_artifact = compile_smodel_artifact(
     spec.semantic_model,
-    drd_name=drd_name,
-    drd_id=drd_id,
-    folder_id=folder_id,
-    folder_name=config.folder_name,
+    drd_name=server_drd_name,
+    drd_id=server_drd_id,
+    folder_id=smodel_folder_id,
+    folder_name=smodel_folder_name,
     connection_name=config.warehouse_connection_name,
     dataset_name_to_id=dataset_name_to_id,
     relationships=spec.semantic_model.relationships,
+    dataset_aliases=dataset_aliases,
+    dataset_columns=dataset_cols,
     fmt=config.payload_format,
 )
 
@@ -231,7 +284,13 @@ if not sm_result.succeeded:
         f"Semantic model creation failed: {[d.message for d in sm_result.diagnostics]}"
     )
 smodel_name = spec.semantic_model.name
-print(f"Semantic Model: {smodel_name}")
+smodel_id = sm_result.primary_entity_id
+created_entities.append({
+    "entity_type": "SEMANTIC_MODEL",
+    "id": smodel_id,
+    "name": smodel_name,
+})
+print(f"Semantic Model: {smodel_name} (id={smodel_id})")
 ```
 
 ### Step 9: Report results
@@ -254,6 +313,8 @@ result = {
     "smodel_name": smodel_name,
     "created_entities": created_entities + [
         {"entity_type": "FOLDER", "id": folder_id, "name": config.folder_name},
+        {"entity_type": "FOLDER", "id": drd_folder_id, "name": drd_folder_name},
+        {"entity_type": "FOLDER", "id": smodel_folder_id, "name": smodel_folder_name},
         {"entity_type": "CONNECTION", "id": connection_id, "name": config.warehouse_connection_name},
     ],
     "errors": [],

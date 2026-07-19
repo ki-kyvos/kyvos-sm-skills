@@ -3,31 +3,38 @@
 ## Install
 
 ```bash
-pip install kyvos-sm-skills
+pip install kyvos-sm-skills[sdk]
 ```
+
+The `[sdk]` extra pulls in `kyvos-sdk-python`, which provides the pure compilers and typed contracts used below.
 
 ## Generate a Connection
 
 ```python
-from kyvos_sm_skills.generators.connection_json import generate_connection_json
+from kyvos_sdk.compiler import compile_connection
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
 
-conn = generate_connection_json(
+artifact = compile_connection(
     name="MyConnection",
     host="localhost",
     port=5432,
     database="mydb",
     username="user",
     password="pass",
+    db_type="POSTGRES",
+    db_version="14",
+    fmt=ArtifactFormat.JSON,  # or ArtifactFormat.XML
 )
+payload = artifact.payload
 ```
 
 ## Generate Datasets
 
 ```python
-from kyvos_sm_skills.generators.dataset_json import DatasetJsonGenerator
-from kyvos_sm_skills.models import TableSpec, ColumnSpec
+from kyvos_sdk.compiler import compile_dataset
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
+from kyvos_sdk.contracts.domain import ColumnSpec, TableSpec
 
-gen = DatasetJsonGenerator(connection_name="MyConnection")
 table = TableSpec(
     name="fact_sales",
     schema_name="public",
@@ -38,62 +45,82 @@ table = TableSpec(
         ColumnSpec(name="amount", data_type="NUMERIC(15,2)"),
     ],
 )
-payload = gen.generate_json_payload(table)
+artifact = compile_dataset(
+    table,
+    connection_name="MyConnection",
+    folder_id="folder_123",
+    folder_name="Datasets",
+    fmt=ArtifactFormat.JSON,
+)
+payload = artifact.payload
 ```
 
 ## Generate a DRD
 
 ```python
-from kyvos_sm_skills.generators.drd_json import DrdJsonGenerator
-from kyvos_sm_skills.generators.drd_xml import SimpleRel
+from kyvos_sdk.compiler import compile_drd
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
+from kyvos_sdk.contracts.identity import DrdGraph, DrdNode, DrdRelation
 
-gen = DrdJsonGenerator(drd_folder_id="folder_123", drd_folder_name="DRDs")
-payload = gen.generate(
-    drd_name="SalesDRD",
-    dataset_name_to_id={"FactSales": "ds_001", "DimProduct": "ds_002"},
-    relationships=[
-        SimpleRel("fact_sales", "product_key", "dim_product", "product_key"),
+graph = DrdGraph(
+    name="SalesDRD",
+    folder_id="folder_123",
+    folder_name="DRDs",
+    nodes=[
+        DrdNode(node_id="n1", dataset_id="ds_001", alias="FactSales", node_type="fact"),
+        DrdNode(node_id="n2", dataset_id="ds_002", alias="DimProduct", node_type=""),
     ],
-    dataset_aliases={"fact_sales": "FactSales", "dim_product": "DimProduct"},
-    fact_dataset_names={"FactSales"},
+    relations=[
+        DrdRelation(
+            source_node_id="n1",
+            target_node_id="n2",
+            source_column="product_key",
+            target_column="product_key",
+        ),
+    ],
 )
+artifact = compile_drd(graph, fmt=ArtifactFormat.JSON)
+payload = artifact.payload
 ```
 
 ## Generate a Semantic Model
 
 ```python
-from kyvos_sm_skills.generators.smodel_json import SModelJsonGenerator
-from kyvos_sm_skills.models import MeasureSpec, HierarchySpec
+from kyvos_sdk.compiler import compile_semantic_model
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
+from kyvos_sdk.contracts.domain import SemanticModelSpec
+from kyvos_sdk.contracts.identity import DrdGraph
 
-gen = SModelJsonGenerator(
-    folder_id="folder_456",
-    folder_name="SMs",
-    smodel_name="SalesModel",
+model_spec = SemanticModelSpec(...)  # name, datasets, relationships, measures, hierarchies
+graph = DrdGraph(...)  # nodes and relations for the DRD
+
+artifact = compile_semantic_model(
+    model_spec,
+    graph,
     connection_name="MyConnection",
-    drd_id="drd_001",
-    drd_name="SalesDRD",
-    dataset_name_to_id={"FactSales": "ds_001", "DimProduct": "ds_002"},
-    dataset_columns={
-        "FactSales": [{"name": "amount", "datatype": "NUMBER"}],
-        "DimProduct": [{"name": "product_name", "datatype": "CHAR"}],
-    },
-    hierarchy_specs=[
-        HierarchySpec(name="Product Hierarchy", levels=["category", "subcategory"], source_dataset="DimProduct"),
-    ],
-    semantic_measures=[
-        MeasureSpec(name="Total Sales", expression="", source_dataset="FactSales", source_column="amount", aggregation_type="sum"),
-    ],
-    fact_dataset_names={"FactSales"},
-    connected_dim_names={"DimProduct"},
+    fmt=ArtifactFormat.JSON,
 )
-payload = gen.generate()
+payload = artifact.payload
 ```
 
-## Generate Sample Models
+## Deploy Artifacts
 
-```bash
-pip install -e ".[dev]"
-python scripts/generate_samples.py
+Use the SDK's `ProvisioningClient` to apply compiled artifacts to Kyvos:
+
+```python
+from kyvos_sdk import KyvosService, ProvisioningClient
+
+svc = KyvosService(config=config)
+svc.initialize()
+prov = ProvisioningClient(svc)
+
+result = prov.apply_artifact(artifact)
+if not result.succeeded:
+    raise RuntimeError(result.diagnostics)
 ```
 
-This generates 5 sample models in `samples/models/<vertical>/` with connection, dataset, DRD, and semantic model payloads (both JSON and XML).
+See the `skills/` directory (e.g. `deploy-from-xmla.md`) for complete end-to-end deployment orchestration.
+
+## Legacy Generators
+
+The older `kyvos_sm_skills.generators.*` and `kyvos_sm_skills.models` APIs are still present for backward compatibility, but they are deprecated in favor of the SDK contracts and compilers.

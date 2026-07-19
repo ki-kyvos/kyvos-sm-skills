@@ -9,6 +9,8 @@ You understand:
 - The `.env` file contains all connection config — no credentials in skill inputs
 - Three separate folders are needed: RDATASET (datasets), DATASET_RELATIONSHIP (DRD), SMODEL (semantic model)
 - Datasets are created idempotently (re-running converges, does not fail on "already exists")
+- Entity and folder names are derived from the XMLA semantic model name — not a generic label
+- A `MMDDYY_HHmm` timestamp is appended to every folder and entity name to avoid clashes on repeat runs
 - Hidden tables are skipped when `KYVOS_SKIP_HIDDEN_TABLES=true`
 - The server assigns a CamelCase name to datasets; XMLA table names (snake_case) must be aliased
 - Columns must be refreshed per-dataset after creation, then fetched as `dataset_cols` for semantic model compilation
@@ -25,7 +27,7 @@ You understand:
 {
   "xmla_file_path": "string (required) — path to the .xmla file",
   "env_file": "string (default .env) — path to the .env config file",
-  "folder_name": "string (optional) — override KYVOS_FOLDER_NAME",
+  "folder_name": "string (optional) — override KYVOS_FOLDER_NAME (unused when name is derived from XMLA)",
   "payload_format": "json|xml (optional) — override KYVOS_PAYLOAD_FORMAT",
   "use_plan_apply": "bool (optional) — use plan/apply lifecycle for review before changes",
   "dry_run": "bool (optional) — parse + compile only, no API calls"
@@ -68,11 +70,14 @@ from kyvos_sdk.config import KyvosConfig
 config = KyvosConfig.from_env_file(env_file)
 ```
 
-### Step 2: Parse XMLA
+### Step 2: Parse XMLA + derive names
 
 The file path is a skill input (`xmla_file_path`), not a `KyvosConfig` field — input files vary per invocation, connection config does not.
 
+After parsing, entity and folder names are derived from the XMLA semantic model name (`spec.semantic_model.name`). A `MMDDYY_HHmm` timestamp suffix is appended to every name to prevent clashes on repeat runs — exactly as the agentic-ai-demo-automation orchestrator does.
+
 ```python
+from datetime import datetime
 from kyvos_xmla_parser.xmla_parser import parse_xmla
 
 with open(xmla_file_path) as f:
@@ -81,13 +86,44 @@ with open(xmla_file_path) as f:
 print(f"Parsed: {len(spec.tables)} tables, "
       f"{len(spec.semantic_model.relationships)} relationships, "
       f"{len(spec.semantic_model.measures)} measures")
+
+# ── Derive base name from XMLA ─────────────────────────────────────────────
+# Use schema_name from metadata (lowercase, may have underscores) → title-case
+# Falls back to semantic_model.name when schema_name is absent.
+_schema_name = spec.metadata.get("schema_name", "") if isinstance(spec.metadata, dict) else ""
+if _schema_name:
+    base_name = _schema_name.replace("_", " ").title()
+else:
+    base_name = spec.semantic_model.name  # e.g. "AWDW2019Multidimensional-EE"
+
+# ── Timestamp suffix — prevents clashes on repeat runs ────────────────────
+_ts = datetime.now().strftime("%m%d%y_%H%M")
+
+# ── Entity names ───────────────────────────────────────────────────────────
+smodel_name      = f"{spec.semantic_model.name}_{_ts}"
+drd_name         = f"{smodel_name} DRD"          # derived from timestamped SM name
+drd_id           = f"drd_{smodel_name}"           # client-side graph ID only
+
+# ── Folder names ───────────────────────────────────────────────────────────
+dataset_folder_label = f"{base_name} {_ts}"
+drd_folder_label     = f"{base_name} DRD {_ts}"
+smodel_folder_label  = f"{base_name} SModel {_ts}"
+
+print(f"Base name     : {base_name}")
+print(f"Timestamp     : {_ts}")
+print(f"Semantic model: {smodel_name}")
+print(f"DRD name      : {drd_name}")
+print(f"Dataset folder: {dataset_folder_label}")
+print(f"DRD folder    : {drd_folder_label}")
+print(f"SModel folder : {smodel_folder_label}")
 ```
 
 ### Step 3: Initialize Kyvos client
 
 ```python
 from kyvos_sdk.client import KyvosService
-from kyvos_sdk.provisioning import ProvisioningClient, FolderType
+from kyvos_sdk.provisioning import ProvisioningClient
+from kyvos_sdk.contracts.identity import FolderType
 
 svc = KyvosService(config=config)
 svc.initialize()
@@ -96,37 +132,35 @@ prov = ProvisioningClient(svc)
 
 ### Step 4: Create folders
 
-Three separate folders are required — one per entity type. All are created with upsert semantics (existing folder is reused).
+Three separate folders are required — one per entity type. Folder names are derived from the XMLA model name + timestamp (set in Step 2). All are created with upsert semantics (existing folder is reused, which never happens in practice because the timestamp makes every name unique).
 
 ```python
-# Dataset folder
-dataset_folder_result = prov.create_folder(config.folder_name, FolderType.RDATASET)
+# Dataset folder — name derived from XMLA + timestamp
+dataset_folder_result = prov.create_folder(dataset_folder_label, FolderType.RDATASET)
 if not dataset_folder_result.succeeded:
     raise RuntimeError(
         f"Dataset folder creation failed: {[d.message for d in dataset_folder_result.diagnostics]}"
     )
 folder_id = dataset_folder_result.primary_entity_id
-print(f"Dataset folder: {config.folder_name} (id={folder_id})")
+print(f"Dataset folder: {dataset_folder_label} (id={folder_id})")
 
 # DRD folder
-drd_folder_name = f"{config.folder_name} DRD"
-drd_folder_result = prov.create_folder(drd_folder_name, FolderType.DATASET_RELATIONSHIP)
+drd_folder_result = prov.create_folder(drd_folder_label, FolderType.DATASET_RELATIONSHIP)
 if not drd_folder_result.succeeded:
     raise RuntimeError(
         f"DRD folder creation failed: {[d.message for d in drd_folder_result.diagnostics]}"
     )
 drd_folder_id = drd_folder_result.primary_entity_id
-print(f"DRD folder: {drd_folder_name} (id={drd_folder_id})")
+print(f"DRD folder: {drd_folder_label} (id={drd_folder_id})")
 
 # Semantic model folder
-smodel_folder_name = f"{config.folder_name} SM"
-smodel_folder_result = prov.create_folder(smodel_folder_name, FolderType.SMODEL)
+smodel_folder_result = prov.create_folder(smodel_folder_label, FolderType.SMODEL)
 if not smodel_folder_result.succeeded:
     raise RuntimeError(
         f"Semantic model folder creation failed: {[d.message for d in smodel_folder_result.diagnostics]}"
     )
 smodel_folder_id = smodel_folder_result.primary_entity_id
-print(f"Semantic model folder: {smodel_folder_name} (id={smodel_folder_id})")
+print(f"Semantic model folder: {smodel_folder_label} (id={smodel_folder_id})")
 ```
 
 ### Step 5: Create connection
@@ -186,10 +220,14 @@ for table in spec.tables:
     if config.skip_hidden_tables and table.is_hidden:
         continue
 
-    ds_result = prov.create_dataset(
-        table, config.warehouse_connection_name, folder_id, config.folder_name,
-        use_json=(config.payload_format == "json"),
+    ds_artifact = compile_dataset_artifact(
+        table,
+        connection_name=config.warehouse_connection_name,
+        folder_id=folder_id,
+        folder_name=dataset_folder_label,
+        fmt=config.payload_format,
     )
+    ds_result = prov.apply_artifact(ds_artifact)
 
     if not ds_result.succeeded:
         raise RuntimeError(
@@ -223,7 +261,7 @@ for ds_info in created_entities:
         continue
     prov.refresh_dataset_columns(ds_info["id"])  # second sweep
     val_result = prov.validate_dataset(
-        ds_info["id"], ds_info["name"], config.folder_name
+        ds_info["id"], ds_info["name"], dataset_folder_label
     )
     if not val_result.succeeded:
         errs = [d.message for d in val_result.diagnostics if d.severity == "ERROR"]
@@ -240,7 +278,7 @@ dataset_cols = {}  # CamelCase dataset name → list of column dicts
 for ds_info in created_entities:
     if ds_info["entity_type"] != "DATASET":
         continue
-    cols = prov.get_dataset_column_details(config.folder_name, ds_info["name"])
+    cols = prov.get_dataset_column_details(dataset_folder_label, ds_info["name"])
     if cols:
         dataset_cols[ds_info["name"]] = cols
 
@@ -249,19 +287,18 @@ print(f"Datasets validated and column details fetched for {len(dataset_cols)} da
 
 ### Step 7: Build DRD graph + create DRD
 
-Use the **DRD folder** (`drd_folder_id`/`drd_folder_name`) — not the dataset folder. Pass `dataset_aliases` so the generator can map XMLA names to CamelCase server names. After creation, capture the **server-assigned DRD entity ID** for use in the semantic model.
+Use the **DRD folder** (`drd_folder_id`/`drd_folder_label`) — not the dataset folder. Pass `dataset_aliases` so the generator can map XMLA names to CamelCase server names. `drd_name` and `drd_id` were derived in Step 2 from the timestamped semantic model name. After creation, capture the **server-assigned DRD entity ID** for use in the semantic model.
 
 ```python
 from kyvos_sm_skills.contract_adapter import compile_drd_artifact
 
-drd_name = f"{config.folder_name}DRD"
-drd_id = f"drd_{config.folder_name}"  # client-side graph ID only
+# drd_name and drd_id are defined in Step 2 (derived from smodel_name + timestamp)
 
 drd_artifact = compile_drd_artifact(
     drd_name=drd_name,
     drd_id=drd_id,
     folder_id=drd_folder_id,          # DRD folder, not dataset folder
-    folder_name=drd_folder_name,
+    folder_name=drd_folder_label,
     dataset_name_to_id=dataset_name_to_id,
     relationships=spec.semantic_model.relationships,
     dataset_aliases=dataset_aliases,
@@ -283,7 +320,7 @@ created_entities.append({
 })
 
 # Validate DRD (pipeline gate)
-drd_val_result = prov.validate_drd(server_drd_id, drd_name, drd_folder_name)
+drd_val_result = prov.validate_drd(server_drd_id, drd_name, drd_folder_label)
 if not drd_val_result.succeeded:
     errs = [d.message for d in drd_val_result.diagnostics if d.severity == "ERROR"]
     raise RuntimeError(f"DRD validation failed — pipeline halted: {errs}")
@@ -293,17 +330,20 @@ print(f"DRD: {drd_name} (id={server_drd_id}) — validated")
 
 ### Step 8: Compile + create semantic model
 
-Use the **server-assigned DRD entity ID** (`server_drd_id`) — not the client-generated `drd_id`. Use the **SM folder** (`smodel_folder_id`/`smodel_folder_name`). Pass `dataset_cols` for measure/column resolution.
+Use the **server-assigned DRD entity ID** (`server_drd_id`) — not the client-generated `drd_id`. Use the **SM folder** (`smodel_folder_id`/`smodel_folder_label`). Pass `dataset_cols` for measure/column resolution. `smodel_name` (with timestamp) was set in Step 2.
 
 ```python
 from kyvos_sm_skills.contract_adapter import compile_smodel_artifact
+
+# Override the semantic model's name with the timestamped version from Step 2
+spec.semantic_model.name = smodel_name
 
 sm_artifact = compile_smodel_artifact(
     spec.semantic_model,
     drd_name=drd_name,
     drd_id=server_drd_id,             # server-assigned DRD entity ID
     folder_id=smodel_folder_id,       # SM folder, not dataset folder
-    folder_name=smodel_folder_name,
+    folder_name=smodel_folder_label,
     connection_name=config.warehouse_connection_name,
     dataset_name_to_id=dataset_name_to_id,
     relationships=spec.semantic_model.relationships,
@@ -318,7 +358,7 @@ if not sm_result.succeeded:
         f"Semantic model creation failed: {[d.message for d in sm_result.diagnostics]}"
     )
 
-smodel_name = spec.semantic_model.name
+# smodel_name already set in Step 2 (with timestamp)
 smodel_id = sm_result.primary_entity_id
 created_entities.append({
     "entity_type": "SEMANTIC_MODEL",
@@ -327,7 +367,7 @@ created_entities.append({
 })
 
 # Validate semantic model
-sm_val_result = prov.validate_semantic_model(smodel_id, smodel_name, smodel_folder_name)
+sm_val_result = prov.validate_semantic_model(smodel_id, smodel_name, smodel_folder_label)
 if not sm_val_result.succeeded:
     errs = [d.message for d in sm_val_result.diagnostics if d.severity == "ERROR"]
     raise RuntimeError(f"Semantic model validation failed: {errs}")
@@ -352,21 +392,23 @@ result = {
     "drd_id": server_drd_id,
     "smodel_name": smodel_name,
     "created_entities": created_entities + [
-        {"entity_type": "FOLDER", "id": folder_id, "name": config.folder_name},
-        {"entity_type": "FOLDER", "id": drd_folder_id, "name": drd_folder_name},
-        {"entity_type": "FOLDER", "id": smodel_folder_id, "name": smodel_folder_name},
+        {"entity_type": "FOLDER", "id": folder_id,        "name": dataset_folder_label},
+        {"entity_type": "FOLDER", "id": drd_folder_id,    "name": drd_folder_label},
+        {"entity_type": "FOLDER", "id": smodel_folder_id, "name": smodel_folder_label},
         {"entity_type": "CONNECTION", "id": connection_id, "name": config.warehouse_connection_name},
     ],
     "errors": [],
     "warnings": [],
 }
 print(f"\n✅ Deployment Successful")
-print(f"   Tables parsed: {len(spec.tables)}")
-print(f"   Datasets created: {len(dataset_name_to_id)}")
-print(f"   Relationships: {len(spec.semantic_model.relationships)}")
-print(f"   Measures: {len(spec.semantic_model.measures)}")
-print(f"   Connection: {config.warehouse_connection_name}")
-print(f"   DRD: {drd_name} (id={server_drd_id})")
+print(f"   XMLA model    : {spec.metadata.get('xmla_db_name', base_name)}")
+print(f"   Timestamp     : {_ts}")
+print(f"   Tables parsed : {len(spec.tables)}")
+print(f"   Datasets      : {len(dataset_name_to_id)}")
+print(f"   Relationships : {len(spec.semantic_model.relationships)}")
+print(f"   Measures      : {len(spec.semantic_model.measures)}")
+print(f"   Connection    : {config.warehouse_connection_name}")
+print(f"   DRD           : {drd_name} (id={server_drd_id})")
 print(f"   Semantic Model: {smodel_name}")
 ```
 

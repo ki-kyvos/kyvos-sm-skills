@@ -214,7 +214,8 @@ def build_spec_from_recommendation(sm_rec: dict, warehouse_tables: list[dict]) -
 ```python
 from kyvos_sdk.config import KyvosConfig
 from kyvos_sdk.client import KyvosService
-from kyvos_sdk.provisioning import ProvisioningClient, FolderType
+from kyvos_sdk.provisioning import ProvisioningClient
+from kyvos_sdk.contracts.identity import FolderType
 from kyvos_sdk.warehouse_registry import build_jdbc_url, get_warehouse_profile
 from kyvos_sm_skills.contract_adapter import (
     compile_dataset_artifact,
@@ -228,13 +229,29 @@ svc = KyvosService(config=config)
 svc.initialize()
 prov = ProvisioningClient(svc)
 
-# Create folder
-folder_result = prov.create_folder(config.folder_name, FolderType.RDATASET)
-if not folder_result.succeeded:
+# Create folders — one per entity type
+dataset_folder_result = prov.create_folder(config.folder_name, FolderType.RDATASET)
+if not dataset_folder_result.succeeded:
     raise RuntimeError(
-        f"Folder creation failed: {[d.message for d in folder_result.diagnostics]}"
+        f"Dataset folder creation failed: {[d.message for d in dataset_folder_result.diagnostics]}"
     )
-folder_id = folder_result.primary_entity_id
+folder_id = dataset_folder_result.primary_entity_id
+
+drd_folder_name = f"{config.folder_name} DRD"
+drd_folder_result = prov.create_folder(drd_folder_name, FolderType.DATASET_RELATIONSHIP)
+if not drd_folder_result.succeeded:
+    raise RuntimeError(
+        f"DRD folder creation failed: {[d.message for d in drd_folder_result.diagnostics]}"
+    )
+drd_folder_id = drd_folder_result.primary_entity_id
+
+smodel_folder_name = f"{config.folder_name} SModel"
+smodel_folder_result = prov.create_folder(smodel_folder_name, FolderType.SMODEL)
+if not smodel_folder_result.succeeded:
+    raise RuntimeError(
+        f"Semantic model folder creation failed: {[d.message for d in smodel_folder_result.diagnostics]}"
+    )
+smodel_folder_id = smodel_folder_result.primary_entity_id
 
 # Create connection
 jdbc_url = config.warehouse_jdbc_url or build_jdbc_url(
@@ -264,28 +281,45 @@ for sm_rec in recommended_sms:
 
     # Create datasets
     dataset_name_to_id = {}
+    dataset_aliases = {}
+    dataset_cols = {}
+    created_entities = []
     for table in spec.tables:
-        ds_result = prov.create_dataset(
-            table, config.warehouse_connection_name, folder_id, config.folder_name,
-            use_json=(config.payload_format == "json"),
+        ds_artifact = compile_dataset_artifact(
+            table,
+            connection_name=config.warehouse_connection_name,
+            folder_id=folder_id,
+            folder_name=config.folder_name,
+            fmt=config.payload_format,
         )
+        ds_result = prov.apply_artifact(ds_artifact)
         if not ds_result.succeeded:
             raise RuntimeError(
                 f"Dataset creation failed for {table.name}: "
                 f"{[d.message for d in ds_result.diagnostics]}"
             )
-        dataset_name_to_id[table.name] = ds_result.primary_entity_id
-        prov.refresh_dataset_columns(ds_result.primary_entity_id)
+        server_name = ds_result.primary_entity_name
+        ds_id = ds_result.primary_entity_id
+        dataset_name_to_id[server_name] = ds_id
+        if table.name != server_name:
+            dataset_aliases[table.name] = server_name
+        created_entities.append({"entity_type": "DATASET", "id": ds_id, "name": server_name})
+        prov.refresh_dataset_columns(ds_id)
+        cols = prov.get_dataset_column_details(config.folder_name, server_name)
+        if cols:
+            dataset_cols[server_name] = cols
 
     # Create DRD
-    drd_name = f"{sm_rec['name']}DRD"
-    drd_id = f"drd_{sm_rec['name']}"
+    sm_base = sm_rec["name"]
+    drd_name = f"{sm_base}DRD"
+    drd_id = f"drd_{sm_base}"
 
     drd_artifact = compile_drd_artifact(
         drd_name=drd_name, drd_id=drd_id,
-        folder_id=folder_id, folder_name=config.folder_name,
+        folder_id=drd_folder_id, folder_name=drd_folder_name,
         dataset_name_to_id=dataset_name_to_id,
         relationships=spec.semantic_model.relationships,
+        dataset_aliases=dataset_aliases,
         fmt=config.payload_format,
     )
     drd_result = prov.apply_artifact(drd_artifact)
@@ -293,15 +327,22 @@ for sm_rec in recommended_sms:
         raise RuntimeError(
             f"DRD creation failed: {[d.message for d in drd_result.diagnostics]}"
         )
+    server_drd_id = drd_result.primary_entity_id
+    server_drd_name = drd_result.primary_entity_name or drd_name
+    created_entities.append({"entity_type": "DRD", "id": server_drd_id, "name": server_drd_name})
 
     # Create semantic model
     sm_artifact = compile_smodel_artifact(
         spec.semantic_model,
-        drd_name=drd_name, drd_id=drd_id,
-        folder_id=folder_id, folder_name=config.folder_name,
+        drd_name=server_drd_name,
+        drd_id=server_drd_id,
+        folder_id=smodel_folder_id,
+        folder_name=smodel_folder_name,
         connection_name=config.warehouse_connection_name,
         dataset_name_to_id=dataset_name_to_id,
         relationships=spec.semantic_model.relationships,
+        dataset_aliases=dataset_aliases,
+        dataset_columns=dataset_cols,
         fmt=config.payload_format,
     )
     sm_result = prov.apply_artifact(sm_artifact)
@@ -309,6 +350,11 @@ for sm_rec in recommended_sms:
         raise RuntimeError(
             f"Semantic model creation failed: {[d.message for d in sm_result.diagnostics]}"
         )
+    created_entities.append({
+        "entity_type": "SEMANTIC_MODEL",
+        "id": sm_result.primary_entity_id,
+        "name": sm_rec["name"],
+    })
 
     print(f"  SM deployed: {sm_rec['name']} ({sm_rec['schema_type']})")
 ```

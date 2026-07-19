@@ -123,26 +123,22 @@ Kyvos IRO XML with DIMENSIONS, MEASURE_GROUPS, and MEASURES sections.
 
 ## Backend
 
-Python generators:
-- **JSON:** `kyvos_sm_skills.generators.smodel_json.SModelJsonGenerator`
-- **XML:** `kyvos_sm_skills.generators.smodel_xml.SModelXmlGenerator`
+Use the SDK's pure compiler to generate deterministic XML or JSON payloads. The compiler consumes a `SemanticModelSpec` and a `DrdGraph` contract and returns a `CompiledArtifact`.
 
 ```python
-from kyvos_sm_skills.generators.smodel_json import SModelJsonGenerator
+from kyvos_sdk.compiler import compile_semantic_model
+from kyvos_sdk.contracts.artifacts import ArtifactFormat
+from kyvos_sdk.contracts.domain import SemanticModelSpec
+from kyvos_sdk.contracts.identity import DrdGraph
 
-gen = SModelJsonGenerator(
-    folder_id="folder_123",
-    folder_name="Semantic Models",
-    smodel_name="SalesModel",
+model_spec = SemanticModelSpec(...)  # name, datasets, relationships, measures, hierarchies
+graph = DrdGraph(...)  # DrdGraph describing the DRD nodes/relations
+
+artifact = compile_semantic_model(
+    model_spec,
+    graph,
     connection_name="PostgresConnection",
-    drd_id="drd_001",
-    drd_name="SalesDRD",
-    dataset_name_to_id={"FactSales": "ds_001", "DimProduct": "ds_002"},
-    dataset_columns={...},
-    hierarchy_specs=[...],
-    semantic_measures=[...],
-    fact_dataset_names={"FactSales"},
-    connected_dim_names={"DimProduct", "DimDate"},
+    fmt=ArtifactFormat.JSON,  # or ArtifactFormat.XML
 )
-payload = gen.generate()
+payload = artifact.payload
 ```
