@@ -109,8 +109,30 @@ The `skills/` directory contains markdown skill files that can be loaded into Cl
 
 See `docs/claude-skill-usage.md` for detailed usage instructions.
 
+## CLI
+
+The `kyvos-skills` command-line tool is installed with the package:
+
+```bash
+# List available skills
+kyvos-skills list
+
+# Export skill files for Claude Code
+kyvos-skills export-skill deploy-from-xmla
+kyvos-skills export-skill --all -o ./skills
+
+# Deploy an XMLA model (no Claude needed)
+kyvos-skills deploy --xmla-path ./AdventureWorks.xmla --env-file ./.env
+
+# Dry run (parse only)
+kyvos-skills deploy --xmla-path ./AdventureWorks.xmla --env-file ./.env --dry-run
+```
+
+See the [Deployment & Getting Started Guide](docs/deployment-guide.md) for full instructions.
+
 ## Documentation
 
+- [Deployment & Getting Started Guide](docs/deployment-guide.md)
 - [Quickstart](docs/quickstart.md)
 - [Tutorials](docs/tutorials/)
 - [API Reference](docs/api-reference.md)

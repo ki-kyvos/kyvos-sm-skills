@@ -70,7 +70,7 @@ class DatasetJsonGenerator:
                 },
                 "parameters": [],
                 "partitionDetails": {
-                    "metadataMode": "AUTO",
+                    "metadataMode": "SINGLE",
                     "columnName": "",
                     "tableName": "",
                     "tableRecordCount": "",

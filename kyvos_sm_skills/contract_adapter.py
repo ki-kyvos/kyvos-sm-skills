@@ -351,7 +351,35 @@ def compile_smodel_artifact(
             "Install it with: pip install kyvos-sm-skills[sdk]"
         ) from exc
 
+    # Remap dataset names, relationship names, measure/hierarchy source_dataset
+    # from XMLA names to CamelCase server names BEFORE adaptation, since the
+    # contract validator checks source_dataset against dataset names during
+    # adapt_semantic_model().
+    if dataset_aliases:
+        for ds in smodel.datasets:
+            mapped = dataset_aliases.get(ds.name)
+            if mapped:
+                ds.name = mapped
+        for rel in smodel.relationships:
+            mapped_l = dataset_aliases.get(rel.left_dataset)
+            if mapped_l:
+                rel.left_dataset = mapped_l
+            mapped_r = dataset_aliases.get(rel.right_dataset)
+            if mapped_r:
+                rel.right_dataset = mapped_r
+        for m in smodel.measures:
+            if m.source_dataset:
+                mapped = dataset_aliases.get(m.source_dataset)
+                if mapped:
+                    m.source_dataset = mapped
+        for h in smodel.hierarchies:
+            if h.source_dataset:
+                mapped = dataset_aliases.get(h.source_dataset)
+                if mapped:
+                    h.source_dataset = mapped
+
     contract_smodel = adapt_semantic_model(smodel)
+
     graph = build_drd_graph(
         drd_name=drd_name,
         drd_id=drd_id,

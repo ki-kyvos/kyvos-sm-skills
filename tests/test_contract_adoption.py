@@ -418,6 +418,109 @@ class TestCompileSmodelArtifact:
                     relationships=[],
                 )
 
+    def test_measure_source_dataset_remapped_via_aliases(self):
+        """GAP-7: Measure source_dataset should be remapped from XMLA names to CamelCase server names."""
+        smodel = SemanticModelSpec(
+            name="TestModel",
+            datasets=[
+                DatasetSpec(name="FactSales", source_table="fact_sales", connection_name="TestConnection"),
+                DatasetSpec(name="DimCustomer", source_table="dim_customer", connection_name="TestConnection"),
+            ],
+            relationships=[
+                RelationshipSpec(
+                    left_dataset="FactSales",
+                    left_column="customer_key",
+                    right_dataset="DimCustomer",
+                    right_column="customer_key",
+                ),
+            ],
+            measures=[
+                MeasureSpec(
+                    name="TotalAmount",
+                    expression="",
+                    source_dataset="fact_sales",
+                    source_column="amount",
+                    is_calculated=False,
+                    aggregation_type="sum",
+                ),
+            ],
+            hierarchies=[],
+        )
+        dataset_name_to_id = {"FactSales": "ds_001", "DimCustomer": "ds_002"}
+        dataset_aliases = {"fact_sales": "FactSales", "dim_customer": "DimCustomer"}
+
+        artifact = compile_smodel_artifact(
+            smodel,
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            folder_id="folder_001",
+            folder_name="TestFolder",
+            connection_name="TestConnection",
+            dataset_name_to_id=dataset_name_to_id,
+            relationships=smodel.relationships,
+            dataset_aliases=dataset_aliases,
+            fact_dataset_names={"FactSales"},
+            fmt="json",
+        )
+
+        import json
+        payload = json.loads(artifact.payload)
+        measures = payload.get("specific", {}).get("smObject", {}).get("measures", {}).get("measure", [])
+        assert len(measures) > 0
+        assert measures[0]["name"] == "TotalAmount"
+        # In Simplified JSON format, dataset reference is in dataField.queryName
+        # (remapped from XMLA snake_case to CamelCase server name via dataset_aliases)
+        data_field = measures[0].get("dataField", {})
+        assert data_field.get("queryName") == "FactSales"
+
+    def test_hierarchy_source_dataset_remapped_via_aliases(self):
+        """GAP-7: Hierarchy source_dataset should also be remapped via dataset_aliases."""
+        smodel = SemanticModelSpec(
+            name="TestModel",
+            datasets=[
+                DatasetSpec(name="FactSales", source_table="fact_sales", connection_name="TestConnection"),
+                DatasetSpec(name="DimCustomer", source_table="dim_customer", connection_name="TestConnection"),
+            ],
+            relationships=[
+                RelationshipSpec(
+                    left_dataset="FactSales",
+                    left_column="customer_key",
+                    right_dataset="DimCustomer",
+                    right_column="customer_key",
+                ),
+            ],
+            measures=[],
+            hierarchies=[
+                HierarchySpec(name="CustomerHierarchy", levels=["customer_name"], source_dataset="dim_customer"),
+            ],
+        )
+        dataset_name_to_id = {"FactSales": "ds_001", "DimCustomer": "ds_002"}
+        dataset_aliases = {"fact_sales": "FactSales", "dim_customer": "DimCustomer"}
+
+        artifact = compile_smodel_artifact(
+            smodel,
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            folder_id="folder_001",
+            folder_name="TestFolder",
+            connection_name="TestConnection",
+            dataset_name_to_id=dataset_name_to_id,
+            relationships=smodel.relationships,
+            dataset_aliases=dataset_aliases,
+            fact_dataset_names={"FactSales"},
+            fmt="json",
+        )
+
+        import json
+        payload = json.loads(artifact.payload)
+        dimensions = payload.get("specific", {}).get("smObject", {}).get("dimensions", [])
+        assert len(dimensions) > 0
+        assert dimensions[0]["name"] == "DimCustomer"
+        # In Simplified JSON format, dataset reference is in dataSources[0].id
+        data_sources = dimensions[0].get("dataSources", [])
+        assert len(data_sources) > 0
+        assert data_sources[0]["id"] == "ds_002"
+
 
 # ── Backward compatibility tests ───────────────────────────────────────────
 
