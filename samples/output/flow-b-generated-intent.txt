@@ -1,0 +1,275 @@
+---
+# Kyvos Semantic Model User Intent Document  
+## Domain: AdventureWorks | Schema: awdw2019multidimensionalee
+
+---
+
+### 1. Business Context
+
+AdventureWorks is a diversified manufacturer and distributor, selling products both directly (internet sales) and via resellers. The organization operates across multiple countries and territories, managing complex product, customer, employee, departmental, and financial structures. Their primary business analytics goals are:
+
+- **Sales Performance:** Analyze sales across channels (internet, reseller), territories, promotions, products, and periods.
+- **Customer & Reseller Segmentation:** Profile and segment customers/resellers for targeted marketing and retention.
+- **Product & Promotion Effectiveness:** Understand product performance and promotion impact.
+- **Financial Reporting:** Track and roll up revenue, expenses, and profitability across organizational, departmental, and account hierarchies.
+- **Operational Efficiency:** Assess employee, department, and geographic performance in sales and financial outcomes.
+- **Time-based Trends:** Track sales, costs, margins, and financial metrics over time (period-to-date, YoY, running total).
+
+Key analytical questions:
+- Which products, territories, and promotions drive sales growth?
+- How are sales distributed across channels and markets?
+- What is the profitability by product, reseller, or territory?
+- Are departments and employees meeting their sales quotas?
+- How does financial performance roll up through organization/account structures?
+
+---
+
+### 2. Fact Tables
+
+#### Main Fact Tables & Key Measures
+
+- **internet_sales**:  
+  - Measures: salesamount, orderquantity, extendedamount, taxamt, freight, unitprice, totalproductcost, productstandardcost, discountpct  
+  - Key for internet channel analysis.
+
+- **reseller_sales**:  
+  - Measures: salesamount, orderquantity, extendedamount, taxamt, freight, unitprice, totalproductcost, productstandardcost, discountamount, unitpricediscountpct  
+  - Key for reseller channel analysis.
+
+- **sales_orders**:  
+  - Measures: orderquantity, unitprice, extendedamount, productstandardcost, totalproductcost, salesamount, taxamt, freight  
+  - Enables channel-agnostic sales analysis.
+
+- **sales_summary**:  
+  - Measures: orderquantity, unitprice, extendedamount, productstandardcost, totalproductcost, salesamount, taxamt, freight  
+  - Aggregated sales for summary reporting.
+
+- **financial_reporting**:  
+  - Measures: amount  
+  - For financial statement and rollup analysis.
+
+- **internet_orders**, **reseller_orders**, **internet_customers**:  
+  - Measures: support detailed analytics; measures overlap with above, plus customer/reseller/sub-dimensions.
+
+- **sales_targets**:  
+  - Measures: salesamountquota  
+  - For quota, target tracking against achieved sales.
+
+---
+
+### 3. Dimension Tables
+
+#### Key Dimensions & Attributes
+
+- **product**:  
+  - Attributes: productkey, productcategorykey, productsubcategorykey, color, size, weight, listprice, dealerprice, class, style, productline, status, modelnameassembly, sizerange, safetystocklevel, daystomanufacture
+
+- **customer**:  
+  - Attributes: customerkey, city, stateprovincecode, englishcountryregionname, countryregioncode, postalcode, birthdate, datefirstpurchase, yearlyincome, englisheducation, englishoccupation, maritalstatus, gender, commutedistance, numbercarsowned, totalchildren
+
+- **sales_territory**:  
+  - Attributes: salesterritorykey, salesterritorycountry, salesterritorygroup
+
+- **promotion**:  
+  - Attributes: promotionkey, discountpct, englishpromotiontype, englishpromotioncategory, startdate, enddate, minqty, maxqty
+
+- **sales_channel**:  
+  - Attributes: saleschannel
+
+- **source_currency, destination_currency**:  
+  - Attributes: currencykey, currencyname, lcid (for currency analytics and conversion)
+
+- **reseller**:  
+  - Attributes: resellerkey, productline, businesstype, annualsales, annualrevenue, firstorderyear, lastorderyear, yearopened, numberemployees, geographykey
+
+- **employee**:  
+  - Attributes: employeekey, departmentname, salespersonflag, title, hiredate, sickleavehours, vacationhours, loginid, baserate, emailaddress, payfrequency, phone, salariedflag, emergencycontactname, gender, maritalstatusdesc, salesterritorykey, employeestatus, startdate, enddate, parentemployeekey, hireyear  
+  - Includes parent-child manager hierarchy.
+
+- **department**:  
+  - Attributes: departmentgroupkey, parentdepartmentgroupkey  
+  - Supports department rollups.
+
+- **organization**:  
+  - Attributes: organizationkey, parentorganizationkey, percentageofownership, currencykey  
+  - Supports organization hierarchy.
+
+- **account**:  
+  - Attributes: accountkey, parentaccountkey, accounttype, accountcodealternatekey, custommembers, operator  
+  - Supports account rollups.
+
+- **scenario**:  
+  - Attributes: scenariokey (supports budget/forecast scenario reporting).
+
+- **date** (single-table candidate):  
+  - Attributes: calendaryear, calendarquarter, calendarsemester, monthnumberofyear, daynumberofmonth, fiscalyear, fiscalquarter, fiscalweeknumberofyear, weeknumberofyear, daynumberofweek, daynumberofyear  
+  - Full date hierarchy support.
+
+- **geography** (single-table candidate):  
+  - Attributes: geographykey, city, stateprovincecode, countryregioncode, englishcountryregionname, postalcode
+
+---
+
+### 4. Hierarchy Requirements
+
+#### Natural Business Hierarchies
+
+- **Date Hierarchy** (_from date table_):
+  - Calendar Year → Quarter → Month → Week → Day  
+    - Levels: calendaryear, calendarquarterofyear, monthnumberofyear, weeknumberofyear, daynumberofmonth
+  - Fiscal Year → Quarter → Month → Week → Day  
+    - Levels: fiscalyear, fiscalquarterofyear, monthnumberofyear, fiscalweeknumberofyear, daynumberofmonth
+
+- **Sales Territory Hierarchy**:
+  - Territory Group → Territory Country → Territory  
+    - Levels: salesterritorygroup, salesterritorycountry, salesterritorykey
+
+- **Product Hierarchy**:
+  - Product Category → Subcategory → Product  
+    - Levels: productcategorykey, productsubcategorykey, productkey
+
+- **Geography Hierarchy**:
+  - Country → State/Province → City → Postal Code  
+    - Levels: englishcountryregionname, stateprovincecode, city, postalcode
+
+- **Promotion Hierarchy**:
+  - Category → Type → Promotion  
+    - Levels: englishpromotioncategory, englishpromotiontype, promotionkey
+
+- **Department Hierarchy** (parent-child):
+  - ParentDepartmentGroupKey → DepartmentGroupKey  
+    - Parent-child hierarchy using departmentgroupkey and parentdepartmentgroupkey  
+    - Root member detection: Parent is blank  
+    - Level naming: _Custom template e.g., "Department Group Level *"_
+
+- **Employee Hierarchy** (parent-child / organizational chart):
+  - ParentEmployeeKey → EmployeeKey  
+    - Parent-child hierarchy using employeekey and parentemployeekey  
+    - Root member: Parent is blank  
+    - Level naming: "Management Level *" (e.g., CEO, Director, Manager, Salesperson)  
+    - Level captions: Based on title column
+
+- **Organization Hierarchy** (parent-child):
+  - ParentOrganizationKey → OrganizationKey  
+    - Parent-child hierarchy using organizationkey and parentorganizationkey  
+    - Root member: Parent is blank  
+    - Level naming: "Organization Level *" (e.g., Parent-Subsidiary, Division, Business Unit)  
+    - Enable alternate path support (multiple rollups possible)
+
+- **Account Hierarchy** (parent-child):
+  - ParentAccountKey → AccountKey  
+    - Parent-child hierarchy using accountkey and parentaccountkey  
+    - Root member: Parent is blank  
+    - Level naming: "Account Level *"  
+    - Caption: accounttype column  
+    - Supports custom rollup weights if needed (e.g., weighted aggregations for accounts)
+
+---
+
+### 5. KPI Requirements
+
+#### Base Measures
+
+- **Sales and Revenue**:  
+  - SUM([Measures].[salesamount]), SUM([Measures].[extendedamount]), SUM([Measures].[orderquantity])
+
+- **Cost & Margin**:  
+  - SUM([Measures].[totalproductcost]), SUM([Measures].[productstandardcost]), SUM([Measures].[taxamt]), SUM([Measures].[freight])
+
+- **Discounts & Promotions**:  
+  - SUM([Measures].[discountpct]), SUM([Measures].[discountamount]), SUM([Measures].[unitpricediscountpct])
+
+- **Counts**:  
+  - COUNT([Customer].[customerkey]), COUNT([Reseller].[resellerkey]), COUNT([Product].[productkey]), COUNT([Employee].[employeekey])
+
+- **Financial Reporting**:  
+  - SUM([Measures].[amount])
+
+#### Time Intelligence KPIs  
+_(Kyvos MDX syntax)_
+
+- **Sales YTD**:  
+  SUM(YTD([Date].[Calendar].CurrentMember), [Measures].[salesamount])
+
+- **Sales QTD**:  
+  SUM(QTD([Date].[Calendar].CurrentMember), [Measures].[salesamount])
+
+- **Sales MTD**:  
+  SUM(MTD([Date].[Calendar].CurrentMember), [Measures].[salesamount])
+
+- **Prior Year Sales**:  
+  ([Measures].[salesamount], ParallelPeriod([Date].[Calendar].[Calendar Year], 1, [Date].[Calendar].CurrentMember))
+
+- **YoY Sales Growth**:  
+  IIF([Measures].[Prior Year Sales] = 0, NULL, ([Measures].[salesamount] - [Measures].[Prior Year Sales]) / [Measures].[Prior Year Sales])
+
+- **Running Total Sales**:  
+  SUM({[Date].[Calendar].[Date].FirstMember : [Date].[Calendar].CurrentMember}, [Measures].[salesamount])
+
+#### Margin and Profitability KPIs
+
+- **Gross Margin**:  
+  IIF([Measures].[salesamount]=0, NULL, ([Measures].[salesamount] - [Measures].[totalproductcost]) / [Measures].[salesamount])
+
+- **Profit Amount**:  
+  [Measures].[salesamount] - [Measures].[totalproductcost]
+
+- **Margin %**:  
+  DIVIDE(([Measures].[salesamount] - [Measures].[totalproductcost]), [Measures].[salesamount], 0)
+
+- **Sales Quota Achievement %**:  
+  DIVIDE([Measures].[salesamount], [Measures].[salesamountquota], 0)
+
+#### Performance & Ranking KPIs
+
+- **Product Rank by Sales**:  
+  RANK([Product].[productkey].CurrentMember, ORDER([Product].[productkey].Members, [Measures].[salesamount], DESC))
+
+- **Sales Territory Rank**:  
+  RANK([Sales Territory].[salesterritorykey].CurrentMember, ORDER([Sales Territory].[salesterritorykey].Members, [Measures].[salesamount], DESC))
+
+- **Percentile Sales** (example for product):  
+  RANK([Product].[productkey].CurrentMember, ORDER([Product].[productkey].Members, [Measures].[salesamount], DESC))  
+  DIVIDE(RANK(...), COUNT([Product].[productkey].Members), 0)
+
+#### Variance & Conditional KPIs
+
+- **Profit Variance**:  
+  [Measures].[Profit Amount] - ([Measures].[Profit Amount], ParallelPeriod([Date].[Calendar].[Calendar Year], 1, [Date].[Calendar].CurrentMember))
+
+- **Quota Variance**:  
+  [Measures].[salesamount] - [Measures].[salesamountquota]
+
+- **Conditional KPI (e.g., high performer flag)**:  
+  IIF([Measures].[Margin %] >= 0.3, 1, 0)
+
+#### Industry Standard KPIs
+
+- **Average Order Value**:  
+  DIVIDE([Measures].[salesamount], [Measures].[orderquantity], 0)
+
+- **Customer Acquisition Count** (first purchase date):  
+  COUNT(FILTER([Customer].[customerkey].Members, [Customer].[datefirstpurchase]=[Date].[Calendar].CurrentMember))
+
+- **Distinct Customer Count**:  
+  COUNT(DISTINCT([Customer].[customerkey].Members))
+
+---
+
+### 6. Quality Bar
+
+The model must be delivered as an **MVP-ready, production-grade Kyvos semantic model**:
+
+- All hierarchies must be defined as per natural business rollups and parent-child relationships, with proper root detection and level naming templates (see Kyvos [hierarchy best practices](https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1228748942/Creating+parent+child+hierarchies)).
+- All KPIs must use **Kyvos MDX syntax**, not DAX.
+- Measures and calculated KPIs must cover time intelligence, profitability, ranking, variance, and performance.
+- Model must support cross-fact analysis via conformed dimensions (as per [star schema best practices](https://docs.support.kyvosinsights.com/wiki/spaces/KD20266)).
+- Parent-child hierarchies (employee, department, organization, account) must be configured with correct key columns, root member detection (parent is blank), and alternate path support if applicable.
+- Custom rollup weights should be available for account or organization hierarchies if required by business rollups (see [custom rollups](https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1228748891)).
+- All time-based KPIs must be based on appropriate calendar/fiscal hierarchies.
+- Clear, business-friendly captions and descriptions for all hierarchy levels and KPI measures.
+- Model ready for enterprise deployment, fully supporting slicing, dicing, drill-down, and time series comparison.
+
+---
+
+**End of Intent Document**

@@ -1,0 +1,578 @@
+{
+  "recommended_sms": [
+    {
+      "name": "AdventureWorks Multifact Sales & Financial Model",
+      "schema_type": "multifact",
+      "rationale": "The warehouse contains multiple fact tables for distinct sales channels (internet, reseller), summary/order facts, and financial reporting, all sharing conformed dimensions. Industry-standard BI for AdventureWorks recommends multifact schemas to align sales and financial analytics, enabling cross-channel insights and KPI rollups. The model includes all relevant fact tables (internet_sales, internet_orders, internet_customers, reseller_sales, reseller_orders, sales_summary, sales_orders, financial_reporting), all conformed and role-playing dimensions (Product, Date, Sales Territory, Customer, Promotion, Source Currency), and bridge tables for many-to-many relationships, delivering production-grade MVP for enterprise analytics.",
+      "tables": [
+        "internet_sales",
+        "internet_orders",
+        "internet_customers",
+        "reseller_sales",
+        "reseller_orders",
+        "sales_summary",
+        "sales_orders",
+        "financial_reporting",
+        "product",
+        "sales_territory",
+        "customer",
+        "promotion",
+        "source_currency",
+        "sales_channel",
+        "reseller",
+        "employee",
+        "department",
+        "organization",
+        "account",
+        "scenario",
+        "sales_reason",
+        "sales_reasons",
+        "destination_currency",
+        "date",
+        "geography"
+      ],
+      "relationships": [
+        {
+          "from_table": "internet_sales",
+          "from_column": "productkey",
+          "to_table": "product",
+          "to_column": "productkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_sales",
+          "from_column": "promotionkey",
+          "to_table": "promotion",
+          "to_column": "promotionkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_sales",
+          "from_column": "customerkey",
+          "to_table": "customer",
+          "to_column": "customerkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_sales",
+          "from_column": "salesterritorykey",
+          "to_table": "sales_territory",
+          "to_column": "salesterritorykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_sales",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_orders",
+          "from_column": "productkey",
+          "to_table": "product",
+          "to_column": "productkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_orders",
+          "from_column": "promotionkey",
+          "to_table": "promotion",
+          "to_column": "promotionkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_orders",
+          "from_column": "customerkey",
+          "to_table": "customer",
+          "to_column": "customerkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_orders",
+          "from_column": "salesterritorykey",
+          "to_table": "sales_territory",
+          "to_column": "salesterritorykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_orders",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_customers",
+          "from_column": "productkey",
+          "to_table": "product",
+          "to_column": "productkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_customers",
+          "from_column": "promotionkey",
+          "to_table": "promotion",
+          "to_column": "promotionkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_customers",
+          "from_column": "salesterritorykey",
+          "to_table": "sales_territory",
+          "to_column": "salesterritorykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "internet_customers",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_sales",
+          "from_column": "productkey",
+          "to_table": "product",
+          "to_column": "productkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_sales",
+          "from_column": "promotionkey",
+          "to_table": "promotion",
+          "to_column": "promotionkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_sales",
+          "from_column": "resellerkey",
+          "to_table": "reseller",
+          "to_column": "resellerkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_sales",
+          "from_column": "employeekey",
+          "to_table": "employee",
+          "to_column": "employeekey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_sales",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_orders",
+          "from_column": "productkey",
+          "to_table": "product",
+          "to_column": "productkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_orders",
+          "from_column": "promotionkey",
+          "to_table": "promotion",
+          "to_column": "promotionkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_orders",
+          "from_column": "resellerkey",
+          "to_table": "reseller",
+          "to_column": "resellerkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_orders",
+          "from_column": "employeekey",
+          "to_table": "employee",
+          "to_column": "employeekey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "reseller_orders",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_summary",
+          "from_column": "productkey",
+          "to_table": "product",
+          "to_column": "productkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_summary",
+          "from_column": "promotionkey",
+          "to_table": "promotion",
+          "to_column": "promotionkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_summary",
+          "from_column": "saleschannel",
+          "to_table": "sales_channel",
+          "to_column": "saleschannel",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_summary",
+          "from_column": "salesterritorykey",
+          "to_table": "sales_territory",
+          "to_column": "salesterritorykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_summary",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_orders",
+          "from_column": "productkey",
+          "to_table": "product",
+          "to_column": "productkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_orders",
+          "from_column": "promotionkey",
+          "to_table": "promotion",
+          "to_column": "promotionkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_orders",
+          "from_column": "saleschannel",
+          "to_table": "sales_channel",
+          "to_column": "saleschannel",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_orders",
+          "from_column": "salesterritorykey",
+          "to_table": "sales_territory",
+          "to_column": "salesterritorykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_orders",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "financial_reporting",
+          "from_column": "departmentgroupkey",
+          "to_table": "department",
+          "to_column": "departmentgroupkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "financial_reporting",
+          "from_column": "organizationkey",
+          "to_table": "organization",
+          "to_column": "organizationkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "financial_reporting",
+          "from_column": "accountkey",
+          "to_table": "account",
+          "to_column": "accountkey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "financial_reporting",
+          "from_column": "scenariokey",
+          "to_table": "scenario",
+          "to_column": "scenariokey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "financial_reporting",
+          "from_column": "currencykey",
+          "to_table": "source_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_one"
+        },
+        {
+          "from_table": "sales_reasons",
+          "from_column": "salesreasonkey",
+          "to_table": "sales_reason",
+          "to_column": "salesreasonkey",
+          "relationship_type": "many_to_many"
+        },
+        {
+          "from_table": "exchange_rates",
+          "from_column": "currencykey",
+          "to_table": "destination_currency",
+          "to_column": "currencykey",
+          "relationship_type": "many_to_many"
+        }
+      ],
+      "measures": [
+        {
+          "name": "InternetSales_SalesAmount",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "InternetSales_ProfitMargin",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "DIVIDE(SUM([internet_sales].[salesamount]) - SUM([internet_sales].[totalproductcost]), SUM([internet_sales].[salesamount]), 0)"
+        },
+        {
+          "name": "InternetSales_MarginPercent",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "IIF(SUM([internet_sales].[salesamount]) = 0, 0, DIVIDE(SUM([internet_sales].[salesamount]) - SUM([internet_sales].[totalproductcost]), SUM([internet_sales].[salesamount]), 0))"
+        },
+        {
+          "name": "InternetSales_YTD_SalesAmount",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "SUM(YTD([date].[calendaryear].CurrentMember), [Measures].[InternetSales_SalesAmount])"
+        },
+        {
+          "name": "InternetSales_QTD_SalesAmount",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "SUM(QTD([date].[calendarquarter].CurrentMember), [Measures].[InternetSales_SalesAmount])"
+        },
+        {
+          "name": "InternetSales_MTD_SalesAmount",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "SUM(MTD([date].[monthnumberofyear].CurrentMember), [Measures].[InternetSales_SalesAmount])"
+        },
+        {
+          "name": "InternetSales_PriorYearSales",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "([Measures].[InternetSales_SalesAmount], ParallelPeriod([date].[calendaryear], 1, [date].[calendaryear].CurrentMember))"
+        },
+        {
+          "name": "InternetSales_YoYGrowthPercent",
+          "source_dataset": "internet_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "IIF([Measures].[InternetSales_PriorYearSales] = 0, NULL, DIVIDE([Measures].[InternetSales_SalesAmount] - [Measures].[InternetSales_PriorYearSales], [Measures].[InternetSales_PriorYearSales], 0))"
+        },
+        {
+          "name": "ResellerSales_SalesAmount",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "ResellerSales_ProfitMargin",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "DIVIDE(SUM([reseller_sales].[salesamount]) - SUM([reseller_sales].[totalproductcost]), SUM([reseller_sales].[salesamount]), 0)"
+        },
+        {
+          "name": "ResellerSales_MarginPercent",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "IIF(SUM([reseller_sales].[salesamount]) = 0, 0, DIVIDE(SUM([reseller_sales].[salesamount]) - SUM([reseller_sales].[totalproductcost]), SUM([reseller_sales].[salesamount]), 0))"
+        },
+        {
+          "name": "ResellerSales_YTD_SalesAmount",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "SUM(YTD([date].[calendaryear].CurrentMember), [Measures].[ResellerSales_SalesAmount])"
+        },
+        {
+          "name": "ResellerSales_QTD_SalesAmount",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "SUM(QTD([date].[calendarquarter].CurrentMember), [Measures].[ResellerSales_SalesAmount])"
+        },
+        {
+          "name": "ResellerSales_MTD_SalesAmount",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "SUM(MTD([date].[monthnumberofyear].CurrentMember), [Measures].[ResellerSales_SalesAmount])"
+        },
+        {
+          "name": "ResellerSales_PriorYearSales",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "([Measures].[ResellerSales_SalesAmount], ParallelPeriod([date].[calendaryear], 1, [date].[calendaryear].CurrentMember))"
+        },
+        {
+          "name": "ResellerSales_YoYGrowthPercent",
+          "source_dataset": "reseller_sales",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "IIF([Measures].[ResellerSales_PriorYearSales] = 0, NULL, DIVIDE([Measures].[ResellerSales_SalesAmount] - [Measures].[ResellerSales_PriorYearSales], [Measures].[ResellerSales_PriorYearSales], 0))"
+        },
+        {
+          "name": "SalesSummary_SalesAmount",
+          "source_dataset": "sales_summary",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "SalesSummary_ProfitMargin",
+          "source_dataset": "sales_summary",
+          "aggregation_type": "sum",
+          "is_calculated": true,
+          "expression": "DIVIDE(SUM([sales_summary].[salesamount]) - SUM([sales_summary].[totalproductcost]), SUM([sales_summary].[salesamount]), 0)"
+        },
+        {
+          "name": "SalesOrders_SalesAmount",
+          "source_dataset": "sales_orders",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "FinancialReporting_Amount",
+          "source_dataset": "financial_reporting",
+          "aggregation_type": "sum"
+        }
+      ],
+      "hierarchies": [
+        {
+          "name": "ProductHierarchy",
+          "levels": [
+            "productcategorykey",
+            "productsubcategorykey",
+            "productkey"
+          ],
+          "source_dataset": "product"
+        },
+        {
+          "name": "SalesTerritoryHierarchy",
+          "levels": [
+            "salesterritorygroup",
+            "salesterritorycountry",
+            "salesterritorykey"
+          ],
+          "source_dataset": "sales_territory"
+        },
+        {
+          "name": "DateHierarchy",
+          "levels": [
+            "calendaryear",
+            "calendarquarter",
+            "monthnumberofyear",
+            "datekey"
+          ],
+          "source_dataset": "date"
+        },
+        {
+          "name": "CustomerGeographyHierarchy",
+          "levels": [
+            "countryregioncode",
+            "stateprovincecode",
+            "city",
+            "postalcode"
+          ],
+          "source_dataset": "customer"
+        },
+        {
+          "name": "EmployeeParentChildHierarchy",
+          "source_dataset": "employee",
+          "is_parent_child": true,
+          "parent_column": "parentemployeekey",
+          "child_column": "employeekey",
+          "display_column": "loginid",
+          "root_member_type": "parent_is_blank",
+          "pc_level_naming_pattern": "CEO,VP,Manager,Employee"
+        },
+        {
+          "name": "OrganizationParentChildHierarchy",
+          "source_dataset": "organization",
+          "is_parent_child": true,
+          "parent_column": "parentorganizationkey",
+          "child_column": "organizationkey",
+          "root_member_type": "parent_is_blank"
+        },
+        {
+          "name": "AccountParentChildHierarchy",
+          "source_dataset": "account",
+          "is_parent_child": true,
+          "parent_column": "parentaccountkey",
+          "child_column": "accountkey",
+          "root_member_type": "parent_is_blank"
+        }
+      ]
+    }
+  ],
+  "shared_dimensions": [
+    "product",
+    "sales_territory",
+    "customer",
+    "promotion",
+    "source_currency",
+    "sales_channel",
+    "employee",
+    "reseller",
+    "department",
+    "organization",
+    "account",
+    "scenario",
+    "date",
+    "geography",
+    "destination_currency"
+  ],
+  "identified_domain": "adventure_works",
+  "domain_research_summary": "Extensive industry research and Kyvos documentation review confirms that AdventureWorks is a canonical example for enterprise BI \u2014 specifically for a bike manufacturing and retail company with internet and reseller sales channels, finance, and HR analytics. Standard modeling is a multifact schema aligning fact tables by sales channel and financial reporting, with conformed dimensions for product, customer, promotion, territory, currency, channel, and rich time intelligence via a calendar/date table. Parent-child hierarchies for employee, organization, and account enable organizational analyses. Bridge/junction tables capture many-to-many relationships (e.g., sales_reasons). KPIs must use MDX syntax for time intelligence (YTD, QTD, MTD, ParallelPeriod) and safe division. Hierarchies must use actual schema columns per best practices. Kyvos documentation (MDX Functions Guide, hierarchy/rollup best practices) is referenced throughout the design.",
+  "table_to_domain_mapping": {
+    "internet_sales": "fact_internet_sales",
+    "internet_orders": "fact_internet_orders",
+    "internet_customers": "fact_internet_customers",
+    "reseller_sales": "fact_reseller_sales",
+    "reseller_orders": "fact_reseller_orders",
+    "sales_summary": "fact_sales_summary",
+    "sales_orders": "fact_sales_orders",
+    "financial_reporting": "fact_financial_reporting",
+    "product": "dimension_product",
+    "sales_territory": "dimension_sales_territory",
+    "customer": "dimension_customer",
+    "promotion": "dimension_promotion",
+    "source_currency": "dimension_currency",
+    "sales_channel": "dimension_sales_channel",
+    "reseller": "dimension_reseller",
+    "employee": "dimension_employee",
+    "department": "dimension_department",
+    "organization": "dimension_organization",
+    "account": "dimension_account",
+    "scenario": "dimension_scenario",
+    "sales_reason": "dimension_sales_reason",
+    "sales_reasons": "bridge_sales_reason_order",
+    "destination_currency": "dimension_destination_currency",
+    "date": "dimension_date",
+    "geography": "dimension_geography"
+  },
+  "gaps_identified": [
+    "No explicit datekey foreign key found in main sales fact tables to link date dimension (date) \u2014 temporal hierarchies included, but direct relationship to date table might not be possible (recommend exploring ETL update).",
+    "Product hierarchy: Only category and subcategory keys found, no explicit business-friendly names or descriptions, so hierarchy uses key columns.",
+    "In geography dimension, only basic city/state/country/postal segmentation; no hierarchical rollup columns for advanced region/area rollups.",
+    "Sales performance vs prior year: Requires alignment of native calendar columns (calendaryear, calendarquarter, etc.) on sales fact tables with date dimension for correct period calculations.",
+    "No explicit bridge table for customer/fact-to-geography relationships; geography included as dimension for summaries, but direct joins may need more ETL work.",
+    "No explicit date relationships on financial_reporting fact. Time intelligence may be limited without calendar alignment."
+  ],
+  "domain_reasoning": "The schema has multiple sales and financial fact tables sharing a rich set of conformed dimensions (product, customer, promotion, territory, currency, channel, etc.), matching AdventureWorks industry standards and Kyvos design best practices. Multifact schema is chosen to enable cross-channel, cross-fact KPIs and business rollups. Junction tables (sales_reasons, exchange_rates) are modeled as many-to-many relationships per bridge table design. All hierarchies use actual schema columns, following Kyvos hierarchy and parent-child guidelines. KPIs for sales, margin, and time intelligence employ Kyvos MDX syntax, ensuring production-grade analytics. Any gaps flagged are either recommended for ETL enhancement or are handled with hierarchy/relationship constraints in Kyvos. Model is designed to be deployable with minimal post-deployment change, supporting enterprise-grade AdventureWorks analytics."
+}
