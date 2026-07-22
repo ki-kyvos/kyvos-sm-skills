@@ -88,26 +88,18 @@ def _make_smodel() -> SemanticModelSpec:
     )
 
 
-# ── Deprecation warning tests ──────────────────────────────────────────────
+# ── No deprecation warning tests ───────────────────────────────────────────
 
 
-class TestDeprecationWarning:
-    def test_import_emits_deprecation_warning(self):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            import importlib
-            import kyvos_sm_skills as pkg
-            importlib.reload(pkg)
-            assert any(issubclass(x.category, DeprecationWarning) for x in w)
-
-    def test_deprecation_warning_mentions_sdk(self):
+class TestNoDeprecationWarning:
+    def test_import_does_not_emit_deprecation_warning(self):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             import importlib
             import kyvos_sm_skills as pkg
             importlib.reload(pkg)
             dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-            assert any("kyvos_sdk" in str(x.message) for x in dep_warnings)
+            assert len(dep_warnings) == 0
 
 
 # ── Connection compiler adapter tests ──────────────────────────────────────

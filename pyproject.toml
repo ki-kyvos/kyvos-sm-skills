@@ -1,6 +1,6 @@
 [project]
 name = "kyvos-sm-skills"
-version = "0.2.0"
+version = "1.0.0"
 description = "Claude skills + generators for Kyvos semantic model creation"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -8,7 +8,7 @@ requires-python = ">=3.11"
 authors = [{name = "Kyvos Open Source"}]
 keywords = ["kyvos", "semantic-model", "claude", "ai", "bi", "olap"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",

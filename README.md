@@ -8,6 +8,9 @@ Claude skills + payload generators for Kyvos semantic model creation.
 
 - **Skill definitions** for schema design, data generation, and end-to-end Kyvos deployment
 - **Contract adapters** (`kyvos_sm_skills.contract_adapter`) that wrap the SDK's pure compilers (`kyvos_sdk.compiler`) for backward-compatible inputs
+- **MDX reference** (`kyvos_sm_skills.mdx_reference`) — DAX→MDX conversion, MDX function catalog, and LLM prompt summaries
+- **Knowledge base** (`kyvos_sm_skills.knowledge_base`) — Curated Kyvos documentation URLs for LLM research
+- **Intent generator** (`kyvos_sm_skills.intent_generator`) — Automatic intent generation from schema discovery + domain research
 - **Legacy payload generators** retained for compatibility but superseded by the SDK compilers
 
 ## Installation
@@ -133,8 +136,14 @@ kyvos-skills discover --env-file ./.env --sm-design ./sm-design.json --dry-run
 # Discover SM from warehouse (LLM mode via Anthropic API)
 kyvos-skills discover --env-file ./.env --user-intent "I want sales analytics" --domain adventure_works --auto-approve
 
+# Discover with automatic intent generation
+kyvos-skills discover --env-file ./.env --generate-intent --domain adventure_works --auto-approve
+
 # Discover with schema filter and payload format override
 kyvos-skills discover --env-file ./.env --sm-design ./sm-design.json --schema sales --payload-format json
+
+# Discover with folder suffix for multi-flow isolation
+kyvos-skills discover --env-file ./.env --sm-design ./sm-design.json --sm-folder-suffix "-flow-a"
 ```
 
 See the [Deployment & Getting Started Guide](docs/deployment-guide.md) for full instructions.
@@ -240,6 +249,56 @@ pip install kyvos-sm-skills[sdk] kyvos-sdk-python[inspect]
 pip install kyvos-sm-skills[sdk,anthropic] kyvos-sdk-python[inspect]
 ```
 
+## MDX Reference
+
+The `kyvos_sm_skills.mdx_reference` module provides DAX→MDX conversion and an MDX function catalog:
+
+```python
+from kyvos_sm_skills.mdx_reference import convert_dax_to_mdx, validate_mdx_expression, get_mdx_prompt_summary
+
+# Convert a DAX expression to MDX
+mdx = convert_dax_to_mdx("SUM(Sales[Amount])")
+
+# Validate an MDX expression
+warnings = validate_mdx_expression("Sum([Sales].[Amount])")
+
+# Get a concise MDX syntax summary for LLM prompts
+summary = get_mdx_prompt_summary()
+```
+
+## Knowledge Base
+
+The `kyvos_sm_skills.knowledge_base` module provides curated Kyvos documentation URLs for LLM research:
+
+```python
+from kyvos_sm_skills.knowledge_base import get_knowledge_base_summary, get_knowledge_base_urls, get_references_by_category
+
+# Get a summary for LLM prompts
+summary = get_knowledge_base_summary()
+
+# Get all documentation URLs
+urls = get_knowledge_base_urls()
+
+# Get references by category (mdx_functions, parent_child, custom_rollups, etc.)
+refs = get_references_by_category("parent_child")
+```
+
+## Intent Generator
+
+The `kyvos_sm_skills.intent_generator` module generates intent automatically from schema discovery + domain research:
+
+```python
+from kyvos_sm_skills.intent_generator import generate_intent, generate_intent_from_file
+
+# Generate intent from schema summary
+intent_text = generate_intent(schema_summary=inspected_schema, domain="adventure_works")
+
+# Generate intent from a saved schema file
+intent_text = generate_intent_from_file("schema.json", domain="retail_banking")
+```
+
+Use `--generate-intent` with the CLI discover command to automatically generate intent without a static intent file.
+
 ## Documentation
 
 - [Deployment & Getting Started Guide](docs/deployment-guide.md)
@@ -248,6 +307,7 @@ pip install kyvos-sm-skills[sdk,anthropic] kyvos-sdk-python[inspect]
 - [API Reference](docs/api-reference.md)
 - [Sample Gallery](docs/sample-gallery.md)
 - [Claude Skill Usage](docs/claude-skill-usage.md)
+- [Reference Architecture](docs/reference-architecture.md)
 
 ## License
 
