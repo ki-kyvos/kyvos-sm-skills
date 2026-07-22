@@ -7,11 +7,6 @@
       "tables": [
         "internet_sales",
         "reseller_sales",
-        "sales_orders",
-        "sales_summary",
-        "internet_orders",
-        "internet_customers",
-        "reseller_orders",
         "financial_reporting",
         "product",
         "promotion",
@@ -23,9 +18,7 @@
         "account",
         "organization",
         "scenario",
-        "source_currency",
-        "geography",
-        "date"
+        "source_currency"
       ],
       "relationships": [
         {
@@ -93,174 +86,6 @@
         },
         {
           "from_table": "reseller_sales",
-          "from_column": "currencykey",
-          "to_table": "source_currency",
-          "to_column": "currencykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_orders",
-          "from_column": "productkey",
-          "to_table": "product",
-          "to_column": "productkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_orders",
-          "from_column": "promotionkey",
-          "to_table": "promotion",
-          "to_column": "promotionkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_orders",
-          "from_column": "saleschannel",
-          "to_table": "sales_channel",
-          "to_column": "saleschannel",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_orders",
-          "from_column": "salesterritorykey",
-          "to_table": "sales_territory",
-          "to_column": "salesterritorykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_orders",
-          "from_column": "currencykey",
-          "to_table": "source_currency",
-          "to_column": "currencykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_summary",
-          "from_column": "productkey",
-          "to_table": "product",
-          "to_column": "productkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_summary",
-          "from_column": "promotionkey",
-          "to_table": "promotion",
-          "to_column": "promotionkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_summary",
-          "from_column": "saleschannel",
-          "to_table": "sales_channel",
-          "to_column": "saleschannel",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_summary",
-          "from_column": "salesterritorykey",
-          "to_table": "sales_territory",
-          "to_column": "salesterritorykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "sales_summary",
-          "from_column": "currencykey",
-          "to_table": "source_currency",
-          "to_column": "currencykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_orders",
-          "from_column": "productkey",
-          "to_table": "product",
-          "to_column": "productkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_orders",
-          "from_column": "promotionkey",
-          "to_table": "promotion",
-          "to_column": "promotionkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_orders",
-          "from_column": "customerkey",
-          "to_table": "customer",
-          "to_column": "customerkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_orders",
-          "from_column": "salesterritorykey",
-          "to_table": "sales_territory",
-          "to_column": "salesterritorykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_orders",
-          "from_column": "currencykey",
-          "to_table": "source_currency",
-          "to_column": "currencykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_customers",
-          "from_column": "productkey",
-          "to_table": "product",
-          "to_column": "productkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_customers",
-          "from_column": "promotionkey",
-          "to_table": "promotion",
-          "to_column": "promotionkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_customers",
-          "from_column": "salesterritorykey",
-          "to_table": "sales_territory",
-          "to_column": "salesterritorykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "internet_customers",
-          "from_column": "currencykey",
-          "to_table": "source_currency",
-          "to_column": "currencykey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "reseller_orders",
-          "from_column": "productkey",
-          "to_table": "product",
-          "to_column": "productkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "reseller_orders",
-          "from_column": "promotionkey",
-          "to_table": "promotion",
-          "to_column": "promotionkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "reseller_orders",
-          "from_column": "resellerkey",
-          "to_table": "reseller",
-          "to_column": "resellerkey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "reseller_orders",
-          "from_column": "employeekey",
-          "to_table": "employee",
-          "to_column": "employeekey",
-          "relationship_type": "many_to_one"
-        },
-        {
-          "from_table": "reseller_orders",
           "from_column": "currencykey",
           "to_table": "source_currency",
           "to_column": "currencykey",
@@ -420,60 +245,6 @@
           "expression": "DIVIDE(([Measures].[salesamount] - [Measures].[totalproductcost]), [Measures].[salesamount], 0)"
         },
         {
-          "name": "sales_quota_achievement_percent",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "DIVIDE([Measures].[salesamount], [Measures].[salesamountquota], 0)"
-        },
-        {
-          "name": "sales_ytd",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "SUM(YTD([Date].[Calendar].CurrentMember), [Measures].[salesamount])"
-        },
-        {
-          "name": "sales_qtd",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "SUM(QTD([Date].[Calendar].CurrentMember), [Measures].[salesamount])"
-        },
-        {
-          "name": "sales_mtd",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "SUM(MTD([Date].[Calendar].CurrentMember), [Measures].[salesamount])"
-        },
-        {
-          "name": "prior_year_sales",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "([Measures].[salesamount], ParallelPeriod([Date].[Calendar].[calendaryear], 1, [Date].[Calendar].CurrentMember))"
-        },
-        {
-          "name": "yoy_sales_growth",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "IIF([Measures].[prior_year_sales]=0, NULL, ([Measures].[salesamount]-[Measures].[prior_year_sales])/[Measures].[prior_year_sales])"
-        },
-        {
-          "name": "running_total_sales",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "SUM({[Date].[Calendar].[datekey].FirstMember:[Date].[Calendar].CurrentMember}, [Measures].[salesamount])"
-        },
-        {
-          "name": "profit_variance",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "[Measures].[profit_amount] - ([Measures].[profit_amount], ParallelPeriod([Date].[Calendar].[calendaryear], 1, [Date].[Calendar].CurrentMember))"
-        },
-        {
-          "name": "quota_variance",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "[Measures].[salesamount] - [Measures].[salesamountquota]"
-        },
-        {
           "name": "average_order_value",
           "aggregation_type": "avg",
           "is_calculated": true,
@@ -484,43 +255,9 @@
           "aggregation_type": "sum",
           "is_calculated": true,
           "expression": "IIF([Measures].[margin_percent]>=0.3, 1, 0)"
-        },
-        {
-          "name": "customer_acquisition_count",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "COUNT(FILTER([Customer].[customerkey].Members, [Customer].[datefirstpurchase]=[Date].[Calendar].CurrentMember))"
-        },
-        {
-          "name": "distinct_customer_count",
-          "aggregation_type": "sum",
-          "is_calculated": true,
-          "expression": "COUNT(DISTINCT([Customer].[customerkey].Members))"
         }
       ],
       "hierarchies": [
-        {
-          "name": "Date Calendar Hierarchy",
-          "source_dataset": "date",
-          "levels": [
-            "calendaryear",
-            "calendarquarter",
-            "monthnumberofyear",
-            "weeknumberofyear",
-            "daynumberofmonth"
-          ]
-        },
-        {
-          "name": "Date Fiscal Hierarchy",
-          "source_dataset": "date",
-          "levels": [
-            "fiscalyear",
-            "fiscalquarter",
-            "monthnumberofyear",
-            "fiscalweeknumberofyear",
-            "daynumberofmonth"
-          ]
-        },
         {
           "name": "Sales Territory Hierarchy",
           "source_dataset": "sales_territory",
@@ -540,16 +277,6 @@
           ]
         },
         {
-          "name": "Geography Hierarchy",
-          "source_dataset": "geography",
-          "levels": [
-            "englishcountryregionname",
-            "stateprovincecode",
-            "city",
-            "postalcode"
-          ]
-        },
-        {
           "name": "Promotion Hierarchy",
           "source_dataset": "promotion",
           "levels": [
@@ -564,8 +291,7 @@
           "is_parent_child": true,
           "parent_column": "parentdepartmentgroupkey",
           "child_column": "departmentgroupkey",
-          "root_member_type": "parent_is_blank",
-          "pc_level_naming_pattern": "Department Group Level *"
+          "root_member_type": "ParentIsSelf"
         },
         {
           "name": "Employee Hierarchy",
@@ -574,8 +300,7 @@
           "parent_column": "parentemployeekey",
           "child_column": "employeekey",
           "display_column": "title",
-          "root_member_type": "parent_is_blank",
-          "pc_level_naming_pattern": "Management Level *"
+          "root_member_type": "ParentIsSelf"
         },
         {
           "name": "Organization Hierarchy",
@@ -583,9 +308,7 @@
           "is_parent_child": true,
           "parent_column": "parentorganizationkey",
           "child_column": "organizationkey",
-          "root_member_type": "parent_is_blank",
-          "pc_level_naming_pattern": "Organization Level *",
-          "hasAlternatePath": true
+          "root_member_type": "ParentIsSelf"
         },
         {
           "name": "Account Hierarchy",
@@ -593,8 +316,7 @@
           "is_parent_child": true,
           "parent_column": "parentaccountkey",
           "child_column": "accountkey",
-          "root_member_type": "parent_is_blank",
-          "pc_level_naming_pattern": "Account Level *"
+          "root_member_type": "ParentIsSelf"
         }
       ]
     }

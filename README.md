@@ -126,9 +126,119 @@ kyvos-skills deploy --xmla-path ./AdventureWorks.xmla --env-file ./.env
 
 # Dry run (parse only)
 kyvos-skills deploy --xmla-path ./AdventureWorks.xmla --env-file ./.env --dry-run
+
+# Discover SM from warehouse (pre-approved JSON mode)
+kyvos-skills discover --env-file ./.env --sm-design ./sm-design.json --dry-run
+
+# Discover SM from warehouse (LLM mode via Anthropic API)
+kyvos-skills discover --env-file ./.env --user-intent "I want sales analytics" --domain adventure_works --auto-approve
+
+# Discover with schema filter and payload format override
+kyvos-skills discover --env-file ./.env --sm-design ./sm-design.json --schema sales --payload-format json
 ```
 
 See the [Deployment & Getting Started Guide](docs/deployment-guide.md) for full instructions.
+
+## Discover SM from Warehouse
+
+The discover flow inspects an existing warehouse schema, generates or loads a semantic model design, and deploys it to Kyvos — all without an XMLA file.
+
+### Two Modes
+
+1. **Pre-approved JSON mode** — Provide a pre-approved SM design JSON file directly. No LLM needed.
+2. **LLM mode** — Provide a natural language `user_intent`; the flow uses the Anthropic API (Claude) to generate an SM design, validates it against the inspected schema, and presents it for approval before deploying.
+
+### Programmatic API
+
+```python
+from kyvos_sm_skills.skill_runner import run_discover_sm_from_warehouse
+
+# Pre-approved JSON mode
+rc = run_discover_sm_from_warehouse(
+    env_file=".env",
+    sm_design_path="samples/adventureworks-sm-design.json",
+    dry_run=True,
+)
+
+# LLM mode (requires anthropic + ANTHROPIC_API_KEY)
+rc = run_discover_sm_from_warehouse(
+    env_file=".env",
+    user_intent="I want sales analytics for Adventure Works",
+    domain="adventure_works",
+    auto_approve=True,
+)
+```
+
+### LLM Designer Module
+
+The `kyvos_sm_skills.llm_designer` module provides the LLM-based SM design logic:
+
+```python
+from kyvos_sm_skills.llm_designer import design_sm_from_schema, validate_sm_recommendation
+
+# Generate SM recommendation via Claude
+recommendation = design_sm_from_schema(
+    schema_summary=inspected_schema,
+    user_intent="I want sales analytics",
+    domain="adventure_works",
+)
+
+# Validate against warehouse schema
+errors = validate_sm_recommendation(recommendation, inspected_schema)
+```
+
+### Spec Builder Module
+
+The `kyvos_sm_skills.spec_builder` module converts SM recommendations + warehouse schema into typed deployment specs:
+
+```python
+from kyvos_sm_skills.spec_builder import build_spec_from_recommendation
+
+discovered_spec = build_spec_from_recommendation(
+    sm_rec=recommendation["recommended_sms"][0],
+    warehouse_tables=inspected_schema["tables"],
+)
+```
+
+### Warehouse Schema Inspector
+
+The `kyvos_sdk.warehouse_inspector` module (in `kyvos-sdk-python[inspect]`) provides SQLAlchemy-based schema introspection:
+
+```python
+from kyvos_sdk.warehouse_inspector import inspect_schema
+from kyvos_sdk.config import KyvosConfig
+
+config = KyvosConfig.from_env_file(".env")
+schema_summary = inspect_schema(config, schema_filter="sales", max_tables=500)
+```
+
+### Validation Scripts
+
+```bash
+# Sandbox validation (dry run, no server needed)
+python scripts/validate_sandbox_discover.py \
+    --env-file .env \
+    --sm-design samples/adventureworks-sm-design.json
+
+# Live integration test (requires warehouse + Kyvos server)
+python scripts/test_live_discover.py \
+    --env-file .env \
+    --sm-design samples/adventureworks-sm-design.json
+```
+
+### Sample SM Design
+
+A sample AdventureWorks SM design is provided at `samples/adventureworks-sm-design.json`.
+
+### Installation
+
+```bash
+# Pre-approved JSON mode only
+pip install kyvos-sm-skills[sdk] kyvos-sdk-python[inspect]
+
+# With LLM mode (Anthropic API)
+pip install kyvos-sm-skills[sdk,anthropic] kyvos-sdk-python[inspect]
+```
 
 ## Documentation
 

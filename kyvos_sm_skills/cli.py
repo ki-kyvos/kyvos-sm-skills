@@ -168,6 +168,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
         dry_run=args.dry_run,
         cleanup_dry_run=_cleanup_dry_run,
         perform_cleanup=_perform_cleanup,
+        sm_folder_suffix=args.sm_folder_suffix,
     )
 
 
@@ -219,6 +220,7 @@ def main() -> int:
     dis.add_argument("--dry-run", action="store_true", help="Inspect + build spec only, no API calls")
     dis.add_argument("--cleanup-dry-run", action="store_true", help="List old entities that would be deleted, without actually deleting them (cleanup is default)")
     dis.add_argument("--cleanup", action="store_true", help="Explicitly enable cleanup (this is the default; use --cleanup-dry-run to preview instead)")
+    dis.add_argument("--sm-folder-suffix", default="", help="Suffix for SM folder name to avoid conflicts when deploying multiple SMs to the same schema (e.g., 'B' for awdw2019multidimensionalee_SModelB)")
     dis.add_argument("--generate-intent", action="store_true", help="Auto-generate user intent via LLM from schema analysis (replaces --user-intent)")
     dis.add_argument("--intent-output", default=None, help="Path to save the generated intent (default: intent_<domain>.txt)")
 

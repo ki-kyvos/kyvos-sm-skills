@@ -25,6 +25,7 @@ sdk = ["kyvos-sdk-python>=0.6.0"]
 # Optional: for multi-PBIT deployment workflows
 parser = ["kyvos-xmla-parser>=0.2.0"]
 datagen = ["kyvos-data-gen>=0.2.0"]
+anthropic = ["anthropic>=0.40.0"]
 # All workflow dependencies in one extra
 all = [
     "kyvos-sdk-python>=0.6.0",

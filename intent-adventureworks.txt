@@ -1,0 +1,38 @@
+I want to build a production-ready MVP semantic model for Adventure Works analytics. Leverage deep domain research on the AdventureWorks bicycle manufacturing and retail business to ensure the model reflects real-world enterprise analytics patterns.
+
+**Schema Discovery & Fact Table Inclusion:**
+- Analyze ALL fact tables discovered in the warehouse schema and include every relevant one in a multifact schema
+- Fact tables identified: internet_sales, internet_orders, internet_customers, reseller_sales, reseller_orders, sales_summary, sales_orders, financial_reporting
+- Include all conformed dimensions shared across fact tables (Product, Date, Sales Territory, Customer, Promotion, Source Currency, etc.)
+- Model as a multifact star/snowflake schema based on actual warehouse structure
+- Include bridge/junction tables (e.g., sales_reasons) as many-to-many relationships where applicable
+
+**Core Analytics Requirements:**
+- Revenue analysis across all sales channels (internet + reseller) by product category/subcategory, sales territory, customer demographics, and time periods
+- Profit margin analysis (gross margin, margin %) with safe division handling for each sales channel
+- Time intelligence: Year-over-Year (YoY) growth, Year-to-Date (YTD), Quarter-to-Date (QTD), and Month-to-Date (MTD) cumulative measures
+- Sales performance vs prior year comparisons using ParallelPeriod
+- Financial reporting metrics where the financial_reporting fact table is included
+
+**Hierarchy Requirements:**
+- Product hierarchy: Category → Subcategory → Product (only if actual columns exist on the Product table)
+- Sales Territory hierarchy: Group → Country → Region (only if actual columns exist)
+- Date hierarchy: Year → Quarter → Month → Date (only if actual columns exist on the Date table)
+- Customer geography hierarchy if applicable (only using actual columns)
+- Parent-child hierarchies for Employee/Organization/Account if those tables are included
+- Every hierarchy level MUST be an actual column on the source_dataset dimension table — no fabricated or business-friendly names
+- Omit any hierarchy where the natural rollup columns don't exist on the table
+
+**KPI/Calculated Measure Requirements:**
+- All calculated measures and calculated members MUST use Kyvos MDX syntax strictly following the official Kyvos MDX Functions Guide: https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1232535557/Kyvos+MDX+Functions+Guide
+- Reference this documentation for correct MDX function names, syntax, and usage patterns when generating any calculated expression
+- Use MDX functions: SUM, IIF, DIVIDE, YTD, QTD, MTD, ParallelPeriod, PeriodsToDate, CurrentMember, Rank, AVG, MIN, MAX, COUNT
+- Do NOT use DAX functions: TOTALYTD, TOTALQTD, TOTALMTD, CALCULATE, SAMEPERIODLASTYEAR, SUMX, RANKX, FILTER, ALL
+- Include divide-by-zero protection using IIF or DIVIDE for all ratio measures
+- KPIs should be production-grade: Gross Margin, Margin %, YoY Growth %, YTD Sales, QTD Sales, Prior Year Sales — for each sales channel where applicable
+
+**Quality Bar:**
+- The model should be deployable as an MVP to production with minimal post-deployment adjustments
+- Measures should have clear business-meaningful names, prefixed by source where needed for uniqueness across fact tables
+- Schema type should reflect the actual warehouse structure (star/snowflake/multifact)
+- Only include tables and relationships that are directly relevant to the analytics use cases above

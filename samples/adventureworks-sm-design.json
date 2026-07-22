@@ -1,0 +1,93 @@
+{
+  "recommended_sms": [
+    {
+      "name": "AdventureWorksSales",
+      "schema_type": "star",
+      "rationale": "AdventureWorks has a classic star schema with a single fact table (FactInternetSales) surrounded by conformed dimensions. This is the standard retail analytics pattern.",
+      "tables": [
+        "factinternetsales",
+        "dimproduct",
+        "dimcustomer",
+        "dimdate",
+        "dimsalesterritory"
+      ],
+      "relationships": [
+        {
+          "from_table": "factinternetsales",
+          "from_column": "productkey",
+          "to_table": "dimproduct",
+          "to_column": "productkey"
+        },
+        {
+          "from_table": "factinternetsales",
+          "from_column": "customerkey",
+          "to_table": "dimcustomer",
+          "to_column": "customerkey"
+        },
+        {
+          "from_table": "factinternetsales",
+          "from_column": "orderdatekey",
+          "to_table": "dimdate",
+          "to_column": "datekey"
+        },
+        {
+          "from_table": "factinternetsales",
+          "from_column": "salesterritorykey",
+          "to_table": "dimsalesterritory",
+          "to_column": "salesterritorykey"
+        }
+      ],
+      "measures": [
+        {
+          "name": "SalesAmount",
+          "source_dataset": "factinternetsales",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "OrderQuantity",
+          "source_dataset": "factinternetsales",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "TotalProductCost",
+          "source_dataset": "factinternetsales",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "TaxAmt",
+          "source_dataset": "factinternetsales",
+          "aggregation_type": "sum"
+        },
+        {
+          "name": "Freight",
+          "source_dataset": "factinternetsales",
+          "aggregation_type": "sum"
+        }
+      ],
+      "hierarchies": [
+        {
+          "name": "ProductCategory",
+          "levels": ["productkey", "productsubcategorykey", "productcategorykey"],
+          "source_dataset": "dimproduct"
+        },
+        {
+          "name": "CalendarDate",
+          "levels": ["datekey", "weeknumberofyear", "englishmonthname", "calendarquarter", "calendaryear"],
+          "source_dataset": "dimdate"
+        },
+        {
+          "name": "SalesTerritory",
+          "levels": ["salesterritorykey", "salesterritoryregion", "salesterritorycountry", "salesterritorygroup"],
+          "source_dataset": "dimsalesterritory"
+        }
+      ]
+    }
+  ],
+  "identified_domain": "adventure_works",
+  "domain_research_summary": "Adventure Works is a fictional bicycle manufacturing company by Microsoft. The schema follows standard retail/ manufacturing patterns with sales facts and conformed dimensions for products, customers, dates, and territories. Industry-standard KPIs include revenue, order quantity, cost, and margin analysis.",
+  "domain_reasoning": "The presence of FactInternetSales with DimProduct, DimCustomer, DimDate, and DimSalesTerritory is the canonical AdventureWorks star schema pattern. The fact table at sales order line granularity with measures like SalesAmount, OrderQuantity, and TotalProductCost confirms this is a retail sales analytics domain.",
+  "gaps_identified": [
+    "No DimPromotion table found — consider adding for promotion effectiveness analysis",
+    "No DimCurrency table found — consider adding for multi-currency analysis if applicable"
+  ]
+}

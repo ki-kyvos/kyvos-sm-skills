@@ -84,6 +84,10 @@ class HierarchySpec(BaseModel):
     child_column: str | None = None
     custom_rollup_weight_column: str | None = None
     pc_level_naming_pattern: str = "Level_*"
+    root_member_type: str = "auto"  # "auto" | "parent_is_self" | "parent_is_blank"
+    non_leaf_data_member_visible: bool = False
+    non_leaf_data_member_caption: str = "self"
+    display_column: str | None = None
 
 
 class SemanticModelSpec(BaseModel):

@@ -34,3 +34,7 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 *.xml.bak
+kyvos_sm_skills/.DS_Store
+*.log
+.DS_Store
+.env.discover
