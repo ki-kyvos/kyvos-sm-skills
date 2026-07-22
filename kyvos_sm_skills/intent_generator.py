@@ -175,10 +175,12 @@ def generate_intent(
             raise ValueError(
                 "Azure OpenAI API key required. Set AZURE_OPENAI_API_KEY or LLM_API_KEY env var."
             )
-        endpoint = os.environ.get("AZURE_ENDPOINT", os.environ.get("AZURE_OPENAI_ENDPOINT", ""))
+        endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "") or os.environ.get("AZURE_ENDPOINT", "")
         if not endpoint:
-            raise ValueError("Azure OpenAI endpoint required. Set AZURE_ENDPOINT env var.")
-        api_version = os.environ.get("AZURE_API_VERSION", "2024-02-15-preview")
+            raise ValueError(
+                "Azure OpenAI endpoint required. Set AZURE_OPENAI_ENDPOINT or AZURE_ENDPOINT env var."
+            )
+        api_version = os.environ.get("AZURE_API_VERSION", "2024-12-01-preview")
         deployment = os.environ.get("AZURE_DEPLOYMENT_NAME", model)
 
         return _call_azure_openai(

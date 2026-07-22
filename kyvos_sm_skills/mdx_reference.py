@@ -468,6 +468,9 @@ _DAX_FUNCTIONS = {
     "GROUPBY",
 }
 
+# Precomputed uppercase set of MDX function names for case-insensitive lookup
+_MDX_FUNCTION_NAMES_UPPER = {k.upper() for k in MDX_FUNCTIONS}
+
 
 def convert_dax_to_mdx(expression: str) -> str:
     """Convert common DAX patterns in an expression to Kyvos MDX equivalents.
@@ -506,7 +509,7 @@ def validate_mdx_expression(expression: str) -> list[str]:
     for func in found_funcs:
         if func.upper() in _DAX_FUNCTIONS:
             # Check if it's also a valid MDX function (some names overlap)
-            if func not in MDX_FUNCTIONS and func.lower() not in MDX_FUNCTIONS:
+            if func.upper() not in _MDX_FUNCTION_NAMES_UPPER:
                 warnings.append(
                     f"DAX function '{func}' is not a supported Kyvos MDX function. "
                     f"Use the MDX equivalent (see Kyvos MDX Functions Guide)."

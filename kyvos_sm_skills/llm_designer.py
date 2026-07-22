@@ -244,15 +244,16 @@ def _extract_json_from_response(text: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # Attempt 4: find the last valid JSON object by trimming from the end
-    for trim_pos in range(len(cleaned) - 1, 0, -1):
-        if cleaned[trim_pos] == "}":
-            _candidate = cleaned[:trim_pos + 1]
-            _candidate = _re.sub(r",\s*([}\]])", r"\1", _candidate)
-            try:
-                return json.loads(_candidate)
-            except json.JSONDecodeError:
-                continue
+    # Attempt 4: find the last valid JSON object by trimming from the end.
+    # Instead of trying every position (O(n²)), only try positions of closing braces.
+    brace_positions = [i for i, ch in enumerate(cleaned) if ch == "}"]
+    for trim_pos in reversed(brace_positions[-20:]):
+        _candidate = cleaned[:trim_pos + 1]
+        _candidate = _re.sub(r",\s*([}\]])", r"\1", _candidate)
+        try:
+            return json.loads(_candidate)
+        except json.JSONDecodeError:
+            continue
 
     # All attempts failed — raise with diagnostic info
     raise json.JSONDecodeError(
@@ -347,7 +348,7 @@ def design_sm_from_schema(
 
     For Azure OpenAI:
         - ``AZURE_OPENAI_API_KEY`` or ``LLM_API_KEY`` env var (or ``api_key`` param)
-        - ``AZURE_ENDPOINT`` or ``AZURE_OPENAI_ENDPOINT`` env var
+        - ``AZURE_OPENAI_ENDPOINT`` or ``AZURE_ENDPOINT`` env var
         - ``AZURE_DEPLOYMENT_NAME`` env var (or ``model`` param)
         - ``AZURE_API_VERSION`` env var
 
@@ -484,8 +485,14 @@ def design_sm_from_schema(
             current_message = user_message + retry_feedback
         else:
             print(f"  LLM produced {len(errors)} validation error(s) after {max_retries + 1} attempts.")
+            for err in errors:
+                print(f"    - {err}")
+            raise ValueError(
+                f"LLM-generated SM design has {len(errors)} validation error(s) "
+                f"after {max_retries + 1} attempts. Last errors: {errors[:5]}"
+            )
 
-    return recommendation
+    raise ValueError("LLM SM design exhausted all retries without producing a valid recommendation.")
 
 
 def validate_sm_recommendation(

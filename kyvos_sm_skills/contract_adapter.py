@@ -355,7 +355,9 @@ def compile_smodel_artifact(
     # from XMLA names to CamelCase server names BEFORE adaptation, since the
     # contract validator checks source_dataset against dataset names during
     # adapt_semantic_model().
+    # Work on a deep copy so the caller's original spec is not mutated.
     if dataset_aliases:
+        smodel = smodel.model_copy(deep=True)
         for ds in smodel.datasets:
             mapped = dataset_aliases.get(ds.name)
             if mapped:

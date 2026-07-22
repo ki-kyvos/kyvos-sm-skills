@@ -22,8 +22,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from kyvos_sdk.contracts.common import Severity
+
 
 _MIN_PREFIX_LEN = 8
+
+
+def _safe_input(prompt: str) -> str:
+    """Prompt for user input, returning empty string on EOF in non-interactive environments."""
+    try:
+        return input(prompt).strip().lower()
+    except EOFError:
+        print(f"\n  (Non-interactive environment detected — defaulting to rejection.)")
+        return ""
 
 
 def _derive_cleanup_prefixes(base_name: str) -> tuple[str, ...]:
@@ -89,14 +100,13 @@ def _write_audit_log(
 
     Returns the path to the audit log file.
     """
-    from datetime import datetime
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    now = datetime.now()
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
     log_path = f"cleanup_{timestamp}.log"
 
     with open(log_path, "w") as f:
         f.write(f"Cleanup Audit Log\n")
-        f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+        f.write(f"Timestamp: {now.isoformat()}\n")
         f.write(f"Mode: {'DRY RUN' if dry_run else 'LIVE'}\n")
         f.write(f"Base name: {base_name}\n")
         f.write(f"Prefixes: {list(prefixes)}\n")
@@ -239,7 +249,7 @@ def _collect_and_cleanup_entities(
     # Confirmation gate — even with auto_approve, warn for live deletes
     if not auto_approve:
         print(f"\n  ⚠️  About to delete {len(targets)} entities. This cannot be undone.")
-        response = input(f"  Type 'yes' to proceed: ").strip().lower()
+        response = _safe_input(f"  Type 'yes' to proceed: ")
         if response != "yes":
             print(f"  Cleanup aborted by user.")
             log_path = _write_audit_log(targets, 0, base_name, prefixes, dry_run=False)
@@ -406,8 +416,9 @@ def _deploy_spec(
     drd_id           = f"drd_{smodel_name}"
 
     # Use stable folder names (no timestamp) so they can be reused across runs
-    dataset_folder_label = f"{base_name}"
+    # When sm_folder_suffix is provided, ALL folders get the suffix for complete isolation
     _folder_suffix = f"_{sm_folder_suffix}" if sm_folder_suffix else ""
+    dataset_folder_label = f"{base_name}{_folder_suffix}"
     drd_folder_label     = f"{base_name}_DRD{_folder_suffix}"
     smodel_folder_label  = f"{base_name}_SModel{_folder_suffix}"
 
@@ -451,8 +462,10 @@ def _deploy_spec(
     # global measure name conflicts on the Kyvos server.
     _stable_folder_names = {dataset_folder_label, drd_folder_label, smodel_folder_label}
     if sm_folder_suffix:
-        _stable_folder_names.add(f"{base_name}_SModel")
+        # Protect the base (non-suffixed) folders so cleanup never touches other flows' entities
+        _stable_folder_names.add(f"{base_name}")
         _stable_folder_names.add(f"{base_name}_DRD")
+        _stable_folder_names.add(f"{base_name}_SModel")
     _sm_prefixes = _derive_cleanup_prefixes(semantic_model.name.replace("_", " ").title())
     _did_cleanup = _collect_and_cleanup_entities(
         insp=insp,
@@ -473,11 +486,8 @@ def _deploy_spec(
     if existing_ds_folder_id:
         folder_id = existing_ds_folder_id
         print(f"Dataset folder: {dataset_folder_label} (id={folder_id}) — reusing existing")
-        if sm_folder_suffix:
-            print(f"  Skipping dataset cleanup (shared folder, suffix mode)")
-        else:
-            print(f"  Cleaning up existing datasets...")
-            _cleanup_folder_entities(FolderType.RDATASET, dataset_folder_label)
+        print(f"  Cleaning up existing datasets...")
+        _cleanup_folder_entities(FolderType.RDATASET, dataset_folder_label)
     else:
         dataset_folder_result = prov.create_folder(dataset_folder_label, FolderType.RDATASET)
         if not dataset_folder_result.succeeded:
@@ -623,7 +633,7 @@ def _deploy_spec(
             ds_info["id"], ds_info["name"], dataset_folder_label
         )
         if not val_result.succeeded:
-            errs = [d.message for d in val_result.diagnostics if d.severity == "ERROR"]
+            errs = [d.message for d in val_result.diagnostics if d.severity == Severity.ERROR]
             validation_errors.append(f"{ds_info['name']}: {errs}")
 
     if validation_errors:
@@ -765,7 +775,7 @@ def _deploy_spec(
             print(f"  DRD validation pending (attempt {_attempt}/{_max_validation_retries}), retrying in {_validation_delay}s...")
             time.sleep(_validation_delay)
         else:
-            errs = [d.message for d in drd_val_result.diagnostics if d.severity.upper() in ("ERROR", "FATAL", "WARNING")]
+            errs = [d.message for d in drd_val_result.diagnostics if d.severity in (Severity.ERROR, Severity.WARNING)]
             if not errs:
                 errs = [d.message for d in drd_val_result.diagnostics]
             raise RuntimeError(f"DRD validation failed — pipeline halted: {errs}")
@@ -843,7 +853,7 @@ def _deploy_spec(
             time.sleep(_sm_retry_delay)
         elif not _is_capacity_error:
             # Real validation errors — don't retry, report immediately
-            errs = [d.message for d in sm_val_result.diagnostics if d.severity.upper() in ("ERROR", "FATAL", "WARNING")]
+            errs = [d.message for d in sm_val_result.diagnostics if d.severity in (Severity.ERROR, Severity.WARNING)]
             if not errs:
                 errs = [d.message for d in sm_val_result.diagnostics]
             print(f"  SM validation FAILED with {len(errs)} error(s):")
@@ -913,6 +923,9 @@ def run_deploy_from_xmla(
     payload_format: str | None = None,
     dry_run: bool = False,
     live: bool = True,
+    cleanup_dry_run: bool = False,
+    auto_approve: bool = False,
+    sm_folder_suffix: str = "",
 ) -> int:
     """Run the deploy-from-xmla skill flow.
 
@@ -988,7 +1001,10 @@ def run_deploy_from_xmla(
         base_name=base_name,
         config=config,
         skip_hidden_tables=config.skip_hidden_tables,
-        perform_cleanup=True,
+        cleanup_dry_run=cleanup_dry_run,
+        perform_cleanup=not cleanup_dry_run,
+        auto_approve=auto_approve,
+        sm_folder_suffix=sm_folder_suffix,
     )
     print(f"\n   XMLA model    : {spec.metadata.get('xmla_db_name', base_name)}")
     return 0
@@ -1142,7 +1158,7 @@ def run_discover_sm_from_warehouse(
         if not auto_approve and not dry_run:
             review_text = format_recommendation_for_review(sm_design_dict)
             print(review_text)
-            response = input("\n  Approve this SM design? (y/n): ").strip().lower()
+            response = _safe_input("\n  Approve this SM design? (y/n): ")
             if response != "y":
                 print("  SM design rejected by user. Exiting.")
                 return 1

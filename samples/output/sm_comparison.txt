@@ -1,0 +1,108 @@
+Flow A vs Flow B — Deployed Semantic Model Comparison
+Generated: 2026-07-22
+======================================================================
+
+FOLDER ISOLATION (all 3 folder types are separate)
+----------------------------------------------------------------------
+  Flow A: Dataset=awdw2019multidimensionalee, DRD=awdw2019multidimensionalee_DRD, SM=awdw2019multidimensionalee_SModel
+  Flow B: Dataset=awdw2019multidimensionalee_B, DRD=awdw2019multidimensionalee_DRD_B, SM=awdw2019multidimensionalee_SModel_B
+
+BASIC INFO
+----------------------------------------------------------------------
+  Flow A: AdventureWorks_Multifact_Sales__Financial_Model_072226_0936
+    ID=0822CE35-FCB7-FDC8-2A78-4AC731EE53D1, Folder=awdw2019multidimensionalee_SModel
+    DRD=AdventureWorks_Multifact_Sales__Financial_Model_072226_0936 DRD (id=3528626594373166)
+  Flow B: AdventureWorks_Multifact_Sales__Finance_072226_0937
+    ID=DF7EB190-D9AF-C489-1CB6-F02FC3EA150A, Folder=awdw2019multidimensionalee_SModel_B
+    DRD=AdventureWorks_Multifact_Sales__Finance_072226_0937 DRD (id=5036632254357497)
+
+MEASURE GROUPS (Fact Datasets)
+----------------------------------------------------------------------
+  Flow A (3): ['FinancialReporting', 'InternetSales', 'ResellerSales']
+  Flow B (3): ['FinancialReporting', 'InternetSales', 'ResellerSales']
+  Shared: ['FinancialReporting', 'InternetSales', 'ResellerSales']
+
+MEASURES
+----------------------------------------------------------------------
+  Flow A (7):
+    FinancialReporting_Amount
+    InternetSales_MarginPercent
+    InternetSales_ProfitMargin
+    InternetSales_SalesAmount
+    ResellerSales_MarginPercent
+    ResellerSales_ProfitMargin
+    ResellerSales_SalesAmount
+  Flow B (25):
+    Reseller Sales extendedamount
+    Reseller Sales freight
+    Reseller Sales orderquantity
+    Reseller Sales productstandardcost
+    Reseller Sales salesamount
+    Reseller Sales taxamt
+    Reseller Sales totalproductcost
+    Reseller Sales unitprice
+    amount
+    average_order_value
+    discountamount
+    discountpct
+    extendedamount
+    freight
+    gross_margin
+    high_performer_flag
+    margin_percent
+    orderquantity
+    productstandardcost
+    profit_amount
+    salesamount
+    taxamt
+    totalproductcost
+    unitprice
+    unitpricediscountpct
+  Shared: []
+
+DIMENSIONS & HIERARCHIES
+----------------------------------------------------------------------
+  Flow A (11 dimensions):
+    Account: 1 hierarchy(ies)
+      AccountParentChildHierarchy [Parent-Child]: ['Hierarchy.ALL', 'accountkey']
+    Customer: 1 hierarchy(ies)
+      CustomerGeographyHierarchy: ['Hierarchy.ALL', 'countryregioncode', 'stateprovincecode', 'city', 'postalcode']
+    Department: 0 hierarchy(ies)
+    Employee: 1 hierarchy(ies)
+      EmployeeParentChildHierarchy [Parent-Child]: ['Hierarchy.ALL', 'loginid']
+    Organization: 1 hierarchy(ies)
+      OrganizationParentChildHierarchy [Parent-Child]: ['Hierarchy.ALL', 'organizationkey']
+    Product: 1 hierarchy(ies)
+      ProductHierarchy: ['Hierarchy.ALL', 'productcategorykey', 'productsubcategorykey', 'productkey']
+    Promotion: 1 hierarchy(ies)
+      H_Promotion: ['Hierarchy.ALL', 'englishpromotiontype', 'englishpromotioncategory', 'enddate', 'startdate']
+    Reseller: 1 hierarchy(ies)
+      H_Reseller: ['Hierarchy.ALL', 'productline', 'phone', 'businesstype', 'bankname', 'minpaymenttype', 'orderfrequency', 'ordermonth', 'addressline1']
+    SalesTerritory: 1 hierarchy(ies)
+      SalesTerritoryHierarchy: ['Hierarchy.ALL', 'salesterritorygroup', 'salesterritorycountry', 'salesterritorykey']
+    Scenario: 0 hierarchy(ies)
+    SourceCurrency: 1 hierarchy(ies)
+      H_SourceCurrency: ['Hierarchy.ALL', 'currencyname']
+
+  Flow B (11 dimensions):
+    Account: 1 hierarchy(ies)
+      Account Hierarchy [Parent-Child]: ['Hierarchy.ALL', 'accountkey']
+    Customer: 1 hierarchy(ies)
+      H_Customer: ['Hierarchy.ALL', 'postalcode', 'city', 'stateprovincecode', 'englishcountryregionname', 'countryregioncode', 'birthdate', 'datefirstpurchase', 'phone', 'emailaddress', 'totalchildren', 'numbercarsowned', 'numberchildrenathome', 'englisheducation', 'englishoccupation', 'maritalstatus', 'gender', 'houseownerflag', 'commutedistance', 'commutedistancesort', 'addressline1']
+    Department: 1 hierarchy(ies)
+      Department Hierarchy [Parent-Child]: ['Hierarchy.ALL', 'departmentgroupkey']
+    Employee: 1 hierarchy(ies)
+      Employee Hierarchy [Parent-Child]: ['Hierarchy.ALL', 'title']
+    Organization: 1 hierarchy(ies)
+      Organization Hierarchy [Parent-Child]: ['Hierarchy.ALL', 'organizationkey']
+    Product: 1 hierarchy(ies)
+      Product Hierarchy: ['Hierarchy.ALL', 'productcategorykey', 'productsubcategorykey', 'productkey']
+    Promotion: 1 hierarchy(ies)
+      Promotion Hierarchy: ['Hierarchy.ALL', 'englishpromotioncategory', 'englishpromotiontype', 'promotionkey']
+    Reseller: 1 hierarchy(ies)
+      H_Reseller: ['Hierarchy.ALL', 'productline', 'phone', 'businesstype', 'bankname', 'minpaymenttype', 'orderfrequency', 'ordermonth', 'addressline1']
+    SalesTerritory: 1 hierarchy(ies)
+      Sales Territory Hierarchy: ['Hierarchy.ALL', 'salesterritorygroup', 'salesterritorycountry', 'salesterritorykey']
+    Scenario: 0 hierarchy(ies)
+    SourceCurrency: 1 hierarchy(ies)
+      H_SourceCurrency: ['Hierarchy.ALL', 'currencyname']

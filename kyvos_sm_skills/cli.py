@@ -122,6 +122,9 @@ def cmd_deploy(args: argparse.Namespace) -> int:
         payload_format=args.payload_format,
         dry_run=args.dry_run,
         live=True,
+        cleanup_dry_run=args.cleanup_dry_run,
+        auto_approve=args.auto_approve,
+        sm_folder_suffix=args.sm_folder_suffix,
     )
 
 
@@ -205,6 +208,9 @@ def main() -> int:
     dep.add_argument("--env-file", default=".env", help="Path to .env file (default: .env)")
     dep.add_argument("--payload-format", default=None, choices=["json", "xml"], help="Override payload format")
     dep.add_argument("--dry-run", action="store_true", help="Parse + compile only, no API calls")
+    dep.add_argument("--cleanup-dry-run", action="store_true", help="List old entities that would be deleted, without actually deleting them (cleanup is default)")
+    dep.add_argument("--auto-approve", action="store_true", help="Skip interactive cleanup confirmation gate (for CI/CD)")
+    dep.add_argument("--sm-folder-suffix", default="", help="Suffix for SM folder name to avoid conflicts when deploying multiple SMs to the same schema")
 
     # discover
     dis = sub.add_parser("discover", help="Run the discover-sm-from-warehouse skill flow")

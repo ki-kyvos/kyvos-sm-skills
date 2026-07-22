@@ -485,6 +485,8 @@ def _build_hierarchies(
         table_cols = wh_table_map[source_dataset.lower()].get("columns", [])
         col_names_lower = {c["name"].lower() for c in table_cols}
 
+        _pc_columns_validated = False
+
         # For parent-child hierarchies, levels may be empty — they use parent_column/child_column
         if is_parent_child and not levels:
             if not parent_column or not child_column:
@@ -524,6 +526,7 @@ def _build_hierarchies(
                 )
                 continue
             validated_levels = [child_column]
+            _pc_columns_validated = True
         else:
             if not levels:
                 print(
@@ -554,9 +557,17 @@ def _build_hierarchies(
                 )
                 continue
 
-        # Validate parent-child columns if specified
-        if is_parent_child:
-            if parent_column and parent_column.lower() not in col_names_lower:
+        # Validate parent-child columns if not already validated in the early branch
+        if is_parent_child and not _pc_columns_validated:
+            if not parent_column or not child_column:
+                print(
+                    f"  Hierarchy '{name}': parent-child hierarchy requires both "
+                    f"parent_column and child_column. Clearing parent-child flag."
+                )
+                is_parent_child = False
+                parent_column = None
+                child_column = None
+            elif parent_column.lower() not in col_names_lower:
                 print(
                     f"  Hierarchy '{name}': parent_column '{parent_column}' not found on "
                     f"table '{actual_source}'. Clearing parent-child flag."
@@ -564,7 +575,7 @@ def _build_hierarchies(
                 is_parent_child = False
                 parent_column = None
                 child_column = None
-            if child_column and child_column.lower() not in col_names_lower:
+            elif child_column.lower() not in col_names_lower:
                 print(
                     f"  Hierarchy '{name}': child_column '{child_column}' not found on "
                     f"table '{actual_source}'. Clearing parent-child flag."
