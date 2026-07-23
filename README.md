@@ -307,6 +307,7 @@ Use `--generate-intent` with the CLI discover command to automatically generate 
 - [API Reference](docs/api-reference.md)
 - [Sample Gallery](docs/sample-gallery.md)
 - [Claude Skill Usage](docs/claude-skill-usage.md)
+- [AdventureWorks Flow Testing and Claude Cowork](docs/adventureworks-flow-testing.md)
 - [Reference Architecture](docs/reference-architecture.md)
 
 ## License

@@ -21,6 +21,10 @@ The `skills/` directory contains markdown skill files that serve as prompt-based
 | `design-measures.md` | Measure design from schema | Schema + domain | Measures JSON |
 | `inspect-warehouse-schema.md` | Warehouse schema introspection | DB connection params | Schema summary + pattern detection |
 
+## Claude Cowork and Source-Independent Installation
+
+For package-only installation, skill export, Cowork runtime permissions, and three AdventureWorks flow examples, see [AdventureWorks Flow Testing and Claude Cowork](adventureworks-flow-testing.md).
+
 ## How to Use
 
 ### 1. Direct Prompt Usage
