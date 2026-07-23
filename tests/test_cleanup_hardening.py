@@ -1,14 +1,15 @@
-"""Tests for cleanup hardening — protected folders, prefix collision, audit log."""
+"""Tests for cleanup hardening — protected folders, prefix collision, audit log, suffix scoping."""
 
 from __future__ import annotations
 
 import os
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
 from kyvos_sm_skills.skill_runner import (
     _check_prefix_collision,
+    _collect_and_cleanup_entities,
     _derive_cleanup_prefixes,
     _get_protected_folders,
     _write_audit_log,
@@ -129,3 +130,189 @@ class TestAuditLog:
         )
         assert log_path.startswith("cleanup_")
         assert log_path.endswith(".log")
+
+
+# ── Suffix-scoped cleanup tests ────────────────────────────────────────────
+
+
+class TestSuffixScopedCleanup:
+    """Tests that folder_suffix prevents cross-flow cleanup."""
+
+    def _make_mock_insp(self, folder_refs_by_type):
+        """Build a mock InspectionClient that returns folder refs per type."""
+        insp = MagicMock()
+
+        def _list_folders(ft):
+            refs = folder_refs_by_type.get(ft, [])
+            result = MagicMock()
+            result.succeeded = True
+            result.entity_refs = refs
+            return result
+
+        insp.list_folders = _list_folders
+
+        # list_datasets_in_folder, list_drds_in_folder, list_smodels_in_folder
+        def _list_entities(folder_name):
+            result = MagicMock()
+            result.succeeded = True
+            result.entity_refs = []
+            return result
+
+        insp.list_datasets_in_folder = _list_entities
+        insp.list_drds_in_folder = _list_entities
+        insp.list_smodels_in_folder = _list_entities
+        return insp
+
+    def _make_ref(self, name, id_="id"):
+        ref = MagicMock()
+        ref.name = name
+        ref.id = id_
+        return ref
+
+    def test_suffix_matches_own_folders(self):
+        """When folder_suffix='G', folders ending with _G should match."""
+        from kyvos_sdk.contracts.identity import FolderType
+
+        folders = {
+            FolderType.RDATASET: [
+                self._make_ref("awdw2019multidimensionalee_G", "id_g"),
+            ],
+        }
+        insp = self._make_mock_insp(folders)
+        prov = MagicMock()
+
+        result = _collect_and_cleanup_entities(
+            insp=insp,
+            prov=prov,
+            base_name="awdw2019multidimensionalee",
+            dry_run=True,
+            folder_suffix="G",
+        )
+        # Dry run returns False, but should have found the folder
+        assert result is False
+
+    def test_suffix_excludes_other_flow_folders(self):
+        """When folder_suffix='G', folders with _X or _U should NOT match."""
+        from kyvos_sdk.contracts.identity import FolderType
+
+        folders = {
+            FolderType.RDATASET: [
+                self._make_ref("awdw2019multidimensionalee_X", "id_x"),
+                self._make_ref("awdw2019multidimensionalee_U", "id_u"),
+                self._make_ref("awdw2019multidimensionalee_G", "id_g"),
+            ],
+        }
+        insp = self._make_mock_insp(folders)
+        prov = MagicMock()
+
+        # Use dry_run to collect targets without deleting
+        with patch("builtins.print"):
+            _collect_and_cleanup_entities(
+                insp=insp,
+                prov=prov,
+                base_name="awdw2019multidimensionalee",
+                dry_run=True,
+                folder_suffix="G",
+            )
+
+        # Verify prov.delete_dataset was never called (dry_run=True)
+        prov.delete_dataset.assert_not_called()
+        prov.delete_drd.assert_not_called()
+        prov.delete_smodel.assert_not_called()
+
+    def test_no_suffix_matches_all_folders(self):
+        """Without folder_suffix, all prefix-matching folders should match (backward compat)."""
+        from kyvos_sdk.contracts.identity import FolderType
+
+        folders = {
+            FolderType.RDATASET: [
+                self._make_ref("awdw2019multidimensionalee_X", "id_x"),
+                self._make_ref("awdw2019multidimensionalee_G", "id_g"),
+                self._make_ref("awdw2019multidimensionalee", "id_base"),
+            ],
+        }
+        insp = self._make_mock_insp(folders)
+        prov = MagicMock()
+
+        with patch("builtins.print"):
+            _collect_and_cleanup_entities(
+                insp=insp,
+                prov=prov,
+                base_name="awdw2019multidimensionalee",
+                dry_run=True,
+            )
+
+        # Dry run — no deletions
+        prov.delete_dataset.assert_not_called()
+
+    def test_suffix_excludes_base_folders(self):
+        """When folder_suffix='G', base (non-suffixed) folders should NOT match."""
+        from kyvos_sdk.contracts.identity import FolderType
+
+        folders = {
+            FolderType.RDATASET: [
+                self._make_ref("awdw2019multidimensionalee", "id_base"),
+                self._make_ref("awdw2019multidimensionalee_G", "id_g"),
+            ],
+        }
+        insp = self._make_mock_insp(folders)
+        prov = MagicMock()
+
+        with patch("builtins.print"):
+            _collect_and_cleanup_entities(
+                insp=insp,
+                prov=prov,
+                base_name="awdw2019multidimensionalee",
+                dry_run=True,
+                folder_suffix="G",
+            )
+
+        prov.delete_dataset.assert_not_called()
+
+    def test_suffix_case_insensitive(self):
+        """Folder suffix matching should be case-insensitive."""
+        from kyvos_sdk.contracts.identity import FolderType
+
+        folders = {
+            FolderType.RDATASET: [
+                self._make_ref("awdw2019multidimensionalee_g", "id_lower"),
+                self._make_ref("awdw2019multidimensionalee_G", "id_upper"),
+            ],
+        }
+        insp = self._make_mock_insp(folders)
+        prov = MagicMock()
+
+        with patch("builtins.print"):
+            _collect_and_cleanup_entities(
+                insp=insp,
+                prov=prov,
+                base_name="awdw2019multidimensionalee",
+                dry_run=True,
+                folder_suffix="G",
+            )
+
+        prov.delete_dataset.assert_not_called()
+
+    def test_suffix_drd_folder_matches(self):
+        """DRD folders with suffix should match (e.g., base_DRD_G)."""
+        from kyvos_sdk.contracts.identity import FolderType
+
+        folders = {
+            FolderType.DATASET_RELATIONSHIP: [
+                self._make_ref("awdw2019multidimensionalee_DRD_G", "id_drd_g"),
+                self._make_ref("awdw2019multidimensionalee_DRD_X", "id_drd_x"),
+            ],
+        }
+        insp = self._make_mock_insp(folders)
+        prov = MagicMock()
+
+        with patch("builtins.print"):
+            _collect_and_cleanup_entities(
+                insp=insp,
+                prov=prov,
+                base_name="awdw2019multidimensionalee",
+                dry_run=True,
+                folder_suffix="G",
+            )
+
+        prov.delete_drd.assert_not_called()

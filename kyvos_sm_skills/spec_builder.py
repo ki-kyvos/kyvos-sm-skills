@@ -94,7 +94,7 @@ def build_spec_from_recommendation(
     for table_name in rec_table_names:
         wt = wh_table_map[table_name.lower()]
         columns = _build_column_specs(wt)
-        table_type = _map_table_type(wt.get("estimated_table_type", "unknown"))
+        table_type = _map_table_type(wt.get("estimated_table_type", "unknown"), wt)
 
         table_specs.append(TableSpec(
             name=wt["name"],
@@ -116,7 +116,7 @@ def build_spec_from_recommendation(
             if rel_table.lower() not in _existing_table_names and rel_table.lower() in wh_table_map:
                 wt = wh_table_map[rel_table.lower()]
                 columns = _build_column_specs(wt)
-                table_type = _map_table_type(wt.get("estimated_table_type", "unknown"))
+                table_type = _map_table_type(wt.get("estimated_table_type", "unknown"), wt)
                 table_specs.append(TableSpec(
                     name=wt["name"],
                     schema_name=wt.get("schema", "public"),
@@ -133,11 +133,25 @@ def build_spec_from_recommendation(
     )
 
     # Auto-add any tables referenced by measure source_dataset but missing from table_specs
+    measures_to_drop: set[str] = set()
     for ms in measures:
         if ms.source_dataset and ms.source_dataset.lower() not in _existing_table_names and ms.source_dataset.lower() in wh_table_map:
             wt = wh_table_map[ms.source_dataset.lower()]
             columns = _build_column_specs(wt)
-            table_type = _map_table_type(wt.get("estimated_table_type", "unknown"))
+            table_type = _map_table_type(wt.get("estimated_table_type", "unknown"), wt)
+
+            # Only add the table if it's a fact table. If it's a dimension or unknown,
+            # the compiler will silently drop the measure anyway, and the auto-added
+            # dimension can trigger dim→dim relationships and ENTITY_ID null errors.
+            if table_type != "fact":
+                print(
+                    f"  WARNING: Measure '{ms.name}' references '{ms.source_dataset}' "
+                    f"which is classified as '{table_type}', not 'fact'. "
+                    f"Dropping measure to prevent deployment errors."
+                )
+                measures_to_drop.add(ms.name)
+                continue
+
             table_specs.append(TableSpec(
                 name=wt["name"],
                 schema_name=wt.get("schema", "public"),
@@ -145,6 +159,26 @@ def build_spec_from_recommendation(
                 columns=columns,
             ))
             _existing_table_names.add(wt["name"].lower())
+
+    # Also check measures whose source_dataset IS in table_specs but the table is not a fact
+    for ms in measures:
+        if ms.name in measures_to_drop:
+            continue
+        if ms.source_dataset:
+            for ts in table_specs:
+                if ts.name.lower() == ms.source_dataset.lower() and ts.table_type != "fact":
+                    print(
+                        f"  WARNING: Measure '{ms.name}' references '{ms.source_dataset}' "
+                        f"which is classified as '{ts.table_type}', not 'fact'. "
+                        f"Dropping measure to prevent deployment errors."
+                    )
+                    measures_to_drop.add(ms.name)
+                    break
+
+    if measures_to_drop:
+        measures = [m for m in measures if m.name not in measures_to_drop]
+
+    _promote_bridge_tables(table_specs, relationships, measures)
 
     # Auto-detect missing relationships from warehouse FK metadata.
     # The LLM may include dimension tables in the model but forget to create
@@ -158,11 +192,26 @@ def build_spec_from_recommendation(
         measures=measures,
     )
 
-    # Build HierarchySpec objects
+    # Final connectivity sweep: remove any table not reachable from a fact
+    # table via directed relationships. This is a safety net — the auto-detection
+    # should catch most cases, but LLM-generated relationships may still leave
+    # disconnected dimensions.
+    table_specs, relationships, measures = _connectivity_sweep(
+        table_specs=table_specs,
+        relationships=relationships,
+        measures=measures,
+    )
+
+    # Build HierarchySpec objects (filter out hierarchies referencing pruned tables)
+    remaining_table_names = {ts.name.lower() for ts in table_specs}
     hierarchies = _build_hierarchies(
         sm_rec.get("hierarchies", []),
         wh_table_map,
     )
+    hierarchies = [
+        h for h in hierarchies
+        if h.source_dataset.lower() in remaining_table_names
+    ]
 
     # Build DatasetSpec objects for each table (needed for contract validation)
     dataset_specs = [
@@ -197,6 +246,129 @@ def build_spec_from_recommendation(
         semantic_model=semantic_model,
         metadata=metadata,
     )
+
+
+def _promote_bridge_tables(
+    table_specs: list[TableSpec],
+    relationships: list[RelationshipSpec],
+    measures: list[MeasureSpec],
+) -> None:
+    table_by_name = {table.name.lower(): table for table in table_specs}
+    fact_names = {
+        table.name.lower() for table in table_specs if table.table_type == "fact"
+    }
+    measure_sources = {
+        measure.source_dataset.lower()
+        for measure in measures
+        if measure.source_dataset
+    }
+    candidates_with_fact_input: set[str] = set()
+    candidates_with_output: set[str] = set()
+
+    for relationship in relationships:
+        left = relationship.left_dataset.lower()
+        right = relationship.right_dataset.lower()
+        if left in fact_names and right in table_by_name:
+            candidates_with_fact_input.add(right)
+        if left in table_by_name and right in table_by_name and right not in fact_names:
+            candidates_with_output.add(left)
+
+    for table_name in candidates_with_fact_input & candidates_with_output:
+        table = table_by_name[table_name]
+        if table.table_type == "dimension" and table_name not in measure_sources:
+            table.table_type = "bridge"
+            print(f"  Promoted bridge table '{table.name}' from fact-to-dimension path")
+
+
+def _connectivity_sweep(
+    table_specs: list[TableSpec],
+    relationships: list[RelationshipSpec],
+    measures: list[MeasureSpec],
+) -> tuple[list[TableSpec], list[RelationshipSpec], list[MeasureSpec]]:
+    """Remove tables not reachable from any fact table with measures via directed relationships.
+
+    Builds a directed graph from relationships (left → right), BFS from all
+    fact tables that have at least one measure, and removes any table not
+    reachable. Kyvos requires every dimension to have a directed path to a
+    measure; a dimension connected only to a measure-less fact table will
+    fail validation.
+
+    Returns:
+        Trimmed (table_specs, relationships, measures) tuple.
+    """
+    if not table_specs:
+        return table_specs, relationships, measures
+
+    spec_table_names = {ts.name.lower() for ts in table_specs}
+    table_type_map = {ts.name.lower(): ts.table_type for ts in table_specs}
+
+    fact_table_names: set[str] = set()
+    for ts in table_specs:
+        if ts.table_type == "fact":
+            fact_table_names.add(ts.name.lower())
+
+    if not fact_table_names:
+        return table_specs, relationships, measures
+
+    # Only BFS from fact tables that have at least one measure.
+    # Kyvos requires every dimension to have a directed path to a measure.
+    measure_dataset_names = {m.source_dataset.lower() for m in measures if m.source_dataset}
+    fact_table_names_with_measures: set[str] = set()
+    for ts in table_specs:
+        if ts.table_type == "fact" and ts.name.lower() in measure_dataset_names:
+            fact_table_names_with_measures.add(ts.name.lower())
+
+    # Fall back to all fact tables if none have measures (edge case)
+    if not fact_table_names_with_measures:
+        fact_table_names_with_measures = fact_table_names
+
+    # Build directed graph (left → right)
+    directed_graph: dict[str, set[str]] = {ts.name.lower(): set() for ts in table_specs}
+    for rel in relationships:
+        left = rel.left_dataset.lower()
+        right = rel.right_dataset.lower()
+        if (
+            left in directed_graph
+            and right in directed_graph
+            and table_type_map.get(left) in {"fact", "bridge"}
+        ):
+            directed_graph[left].add(right)
+
+    # Directed BFS from fact tables that have measures
+    connected: set[str] = set()
+    queue = list(fact_table_names_with_measures)
+    while queue:
+        current = queue.pop(0)
+        if current in connected:
+            continue
+        connected.add(current)
+        for neighbor in directed_graph.get(current, set()):
+            if neighbor not in connected:
+                queue.append(neighbor)
+
+    disconnected = spec_table_names - connected
+    if not disconnected:
+        return table_specs, relationships, measures
+
+    # Remove disconnected tables, their relationships, and their measures
+    for disc in sorted(disconnected):
+        print(
+            f"  WARNING: Removing disconnected table '{disc}' — "
+            f"no directed path from any fact table with measures."
+        )
+
+    table_specs = [ts for ts in table_specs if ts.name.lower() not in disconnected]
+    relationships = [
+        rel for rel in relationships
+        if rel.left_dataset.lower() not in disconnected
+        and rel.right_dataset.lower() not in disconnected
+    ]
+    measures = [
+        m for m in measures
+        if not m.source_dataset or m.source_dataset.lower() not in disconnected
+    ]
+
+    return table_specs, relationships, measures
 
 
 def _auto_detect_missing_relationships(
@@ -399,6 +571,12 @@ def _auto_detect_missing_relationships(
 
     new_relationships: list[RelationshipSpec] = []
 
+    # Helper: check if a table is a fact or bridge (eligible to be on the left
+    # side of a relationship that connects a dimension).
+    def _is_fact_or_bridge(name_lower: str) -> bool:
+        tt = table_type_map.get(name_lower, "dimension")
+        return tt in ("fact", "bridge")
+
     # Iteratively connect disconnected tables: after adding a relationship,
     # the connected set may grow, allowing further connections.
     while disconnected:
@@ -408,6 +586,12 @@ def _auto_detect_missing_relationships(
             disc_wt = wh_table_map.get(disc_table)
             if not disc_wt:
                 continue
+
+            # Skip dim→dim auto-detection: if the disconnected table is a
+            # dimension (not fact/bridge), only connect it to a fact or bridge
+            # table. Connecting two dimensions creates edges that cause cube
+            # build failures (ENTITY_ID null errors).
+            disc_is_dim = not _is_fact_or_bridge(disc_table)
 
             connected_to_this = False
 
@@ -431,6 +615,10 @@ def _auto_detect_missing_relationships(
                 # Only connect if the referenced table is already connected
                 # (so the directed path from fact → ... → ref_table → disc_table works)
                 if ref_table_lower not in connected:
+                    continue
+                # Dim→dim guard: if the disconnected table is a dimension,
+                # only connect it to a fact or bridge table.
+                if disc_is_dim and not _is_fact_or_bridge(ref_table_lower):
                     continue
                 # Skip if there's already a relationship between these tables
                 if (ref_table_lower, disc_table) in existing_table_pairs:
@@ -498,6 +686,10 @@ def _auto_detect_missing_relationships(
             #   connected_table → disconnected_table
             for conn_table in sorted(connected):
                 if conn_table == disc_table:
+                    continue
+                # Dim→dim guard: if the disconnected table is a dimension,
+                # only connect it from a fact or bridge table.
+                if disc_is_dim and not _is_fact_or_bridge(conn_table):
                     continue
                 # Skip if there's already a relationship between these tables
                 if (conn_table, disc_table) in existing_table_pairs:
@@ -593,6 +785,10 @@ def _auto_detect_missing_relationships(
                 for conn_table in sorted(connected):
                     if conn_table == disc_table:
                         continue
+                    # Dim→dim guard: if the disconnected table is a dimension,
+                    # only connect it from a fact or bridge table.
+                    if disc_is_dim and not _is_fact_or_bridge(conn_table):
+                        continue
                     # Skip if there's already a relationship between these tables
                     if (conn_table, disc_table) in existing_table_pairs:
                         continue
@@ -671,6 +867,10 @@ def _auto_detect_missing_relationships(
 
                 for conn_table in sorted(connected):
                     if conn_table == disc_table:
+                        continue
+                    # Dim→dim guard: if the disconnected table is a dimension,
+                    # only connect it from a fact or bridge table.
+                    if disc_is_dim and not _is_fact_or_bridge(conn_table):
                         continue
                     # Skip if there's already a relationship between these tables
                     if (conn_table, disc_table) in existing_table_pairs:
@@ -784,15 +984,40 @@ def _build_column_specs(warehouse_table: dict[str, Any]) -> list[ColumnSpec]:
     return columns
 
 
-def _map_table_type(estimated_type: str) -> str:
-    """Map warehouse inspector's estimated type to TableSpec.table_type."""
+def _map_table_type(estimated_type: str, wt: dict[str, Any] | None = None) -> str:
+    """Map warehouse inspector's estimated type to TableSpec.table_type.
+
+    When ``estimated_type`` is ``"unknown"``, applies heuristics from the XMLA
+    parser to classify the table:
+
+    - outgoing FK count ≥ 3 → ``fact``
+    - all columns numeric and ≥ 5 columns → ``fact``
+    - otherwise → ``dimension``
+    """
     mapping = {
         "fact": "fact",
         "dimension": "dimension",
         "bridge": "bridge",
-        "unknown": "dimension",  # Default to dimension for unknown
     }
-    return mapping.get(estimated_type, "dimension")
+    if estimated_type in mapping:
+        return mapping[estimated_type]
+
+    # Unknown — apply heuristics if warehouse table metadata is available
+    if wt is not None:
+        cols = wt.get("columns", [])
+        outgoing_fk_count = sum(1 for c in cols if c.get("is_fk"))
+        if outgoing_fk_count >= 3:
+            return "fact"
+        if len(cols) >= 5:
+            numeric_markers = ("INT", "NUMERIC", "DECIMAL", "FLOAT", "DOUBLE", "REAL", "BIGINT", "SMALLINT")
+            all_numeric = all(
+                any(m in str(c.get("data_type", "")).upper() for m in numeric_markers)
+                for c in cols
+            )
+            if all_numeric:
+                return "fact"
+
+    return "dimension"
 
 
 def _build_relationships(

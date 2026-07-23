@@ -157,6 +157,7 @@ class TestGenerateIntent:
             schema_summary=schema,
             domain="adventure_works",
             api_key="test_key",
+            use_template=False,
         )
         assert "Business Context" in result
         mock_call.assert_called_once()
@@ -169,6 +170,7 @@ class TestGenerateIntent:
             schema_summary=schema,
             domain="retail_ecommerce",
             api_key="test_key",
+            use_template=False,
         )
         # Check the user message contains the domain
         call_args = mock_call.call_args
@@ -182,6 +184,7 @@ class TestGenerateIntent:
         generate_intent(
             schema_summary=schema,
             api_key="test_key",
+            use_template=False,
         )
         call_args = mock_call.call_args
         user_msg = call_args.kwargs["user_message"]
@@ -196,6 +199,7 @@ class TestGenerateIntent:
             schema_summary=schema,
             enterprise_context="Global manufacturing company",
             api_key="test_key",
+            use_template=False,
         )
         call_args = mock_call.call_args
         user_msg = call_args.kwargs["user_message"]
@@ -207,6 +211,7 @@ class TestGenerateIntent:
             generate_intent(
                 schema_summary=schema,
                 api_key="",
+                use_template=False,
             )
 
     @patch("kyvos_sm_skills.llm_designer._call_azure_openai")
@@ -218,6 +223,7 @@ class TestGenerateIntent:
                 schema_summary=schema,
                 api_key="test_key",
                 llm_provider="azure_openai",
+                use_template=False,
             )
         assert "Business Context" in result
         mock_call.assert_called_once()
@@ -236,6 +242,7 @@ class TestGenerateIntentFromFile:
             intent_path=intent_path,
             schema_summary=schema,
             api_key="test_key",
+            use_template=False,
         )
         assert "Test intent document" in result
         with open(intent_path) as f:
@@ -250,5 +257,6 @@ class TestGenerateIntentFromFile:
             intent_path="/tmp/test_intent_output.txt",
             schema_summary=schema,
             api_key="test_key",
+            use_template=False,
         )
         assert result == "Generated intent content"

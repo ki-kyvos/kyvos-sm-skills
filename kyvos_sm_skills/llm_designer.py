@@ -110,6 +110,9 @@ def _build_user_message(
         "Return your response as JSON matching the output schema in the system prompt. "
         "Include: recommended_sms (with name, schema_type, rationale, tables, relationships, measures, hierarchies), "
         "identified_domain, domain_research_summary, domain_reasoning, and gaps_identified.\n\n"
+        "IMPORTANT: Keep rationale, domain_research_summary, and domain_reasoning concise (1-2 sentences each). "
+        "Do NOT include lengthy prose explanations inside JSON string values. "
+        "Focus tokens on the structural model (tables, measures, hierarchies, relationships) not on prose.\n\n"
         "## Advanced Design Requirements\n"
         "When the user intent calls for advanced analytics, incorporate these capabilities:\n\n"
         "### Multiple Fact Tables (Multifact Schema)\n"
@@ -140,6 +143,20 @@ def _build_user_message(
         "account.parentaccountkey -> account.accountkey, organization.parentorganizationkey -> organization.organizationkey) "
         "should be modeled as hierarchies in the hierarchies list, NOT as relationships. "
         "Kyvos DRD does not support self-join relationships.\n\n"
+        "### Hard Deployment Constraints — MUST follow\n"
+        "These constraints are enforced by the Kyvos compiler and deployment pipeline. "
+        "Violations cause deployment failures or silent data loss.\n\n"
+        "1. **Measures only on fact tables**: Every measure's source_dataset MUST be a table classified as 'fact'. "
+        "Do NOT create measures referencing tables classified as 'dimension', 'bridge', or 'unknown'. "
+        "The compiler silently drops measures on non-fact tables, causing measure loss.\n\n"
+        "2. **No dimension-to-dimension relationships**: Every relationship must originate from a fact or bridge table. "
+        "Relationships between two dimension tables cause cube build failures (ENTITY_ID null errors). "
+        "Valid patterns: fact→dimension, fact→bridge→dimension.\n\n"
+        "3. **All dimensions must be connected**: Every dimension table included in the model MUST have a directed "
+        "relationship path from at least one fact table. Omit any dimension that cannot be connected.\n\n"
+        "4. **No numeric hierarchy levels**: Hierarchy levels MUST NOT use columns with numeric data types "
+        "(NUMBER, NUMERIC, DECIMAL, FLOAT, DOUBLE, INT, INTEGER, BIGINT, SMALLINT, REAL). "
+        "Only string, date, and boolean columns are valid hierarchy levels.\n\n"
         "### Date Dimension Relationships\n"
         "Only create relationships between a date dimension and fact tables if the fact table has a column "
         "with the same name and compatible type as the date dimension's primary key. "
@@ -271,14 +288,42 @@ def _extract_json_from_response(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
+    sanitized_chars: list[str] = []
+    in_string = False
+    escaped = False
+    for index, char in enumerate(cleaned):
+        if in_string and ord(char) < 0x20:
+            sanitized_chars.append(json.dumps(char)[1:-1])
+            escaped = False
+            continue
+        if in_string and char == "\\" and not escaped:
+            next_char = cleaned[index + 1] if index + 1 < len(cleaned) else ""
+            if next_char not in '"\\/bfnrtu':
+                sanitized_chars.append("\\")
+        sanitized_chars.append(char)
+        if char == '"' and not escaped:
+            in_string = not in_string
+        escaped = char == "\\" and not escaped
+        if char != "\\":
+            escaped = False
+    sanitized = "".join(sanitized_chars)
+    try:
+        return json.loads(sanitized)
+    except json.JSONDecodeError:
+        pass
+
     # Attempt 3: try to fix truncated JSON by closing open braces/brackets
-    _open_braces = cleaned.count("{") - cleaned.count("}")
-    _open_brackets = cleaned.count("[") - cleaned.count("]")
+    _open_braces = sanitized.count("{") - sanitized.count("}")
+    _open_brackets = sanitized.count("[") - sanitized.count("]")
     if _open_braces > 0 or _open_brackets > 0:
-        _fixed = cleaned
+        _fixed = sanitized
         # Remove any trailing incomplete key-value or string
         _fixed = _re.sub(r'[\s,]*"[^"]*"\s*:\s*$', "", _fixed)
         _fixed = _re.sub(r'[\s,]*"[^"]*"\s*$', "", _fixed)
+        # Also remove trailing incomplete string values (unterminated quotes)
+        _fixed = _re.sub(r'"[^"]*$', '', _fixed)
+        # Remove trailing incomplete content after last complete value
+        _fixed = _re.sub(r'[\s,]*$', '', _fixed)
         _fixed += "]" * max(_open_brackets, 0)
         _fixed += "}" * max(_open_braces, 0)
         try:
@@ -330,6 +375,11 @@ def _call_anthropic(
     for block in response.content:
         if hasattr(block, "text"):
             response_text += block.text
+
+    if response.stop_reason == "max_tokens":
+        print(f"  WARNING: LLM response truncated (stop_reason=max_tokens, max_tokens={max_tokens}). "
+              f"Response may be incomplete — consider increasing max_tokens or simplifying the intent.")
+
     return response_text
 
 
@@ -359,6 +409,12 @@ def _call_azure_openai(
             {"role": "user", "content": user_message},
         ],
     )
+
+    finish_reason = response.choices[0].finish_reason
+    if finish_reason == "length":
+        print(f"  WARNING: LLM response truncated (finish_reason=length, max_tokens={max_tokens}). "
+              f"Response may be incomplete — consider increasing max_tokens or simplifying the intent.")
+
     return response.choices[0].message.content or ""
 
 
@@ -370,7 +426,7 @@ def design_sm_from_schema(
     sm_hints: dict[str, Any] | None = None,
     api_key: str | None = None,
     model: str = "claude-sonnet-4-20250514",
-    max_tokens: int = 16384,
+    max_tokens: int = 32768,
     llm_provider: str | None = None,
 ) -> dict[str, Any]:
     """Generate an SM recommendation from warehouse schema + user intent via LLM.

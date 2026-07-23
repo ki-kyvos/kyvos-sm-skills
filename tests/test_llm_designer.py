@@ -108,6 +108,11 @@ class TestExtractJson:
         with pytest.raises(json.JSONDecodeError):
             _extract_json_from_response("not json at all")
 
+    def test_unescaped_string_characters_are_recovered(self):
+        text = '{"summary":"line one\nline two at C:\\warehouse"}'
+        result = _extract_json_from_response(text)
+        assert result["summary"] == "line one\nline two at C:\\warehouse"
+
 
 # ── Test _build_user_message ───────────────────────────────────────────────
 

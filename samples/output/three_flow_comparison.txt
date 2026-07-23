@@ -1,0 +1,115 @@
+======================================================================
+Three-Flow AdventureWorks SM Validation & Comparison Report
+Generated: 2026-07-23
+======================================================================
+
+Flow                          Status   Errors   Warnings
+-------------------------------------------------------
+Flow1_XMLA                   INVALID       16          0
+Flow2_GenIntent              INVALID        1          0
+Flow3_UserIntent               VALID        0          5
+
+======================================================================
+DEPLOYMENT SUMMARY
+======================================================================
+
+Flow1_XMLA:
+  SM Name: AWDW2019Multidimensional-EE_072326_1357
+  SM ID:   55B5D10E-2BD9-46CD-F1DA-8DE6D45ADCD0
+  Source:  XMLA file parse -> compile -> deploy
+  Tables:  30 | Datasets: 30 | Relationships: 48 | Measures: 86
+  Folder:  awdw2019multidimensionalee_X
+  Notes:   Full XMLA model with all SSAS tables, measures, hierarchies
+
+Flow2_GenIntent:
+  SM Name: AdventureWorks_Enterprise_Multifact_072326_1406
+  SM ID:   FF11FA16-69F0-A5C6-37B7-ED46A912F4C4
+  Source:  Template intent -> LLM design -> spec builder -> compile -> deploy
+  Tables:  25 | Datasets: 25 | Relationships: 47 | Measures: 43
+  Folder:  awdw2019multidimensionalee_G
+  Notes:   Template-generated intent, LLM-designed multifact model
+
+Flow3_UserIntent:
+  SM Name: AdventureWorks_Enterprise_Multifact_072326_1409
+  SM ID:   0397FEFD-C83F-B426-FA54-B0E9E70D1B5E
+  Source:  Static intent file -> LLM design -> spec builder -> compile -> deploy
+  Tables:  25 | Datasets: 25 | Relationships: 46 | Measures: 26
+  Folder:  awdw2019multidimensionalee_U
+  Notes:   User-provided intent from intent-adventureworks.txt
+
+======================================================================
+COMPARISON ANALYSIS
+======================================================================
+
+1. TABLE/DATASET COUNT:
+   - Flow 1 (XMLA): 30 tables -- includes ALL tables from the SSAS model
+   - Flow 2 (Gen-Intent): 25 tables -- LLM selected subset with bridge tables
+   - Flow 3 (User-Intent): 25 tables -- LLM selected subset, similar to Flow 2
+
+2. MEASURE COUNT:
+   - Flow 1 (XMLA): 86 measures -- full SSAS measure set including all calculated measures
+   - Flow 2 (Gen-Intent): 43 measures -- LLM-generated base + calculated measures
+   - Flow 3 (User-Intent): 26 measures -- fewer calculated measures than Flow 2
+
+3. RELATIONSHIP COUNT:
+   - Flow 1 (XMLA): 48 relationships -- full SSAS relationship set
+   - Flow 2 (Gen-Intent): 47 relationships -- nearly matching XMLA coverage
+   - Flow 3 (User-Intent): 46 relationships -- similar to Flow 2
+
+4. BRIDGE TABLES:
+   - Flow 2/3: SalesReasons and ExchangeRates detected as bridge tables
+   - Flow 1: Bridge tables from SSAS model preserved
+
+5. DEPLOYMENT CONSTRAINTS ENFORCED (all flows):
+   - No measures on non-fact tables (spec builder drops them)
+   - No dim->dim relationships (spec builder guards prevent them)
+   - Connectivity sweep removes disconnected dimensions
+   - Numeric columns excluded from hierarchy levels (compiler)
+   - Hierarchies referencing pruned tables are filtered (spec builder fix)
+
+
+======================================================================
+Flow1_XMLA -- Full Errors & Warnings
+======================================================================
+
+ERRORS (16):
+  - Due to some internal error, BI server could not perform semantic model validations.
+  - Either dataset used in these measures does not exist
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+  - Semantic Model is Invalid : As could not find relation between dimension and any measure, please check directions between nodes.
+
+WARNINGS: None
+
+======================================================================
+Flow2_GenIntent -- Full Errors & Warnings
+======================================================================
+
+ERRORS (1):
+  - Due to some internal error, BI server could not perform semantic model validations.
+
+WARNINGS: None
+
+======================================================================
+Flow3_UserIntent -- Full Errors & Warnings
+======================================================================
+
+ERRORS: None
+
+WARNINGS (5):
+  - Dataset [FinancialReporting] does not contain partition details.
+  - Dataset [InternetCustomers] does not contain partition details.
+  - Dataset [InternetSales] does not contain partition details.
+  - Dataset [ResellerSales] does not contain partition details.
+  - Dataset [SalesSummary] does not contain partition details.

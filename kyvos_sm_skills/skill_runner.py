@@ -130,6 +130,7 @@ def _collect_and_cleanup_entities(
     extra_prefixes: tuple[str, ...] = (),
     auto_approve: bool = False,
     restrict_smodel_folder: str | None = None,
+    folder_suffix: str = "",
 ) -> bool:
     """Collect and optionally delete old entities matching the base_name prefixes.
 
@@ -141,6 +142,8 @@ def _collect_and_cleanup_entities(
     - Prefix collision warning aborts if a prefix is too generic.
     - Confirmation gate requires user input even with auto_approve for live deletes.
     - Audit log is written for every cleanup run.
+    - When folder_suffix is provided, only folders ending with _{suffix} are
+      matched, preventing cross-flow cleanup from deleting other flows' entities.
 
     Args:
         insp: InspectionClient instance.
@@ -153,6 +156,10 @@ def _collect_and_cleanup_entities(
                         LLM-generated SM name to catch entities from previous
                         runs that used different naming conventions).
         auto_approve: If True, skip interactive confirmation gate (for CI/CD).
+        folder_suffix: When provided, only match folders whose names end with
+                       _{suffix} (case-insensitive).  This scopes cleanup to
+                       the current flow's entities only, preventing deletion of
+                       other flows' entities that share the same base prefix.
 
     Returns:
         True if any entities were deleted (and a delay is warranted), False otherwise.
@@ -187,8 +194,15 @@ def _collect_and_cleanup_entities(
         print(f"  Protected folders: {sorted(protected)}")
     skip_folders = (skip_folders or set()) | protected
 
+    _suffix_lower = folder_suffix.lower().lstrip() if folder_suffix else ""
+
     def _matches(name: str) -> bool:
         lower = name.lower().lstrip()
+        if _suffix_lower:
+            return any(
+                lower.startswith(p) and lower.endswith(f"_{_suffix_lower}")
+                for p in prefixes
+            )
         return any(lower.startswith(p) for p in prefixes)
 
     print(f"  Scanning for old entities matching prefixes: {list(prefixes)} ...")
@@ -476,6 +490,7 @@ def _deploy_spec(
         extra_prefixes=_sm_prefixes,
         auto_approve=auto_approve,
         restrict_smodel_folder=smodel_folder_label,
+        folder_suffix=sm_folder_suffix,
     )
     if _did_cleanup:
         print(f"  Waiting 10s for server to process deletions...")

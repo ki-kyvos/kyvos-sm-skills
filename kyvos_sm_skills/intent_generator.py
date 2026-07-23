@@ -1,23 +1,27 @@
-"""LLM-powered automatic intent generation for semantic model design.
+"""Automatic intent generation for semantic model design.
 
 This module generates a production-ready user intent by:
-1. Analyzing the discovered warehouse schema (tables, columns, relationships, patterns)
-2. Researching the domain (e.g., "adventure_works" → bicycle manufacturing/retail)
-3. Applying enterprise AI/BI best practices (star schema, conformed dimensions, KPIs)
-4. Including Kyvos-specific requirements (MDX syntax, parent-child hierarchies)
-5. Producing a structured intent document
+1. Filling a domain-agnostic parameterized template with schema-derived values
+2. Optionally refining the filled template via an LLM for domain-specific depth
+3. Including Kyvos-specific requirements (MDX syntax, parent-child hierarchies)
+4. Producing a structured intent document
 
 The generated intent replaces the need for a manually crafted static intent file.
+Users can also provide their own intent files that follow the same section structure.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
+from pathlib import Path
 from typing import Any
 
 from kyvos_sm_skills.knowledge_base import get_knowledge_base_summary
 from kyvos_sm_skills.mdx_reference import get_mdx_prompt_summary
+
+_TEMPLATE_PATH = Path(__file__).parent / "templates" / "intent_template.txt"
 
 
 def _build_intent_system_prompt() -> str:
@@ -127,6 +131,76 @@ def _build_intent_user_message(
     return "\n".join(parts)
 
 
+def _fill_template(
+    schema_summary: dict[str, Any],
+    domain: str | None = None,
+) -> str | None:
+    """Fill the parameterized intent template with schema-derived values.
+
+    Reads ``templates/intent_template.txt`` and replaces ``{{placeholders}}``
+    with values derived from the warehouse schema summary.
+
+    Args:
+        schema_summary: Dict from ``inspect_schema()`` with tables, columns, etc.
+        domain: Optional domain name (e.g., "adventure_works", "retail_ecommerce").
+
+    Returns:
+        Filled template string, or ``None`` if the template file is not found.
+    """
+    if not _TEMPLATE_PATH.exists():
+        return None
+
+    template = _TEMPLATE_PATH.read_text()
+
+    # Derive domain label
+    domain_label = (domain or "the specified domain").replace("_", " ").title()
+
+    # Derive KPI categories from schema patterns
+    tables = schema_summary.get("tables", [])
+    detected = schema_summary.get("detected_patterns", {})
+
+    kpi_parts: list[str] = []
+    # Revenue-related KPIs if fact tables with amount/price columns exist
+    has_amount_cols = any(
+        any("amount" in c.get("name", "").lower() or "price" in c.get("name", "").lower()
+            for c in t.get("columns", []))
+        for t in tables
+        if t.get("estimated_table_type") == "fact"
+    )
+    if has_amount_cols:
+        kpi_parts.append("Revenue (total and per-channel), Gross Profit Margin, Customer Growth")
+    # Expense-related KPIs if cost columns exist
+    has_cost_cols = any(
+        any("cost" in c.get("name", "").lower() or "expense" in c.get("name", "").lower()
+            for c in t.get("columns", []))
+        for t in tables
+        if t.get("estimated_table_type") == "fact"
+    )
+    if has_cost_cols:
+        kpi_parts.append("Expense to Revenue Ratio, Operating Profit")
+    # Asset-related KPIs if asset columns exist
+    has_asset_cols = any(
+        any("asset" in c.get("name", "").lower()
+            for c in t.get("columns", []))
+        for t in tables
+    )
+    if has_asset_cols:
+        kpi_parts.append("Return on Assets")
+    if not kpi_parts:
+        kpi_parts.append("Revenue (total and per-channel), Gross Profit Margin, Customer Growth, Expense to Revenue Ratio, Operating Profit")
+
+    kpi_categories = "\n  - ".join(kpi_parts)
+
+    # Replace placeholders
+    filled = template.replace("{{domain}}", domain_label)
+    filled = filled.replace("{{kpi_categories}}", kpi_categories)
+
+    # Remove any remaining unreplaced placeholders
+    filled = re.sub(r"\{\{[^}]+\}\}", "", filled)
+
+    return filled
+
+
 def generate_intent(
     schema_summary: dict[str, Any],
     domain: str | None = None,
@@ -135,12 +209,13 @@ def generate_intent(
     model: str = "claude-sonnet-4-20250514",
     max_tokens: int = 8192,
     llm_provider: str | None = None,
+    use_template: bool = True,
 ) -> str:
-    """Generate a production-ready user intent document using LLM.
+    """Generate a production-ready user intent document.
 
-    Analyzes the warehouse schema, researches the domain, and applies enterprise
-    AI/BI best practices to produce a structured intent document that can guide
-    semantic model design without further human input.
+    By default, fills the parameterized template with schema-derived values.
+    When ``use_template=False`` or the template is unavailable, falls back
+    to fully LLM-generated intent.
 
     Args:
         schema_summary: Dict from ``inspect_schema()`` with tables, columns, relationships.
@@ -150,14 +225,23 @@ def generate_intent(
         model: Model name (Anthropic) or deployment name (Azure OpenAI).
         max_tokens: Max response tokens.
         llm_provider: "anthropic" or "azure_openai". If None, reads LLM_PROVIDER env var.
+        use_template: When True (default), fill the package template first, then
+            optionally refine via LLM. When False, use fully LLM-generated intent.
 
     Returns:
         Generated intent document as a string.
 
     Raises:
         ImportError: If required SDK is not installed.
-        ValueError: If API key is missing.
+        ValueError: If API key is missing and template is unavailable.
     """
+    # Try template-based generation first
+    if use_template:
+        filled = _fill_template(schema_summary, domain)
+        if filled is not None:
+            return filled
+
+    # Fall back to LLM-based generation
     provider = (llm_provider or os.environ.get("LLM_PROVIDER", "anthropic")).lower()
 
     system_prompt = _build_intent_system_prompt()
@@ -215,6 +299,7 @@ def generate_intent_from_file(
     schema_summary: dict[str, Any],
     domain: str | None = None,
     enterprise_context: str | None = None,
+    use_template: bool = True,
     **kwargs: Any,
 ) -> str:
     """Generate intent and save to a file.
@@ -224,6 +309,7 @@ def generate_intent_from_file(
         schema_summary: Dict from ``inspect_schema()``.
         domain: Optional domain hint.
         enterprise_context: Optional enterprise context.
+        use_template: When True (default), use the package template.
         **kwargs: Additional arguments passed to ``generate_intent()``.
 
     Returns:
@@ -233,6 +319,7 @@ def generate_intent_from_file(
         schema_summary=schema_summary,
         domain=domain,
         enterprise_context=enterprise_context,
+        use_template=use_template,
         **kwargs,
     )
 
