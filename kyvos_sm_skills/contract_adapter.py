@@ -123,6 +123,7 @@ def build_drd_graph(
     relationships: list[SimpleRel],
     dataset_aliases: dict[str, str] | None = None,
     fact_dataset_names: set[str] | None = None,
+    bridge_dataset_names: set[str] | None = None,
 ) -> Any:
     """Build a ``DrdGraph`` from SimpleRel relationships and dataset ID mapping.
 
@@ -135,6 +136,7 @@ def build_drd_graph(
         relationships: List of SimpleRel relationships.
         dataset_aliases: Mapping from semantic display name → Kyvos dataset name.
         fact_dataset_names: Optional set of fact dataset names.
+        bridge_dataset_names: Optional set of bridge dataset names.
 
     Returns:
         ``kyvos_sdk.contracts.identity.DrdGraph`` (preview).
@@ -161,6 +163,7 @@ def build_drd_graph(
     aliases_ci: dict[str, str] = {k.lower(): v for k, v in aliases.items()}
     id_map_ci: dict[str, str] = {k.lower(): v for k, v in dataset_name_to_id.items()}
     fact_set = fact_dataset_names or set()
+    bridge_set = bridge_dataset_names or set()
 
     # Ensure drd_id is non-empty for EntityRef validation
     if not drd_id or not drd_id.strip():
@@ -188,7 +191,7 @@ def build_drd_graph(
         node_id = f"{ds_id}_{idx}"
         name_to_node_id[kyvos_name] = node_id
 
-        node_type = "fact" if kyvos_name in fact_set else ""
+        node_type = "fact" if kyvos_name in fact_set else ("bridge" if kyvos_name in bridge_set else "")
         nodes.append(DrdNode(
             node_id=node_id,
             dataset_ref=EntityRef(
@@ -247,6 +250,7 @@ def compile_drd_artifact(
     relationships: list[SimpleRel],
     dataset_aliases: dict[str, str] | None = None,
     fact_dataset_names: set[str] | None = None,
+    bridge_dataset_names: set[str] | None = None,
     fmt: str = "xml",
 ) -> Any:
     """Compile a DRD into a ``CompiledArtifact`` via SDK compiler.
@@ -263,6 +267,7 @@ def compile_drd_artifact(
         relationships: List of SimpleRel relationships.
         dataset_aliases: Optional semantic→Kyvos name mapping.
         fact_dataset_names: Optional set of fact dataset names.
+        bridge_dataset_names: Optional set of bridge dataset names.
         fmt: "xml" or "json".
 
     Returns:
@@ -287,6 +292,7 @@ def compile_drd_artifact(
         relationships=relationships,
         dataset_aliases=dataset_aliases,
         fact_dataset_names=fact_dataset_names,
+        bridge_dataset_names=bridge_dataset_names,
     )
     artifact_fmt = ArtifactFormat.JSON if fmt.lower() == "json" else ArtifactFormat.XML
     return compile_drd(
@@ -311,6 +317,7 @@ def compile_smodel_artifact(
     relationships: list[SimpleRel],
     dataset_aliases: dict[str, str] | None = None,
     fact_dataset_names: set[str] | None = None,
+    bridge_dataset_names: set[str] | None = None,
     dataset_columns: dict[str, list[dict]] | None = None,
     fmt: str = "xml",
 ) -> Any:
@@ -330,6 +337,7 @@ def compile_smodel_artifact(
         relationships: List of SimpleRel relationships for DRD graph.
         dataset_aliases: Optional semantic→Kyvos name mapping.
         fact_dataset_names: Optional set of fact dataset names.
+        bridge_dataset_names: Optional set of bridge dataset names.
         dataset_columns: Optional dataset columns metadata.
         fmt: "xml" or "json".
 
@@ -389,6 +397,7 @@ def compile_smodel_artifact(
         relationships=relationships,
         dataset_aliases=dataset_aliases,
         fact_dataset_names=fact_dataset_names,
+        bridge_dataset_names=bridge_dataset_names,
     )
     artifact_fmt = ArtifactFormat.JSON if fmt.lower() == "json" else ArtifactFormat.XML
     return compile_semantic_model(

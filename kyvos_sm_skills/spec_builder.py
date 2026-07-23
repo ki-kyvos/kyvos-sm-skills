@@ -146,6 +146,18 @@ def build_spec_from_recommendation(
             ))
             _existing_table_names.add(wt["name"].lower())
 
+    # Auto-detect missing relationships from warehouse FK metadata.
+    # The LLM may include dimension tables in the model but forget to create
+    # relationships connecting them to fact tables. Kyvos rejects dimensions
+    # that have no path to any measure. This step scans FK columns in the
+    # warehouse schema and auto-creates relationships for disconnected tables.
+    relationships = _auto_detect_missing_relationships(
+        relationships=relationships,
+        table_specs=table_specs,
+        wh_table_map=wh_table_map,
+        measures=measures,
+    )
+
     # Build HierarchySpec objects
     hierarchies = _build_hierarchies(
         sm_rec.get("hierarchies", []),
@@ -185,6 +197,576 @@ def build_spec_from_recommendation(
         semantic_model=semantic_model,
         metadata=metadata,
     )
+
+
+def _auto_detect_missing_relationships(
+    relationships: list[RelationshipSpec],
+    table_specs: list[TableSpec],
+    wh_table_map: dict[str, dict[str, Any]],
+    measures: list[MeasureSpec],
+) -> list[RelationshipSpec]:
+    """Auto-create relationships for tables disconnected from all fact tables.
+
+    After the LLM produces relationships, some dimension tables may be included
+    in the model but have no **directed** relationship path from a fact table.
+    Kyvos DRD uses directed edges (left → right) and rejects dimensions that
+    cannot be reached from any measure via directed traversal.
+
+    This function:
+
+    1. Reorients wrong-direction relationships (dim → fact becomes fact → dim).
+    2. Builds a **directed** graph from relationships (left → right).
+    3. Identifies fact tables (table_type == 'fact' or tables with measures).
+    4. Directed BFS from all fact tables to find reachable tables.
+    5. For each unreachable table, scans FK column metadata in the warehouse
+       schema to find connections and auto-creates relationships with the
+       correct direction (connected_table → disconnected_table).
+
+    Args:
+        relationships: Existing RelationshipSpec list from LLM recommendation.
+        table_specs: All TableSpec objects in the spec.
+        wh_table_map: Warehouse table lookup (lowercase name -> table dict).
+        measures: MeasureSpec list (to identify which tables have measures).
+
+    Returns:
+        Extended relationships list with reoriented + auto-detected relationships.
+    """
+    if not table_specs:
+        return relationships
+
+    spec_table_names = {ts.name.lower() for ts in table_specs}
+    table_type_map = {ts.name.lower(): ts.table_type for ts in table_specs}
+
+    # Identify fact tables: only table_type == "fact".
+    # Do NOT add tables with measures but non-fact table_type — those are
+    # dimensions that the LLM incorrectly assigned measures to. The DRD
+    # generator also uses only table_type == "fact", so we must match.
+    fact_table_names: set[str] = set()
+    for ts in table_specs:
+        if ts.table_type == "fact":
+            fact_table_names.add(ts.name.lower())
+
+    if not fact_table_names:
+        return relationships  # No fact tables -- nothing to connect to
+
+    # Step 1: Reorient wrong-direction dim → fact relationships to fact → dim.
+    # The DRD uses directed edges (left → right). A fact should be on the left
+    # so that dimensions are reachable from fact tables via directed traversal.
+    reoriented: list[RelationshipSpec] = []
+    reorient_count = 0
+    for rel in relationships:
+        left = rel.left_dataset.lower()
+        right = rel.right_dataset.lower()
+        left_is_fact = left in fact_table_names
+        right_is_fact = right in fact_table_names
+        left_is_dim = not left_is_fact
+        right_is_dim = not right_is_fact
+
+        if left_is_dim and right_is_fact:
+            # Wrong direction: dim → fact. Flip to fact → dim.
+            reoriented.append(RelationshipSpec(
+                left_dataset=rel.right_dataset,
+                left_column=rel.right_column,
+                right_dataset=rel.left_dataset,
+                right_column=rel.left_column,
+                relationship_type=rel.relationship_type,
+            ))
+            reorient_count += 1
+            print(
+                f"  Reoriented relationship: {rel.left_dataset}.{rel.left_column} "
+                f"-> {rel.right_dataset}.{rel.right_column}  =>  "
+                f"{rel.right_dataset}.{rel.right_column} -> {rel.left_dataset}.{rel.left_column}"
+            )
+        else:
+            reoriented.append(rel)
+
+    if reorient_count > 0:
+        print(f"  Reoriented {reorient_count} wrong-direction dim→fact relationship(s)")
+
+    # Step 2: Build directed graph (left → right only)
+    directed_graph: dict[str, set[str]] = {ts.name.lower(): set() for ts in table_specs}
+    for rel in reoriented:
+        left = rel.left_dataset.lower()
+        right = rel.right_dataset.lower()
+        if left in directed_graph and right in directed_graph:
+            directed_graph[left].add(right)
+
+    # Step 3: Directed BFS from all fact tables
+    connected: set[str] = set()
+    queue = list(fact_table_names)
+    while queue:
+        current = queue.pop(0)
+        if current in connected:
+            continue
+        connected.add(current)
+        for neighbor in directed_graph.get(current, set()):
+            if neighbor not in connected:
+                queue.append(neighbor)
+
+    # Step 3b: Reorient dim→dim relationships where left is disconnected
+    # and right is connected. These relationships point the wrong way for
+    # directed traversal (disconnected → connected should be connected → disconnected).
+    initial_disconnected = spec_table_names - connected
+    if initial_disconnected:
+        reoriented_2: list[RelationshipSpec] = []
+        reorient_2_count = 0
+        for rel in reoriented:
+            left = rel.left_dataset.lower()
+            right = rel.right_dataset.lower()
+            if (left in initial_disconnected and right in connected
+                    and left not in fact_table_names and right not in fact_table_names):
+                # Wrong direction: disconnected → connected. Flip to connected → disconnected.
+                reoriented_2.append(RelationshipSpec(
+                    left_dataset=rel.right_dataset,
+                    left_column=rel.right_column,
+                    right_dataset=rel.left_dataset,
+                    right_column=rel.left_column,
+                    relationship_type=rel.relationship_type,
+                ))
+                reorient_2_count += 1
+                print(
+                    f"  Reoriented dim→dim: {rel.left_dataset}.{rel.left_column} "
+                    f"-> {rel.right_dataset}.{rel.right_column}  =>  "
+                    f"{rel.right_dataset}.{rel.right_column} -> {rel.left_dataset}.{rel.left_column}"
+                )
+            else:
+                reoriented_2.append(rel)
+
+        if reorient_2_count > 0:
+            print(f"  Reoriented {reorient_2_count} wrong-direction dim→dim relationship(s)")
+            reoriented = reoriented_2
+
+            # Rebuild directed graph with reoriented relationships
+            directed_graph = {ts.name.lower(): set() for ts in table_specs}
+            for rel in reoriented:
+                left = rel.left_dataset.lower()
+                right = rel.right_dataset.lower()
+                if left in directed_graph and right in directed_graph:
+                    directed_graph[left].add(right)
+
+            # Redo BFS
+            connected = set()
+            queue = list(fact_table_names)
+            while queue:
+                current = queue.pop(0)
+                if current in connected:
+                    continue
+                connected.add(current)
+                for neighbor in directed_graph.get(current, set()):
+                    if neighbor not in connected:
+                        queue.append(neighbor)
+
+    # Find disconnected tables (in spec but not reachable from any fact table)
+    disconnected = spec_table_names - connected
+    if not disconnected:
+        return reoriented
+
+    # Debug: print graph state for diagnosis
+    print(f"  Auto-detect debug: fact_tables={sorted(fact_table_names)}")
+    print(f"  Auto-detect debug: connected={sorted(connected)}")
+    print(f"  Auto-detect debug: disconnected={sorted(disconnected)}")
+    for disc in sorted(disconnected):
+        edges_out = directed_graph.get(disc, set())
+        edges_in = {k for k, v in directed_graph.items() if disc in v}
+        print(f"    {disc}: edges_out={sorted(edges_out)} edges_in={sorted(edges_in)}")
+        # Show FK info from warehouse
+        disc_wt_debug = wh_table_map.get(disc)
+        if disc_wt_debug:
+            for col in disc_wt_debug.get("columns", []):
+                if col.get("is_fk"):
+                    print(f"      FK: {col['name']} -> {col.get('references')}")
+
+    # Build a set of existing relationship keys to avoid duplicates
+    existing_rel_keys: set[tuple[str, str, str, str]] = set()
+    existing_table_pairs: set[tuple[str, str]] = set()
+    for rel in reoriented:
+        key = (
+            rel.left_dataset.lower(),
+            rel.left_column.lower(),
+            rel.right_dataset.lower(),
+            rel.right_column.lower(),
+        )
+        existing_rel_keys.add(key)
+        existing_rel_keys.add(
+            (rel.right_dataset.lower(), rel.right_column.lower(),
+             rel.left_dataset.lower(), rel.left_column.lower())
+        )
+        # Track table pairs (both directions) to prevent conflicting reverse relationships
+        left_t = rel.left_dataset.lower()
+        right_t = rel.right_dataset.lower()
+        existing_table_pairs.add((left_t, right_t))
+        existing_table_pairs.add((right_t, left_t))
+
+    new_relationships: list[RelationshipSpec] = []
+
+    # Iteratively connect disconnected tables: after adding a relationship,
+    # the connected set may grow, allowing further connections.
+    while disconnected:
+        progress_made = False
+
+        for disc_table in sorted(disconnected):
+            disc_wt = wh_table_map.get(disc_table)
+            if not disc_wt:
+                continue
+
+            connected_to_this = False
+
+            # Strategy 1: Scan FK columns in the disconnected table itself.
+            # If the FK points to a connected table, create:
+            #   connected_table → disconnected_table  (so directed BFS reaches it)
+            for col in disc_wt.get("columns", []):
+                if not col.get("is_fk") or not col.get("references"):
+                    continue
+                ref = col["references"]
+                if "." not in ref:
+                    continue
+                ref_table, ref_column = ref.rsplit(".", 1)
+                ref_table_lower = ref_table.lower()
+
+                if ref_table_lower not in spec_table_names:
+                    continue
+                if ref_table_lower == disc_table:
+                    continue
+
+                # Only connect if the referenced table is already connected
+                # (so the directed path from fact → ... → ref_table → disc_table works)
+                if ref_table_lower not in connected:
+                    continue
+                # Skip if there's already a relationship between these tables
+                if (ref_table_lower, disc_table) in existing_table_pairs:
+                    continue
+
+                ref_wt = wh_table_map.get(ref_table_lower)
+                if not ref_wt:
+                    continue
+                ref_cols = {c["name"].lower() for c in ref_wt.get("columns", [])}
+                if ref_column.lower() not in ref_cols:
+                    continue
+
+                # Relationship direction: ref_table (connected) → disc_table (disconnected)
+                rel_key = (ref_table_lower, ref_column.lower(), disc_table, col["name"].lower())
+                if rel_key in existing_rel_keys:
+                    continue
+
+                # Type compatibility check
+                from_col_type = next(
+                    (c.get("data_type", "") for c in ref_wt.get("columns", [])
+                     if c["name"].lower() == ref_column.lower()), ""
+                ).upper()
+                to_col_type = col.get("data_type", "").upper()
+                _from_is_date = "DATE" in from_col_type
+                _to_is_int = "INT" in to_col_type
+                _from_is_int = "INT" in from_col_type
+                _to_is_date = "DATE" in to_col_type
+                if (_from_is_date and _to_is_int) or (_from_is_int and _to_is_date):
+                    continue
+
+                actual_from = ref_wt["name"]
+                actual_to = disc_wt["name"]
+                actual_from_col = next(
+                    (c["name"] for c in ref_wt.get("columns", [])
+                     if c["name"].lower() == ref_column.lower()), ref_column
+                )
+                actual_to_col = col["name"]
+
+                new_relationships.append(RelationshipSpec(
+                    left_dataset=actual_from,
+                    left_column=actual_from_col,
+                    right_dataset=actual_to,
+                    right_column=actual_to_col,
+                    relationship_type="many_to_one",
+                ))
+                existing_rel_keys.add(rel_key)
+                existing_rel_keys.add((disc_table, col["name"].lower(), ref_table_lower, ref_column.lower()))
+                existing_table_pairs.add((ref_table_lower, disc_table))
+                existing_table_pairs.add((disc_table, ref_table_lower))
+                print(
+                    f"  Auto-detected relationship: {actual_from}.{actual_from_col} "
+                    f"-> {actual_to}.{actual_to_col}"
+                )
+                connected.add(disc_table)
+                directed_graph[ref_table_lower].add(disc_table)
+                progress_made = True
+                connected_to_this = True
+                break  # One connection is enough for this table
+
+            if connected_to_this:
+                continue
+
+            # Strategy 2: Scan connected tables for FKs pointing TO the disconnected table.
+            # If a connected table has an FK to the disconnected table, create:
+            #   connected_table → disconnected_table
+            for conn_table in sorted(connected):
+                if conn_table == disc_table:
+                    continue
+                # Skip if there's already a relationship between these tables
+                if (conn_table, disc_table) in existing_table_pairs:
+                    continue
+                conn_wt = wh_table_map.get(conn_table)
+                if not conn_wt:
+                    continue
+                for col in conn_wt.get("columns", []):
+                    if not col.get("is_fk") or not col.get("references"):
+                        continue
+                    ref = col["references"]
+                    if "." not in ref:
+                        continue
+                    ref_table, ref_column = ref.rsplit(".", 1)
+                    if ref_table.lower() != disc_table:
+                        continue
+
+                    disc_cols = {c["name"].lower() for c in disc_wt.get("columns", [])}
+                    if ref_column.lower() not in disc_cols:
+                        continue
+
+                    rel_key = (conn_table, col["name"].lower(), disc_table, ref_column.lower())
+                    if rel_key in existing_rel_keys:
+                        continue
+
+                    # Type compatibility check
+                    from_col_type = col.get("data_type", "").upper()
+                    to_col_type = next(
+                        (c.get("data_type", "") for c in disc_wt.get("columns", [])
+                         if c["name"].lower() == ref_column.lower()), ""
+                    ).upper()
+                    _from_is_date = "DATE" in from_col_type
+                    _to_is_int = "INT" in to_col_type
+                    _from_is_int = "INT" in from_col_type
+                    _to_is_date = "DATE" in to_col_type
+                    if (_from_is_date and _to_is_int) or (_from_is_int and _to_is_date):
+                        continue
+
+                    actual_from = conn_wt["name"]
+                    actual_to = disc_wt["name"]
+                    actual_from_col = col["name"]
+                    actual_to_col = next(
+                        (c["name"] for c in disc_wt.get("columns", [])
+                         if c["name"].lower() == ref_column.lower()), ref_column
+                    )
+
+                    new_relationships.append(RelationshipSpec(
+                        left_dataset=actual_from,
+                        left_column=actual_from_col,
+                        right_dataset=actual_to,
+                        right_column=actual_to_col,
+                        relationship_type="many_to_one",
+                    ))
+                    existing_rel_keys.add(rel_key)
+                    existing_rel_keys.add((disc_table, ref_column.lower(), conn_table, col["name"].lower()))
+                    existing_table_pairs.add((conn_table, disc_table))
+                    existing_table_pairs.add((disc_table, conn_table))
+                    print(
+                        f"  Auto-detected relationship: {actual_from}.{actual_from_col} "
+                        f"-> {actual_to}.{actual_to_col}"
+                    )
+                    connected.add(disc_table)
+                    directed_graph[conn_table].add(disc_table)
+                    progress_made = True
+                    connected_to_this = True
+                    break  # One connection is enough
+
+                if connected_to_this:
+                    break
+
+            if connected_to_this:
+                continue
+
+            # Strategy 3: PK column name matching (no FK metadata available).
+            # For role-playing dimensions and tables without FK constraints,
+            # match fact table columns that contain the dimension's PK column
+            # name as a suffix (e.g., date_key on date table matches
+            # order_date_key, ship_date_key, due_date_key on fact tables).
+            disc_pk_cols = [
+                c for c in disc_wt.get("columns", []) if c.get("is_pk")
+            ]
+            if not disc_pk_cols:
+                # Fall back to columns ending in "_key" or "key"
+                disc_pk_cols = [
+                    c for c in disc_wt.get("columns", [])
+                    if c["name"].lower().endswith("key") or c["name"].lower().endswith("_id")
+                ]
+
+            for pk_col in disc_pk_cols:
+                pk_name_lower = pk_col["name"].lower()
+                pk_type = pk_col.get("data_type", "").upper()
+
+                for conn_table in sorted(connected):
+                    if conn_table == disc_table:
+                        continue
+                    # Skip if there's already a relationship between these tables
+                    if (conn_table, disc_table) in existing_table_pairs:
+                        continue
+                    conn_wt = wh_table_map.get(conn_table)
+                    if not conn_wt:
+                        continue
+
+                    for conn_col in conn_wt.get("columns", []):
+                        conn_col_lower = conn_col["name"].lower()
+                        # Match if the connected table's column ends with
+                        # the PK column name (e.g., "order_date_key" ends with "date_key")
+                        # or matches exactly
+                        if conn_col_lower == pk_name_lower or conn_col_lower.endswith("_" + pk_name_lower):
+                            # Skip if already an FK with a different reference
+                            if conn_col.get("is_fk") and conn_col.get("references"):
+                                ref = conn_col["references"]
+                                if "." in ref:
+                                    ref_table, _ = ref.rsplit(".", 1)
+                                    if ref_table.lower() != disc_table:
+                                        continue  # FK points elsewhere
+
+                            # Type compatibility check
+                            conn_col_type = conn_col.get("data_type", "").upper()
+                            _from_is_date = "DATE" in conn_col_type
+                            _to_is_int = "INT" in pk_type
+                            _from_is_int = "INT" in conn_col_type
+                            _to_is_date = "DATE" in pk_type
+                            if (_from_is_date and _to_is_int) or (_from_is_int and _to_is_date):
+                                continue
+
+                            rel_key = (conn_table, conn_col_lower, disc_table, pk_name_lower)
+                            if rel_key in existing_rel_keys:
+                                continue
+
+                            actual_from = conn_wt["name"]
+                            actual_to = disc_wt["name"]
+                            actual_from_col = conn_col["name"]
+                            actual_to_col = pk_col["name"]
+
+                            new_relationships.append(RelationshipSpec(
+                                left_dataset=actual_from,
+                                left_column=actual_from_col,
+                                right_dataset=actual_to,
+                                right_column=actual_to_col,
+                                relationship_type="many_to_one",
+                            ))
+                            existing_rel_keys.add(rel_key)
+                            existing_rel_keys.add((disc_table, pk_name_lower, conn_table, conn_col_lower))
+                            existing_table_pairs.add((conn_table, disc_table))
+                            existing_table_pairs.add((disc_table, conn_table))
+                            print(
+                                f"  Auto-detected relationship (PK match): {actual_from}.{actual_from_col} "
+                                f"-> {actual_to}.{actual_to_col}"
+                            )
+                            connected.add(disc_table)
+                            directed_graph[conn_table].add(disc_table)
+                            progress_made = True
+                            connected_to_this = True
+                            break
+
+                    if connected_to_this:
+                        break
+
+            if connected_to_this:
+                continue
+
+            # Strategy 4: Exact column name matching for all columns.
+            # For bridge tables and other tables without PK/FK metadata,
+            # try matching any column name that exists in both the disconnected
+            # table and a connected table (e.g., salesordernumber in both
+            # sales_reasons and internet_sales).
+            disc_cols_all = disc_wt.get("columns", [])
+            for disc_col in disc_cols_all:
+                disc_col_lower = disc_col["name"].lower()
+                disc_col_type = disc_col.get("data_type", "").upper()
+
+                for conn_table in sorted(connected):
+                    if conn_table == disc_table:
+                        continue
+                    # Skip if there's already a relationship between these tables
+                    if (conn_table, disc_table) in existing_table_pairs:
+                        continue
+                    conn_wt = wh_table_map.get(conn_table)
+                    if not conn_wt:
+                        continue
+
+                    for conn_col in conn_wt.get("columns", []):
+                        conn_col_lower = conn_col["name"].lower()
+                        if conn_col_lower != disc_col_lower:
+                            continue
+
+                        # Skip if already an FK with a different reference
+                        if conn_col.get("is_fk") and conn_col.get("references"):
+                            ref = conn_col["references"]
+                            if "." in ref:
+                                ref_table, _ = ref.rsplit(".", 1)
+                                if ref_table.lower() != disc_table:
+                                    continue
+
+                        # Type compatibility check
+                        conn_col_type = conn_col.get("data_type", "").upper()
+                        _from_is_date = "DATE" in conn_col_type
+                        _to_is_int = "INT" in disc_col_type
+                        _from_is_int = "INT" in conn_col_type
+                        _to_is_date = "DATE" in disc_col_type
+                        if (_from_is_date and _to_is_int) or (_from_is_int and _to_is_date):
+                            continue
+
+                        rel_key = (conn_table, conn_col_lower, disc_table, disc_col_lower)
+                        if rel_key in existing_rel_keys:
+                            continue
+
+                        actual_from = conn_wt["name"]
+                        actual_to = disc_wt["name"]
+                        actual_from_col = conn_col["name"]
+                        actual_to_col = disc_col["name"]
+
+                        new_relationships.append(RelationshipSpec(
+                            left_dataset=actual_from,
+                            left_column=actual_from_col,
+                            right_dataset=actual_to,
+                            right_column=actual_to_col,
+                            relationship_type="many_to_one",
+                        ))
+                        existing_rel_keys.add(rel_key)
+                        existing_rel_keys.add((disc_table, disc_col_lower, conn_table, conn_col_lower))
+                        existing_table_pairs.add((conn_table, disc_table))
+                        existing_table_pairs.add((disc_table, conn_table))
+                        print(
+                            f"  Auto-detected relationship (col match): {actual_from}.{actual_from_col} "
+                            f"-> {actual_to}.{actual_to_col}"
+                        )
+                        connected.add(disc_table)
+                        directed_graph[conn_table].add(disc_table)
+                        progress_made = True
+                        connected_to_this = True
+                        break
+
+                    if connected_to_this:
+                        break
+
+                if connected_to_this:
+                    break
+
+        # Propagate connectivity through existing directed edges (BFS)
+        # When a new table is connected, tables reachable from it via existing
+        # edges should also become connected (e.g., sales_reasons → sales_reason).
+        queue = list(connected)
+        while queue:
+            current = queue.pop(0)
+            for neighbor in directed_graph.get(current, set()):
+                if neighbor not in connected:
+                    connected.add(neighbor)
+                    queue.append(neighbor)
+
+        # Update disconnected set
+        disconnected = spec_table_names - connected
+        if not progress_made:
+            break  # No more connections can be made
+
+    if new_relationships:
+        print(
+            f"  Auto-detected {len(new_relationships)} missing relationship(s) "
+            f"from warehouse FK metadata"
+        )
+
+    # Report any tables that remain disconnected
+    if disconnected:
+        print(
+            f"  WARNING: {len(disconnected)} table(s) still disconnected from fact tables: "
+            f"{sorted(disconnected)}"
+        )
+
+    return reoriented + new_relationships
 
 
 def _build_column_specs(warehouse_table: dict[str, Any]) -> list[ColumnSpec]:
@@ -314,7 +896,7 @@ def _build_measures(
     for m in measures:
         name = m.get("name", "")
         source_dataset = m.get("source_dataset", "")
-        agg_type = m.get("aggregation_type", "sum")
+        agg_type = m.get("aggregation_type") or "sum"
 
         if not name:
             raise ValueError(f"Measure missing 'name' field: {m}")
@@ -402,6 +984,28 @@ def _build_measures(
                             break
 
         expression = m.get("expression", "")
+
+        # Validate source_column for base (non-calculated) measures
+        if not is_calculated and actual_source:
+            if not source_column:
+                # LLM hallucinated a measure for a column that doesn't exist
+                print(f"  WARNING: Skipping measure '{name}' — no matching column found on '{actual_source}'")
+                continue
+            # Validate source_column exists and check data type compatibility
+            if source_dataset:
+                cols = wh_table_map[source_dataset.lower()].get("columns", [])
+                col_lookup = {c["name"].lower(): c for c in cols}
+                matched_col = col_lookup.get(source_column.lower())
+                if not matched_col:
+                    print(f"  WARNING: Skipping measure '{name}' — source_column '{source_column}' not found on '{actual_source}'")
+                    continue
+                _numeric_aggs = {"sum", "avg", "min", "max", "median", "stdev", "var"}
+                if agg_type.lower() in _numeric_aggs:
+                    col_type = str(matched_col.get("data_type", "")).upper()
+                    _numeric_type_markers = ("INT", "NUMERIC", "DECIMAL", "FLOAT", "DOUBLE", "REAL", "BIGINT", "SMALLINT", "SERIAL")
+                    if not any(t in col_type for t in _numeric_type_markers):
+                        print(f"  WARNING: Skipping measure '{name}' — aggregation '{agg_type}' on non-numeric column '{source_column}' ({col_type}) on '{actual_source}'")
+                        continue
 
         # Convert DAX patterns to Kyvos MDX if the LLM produced DAX syntax
         if expression and is_calculated:

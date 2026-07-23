@@ -217,11 +217,6 @@
           "aggregation_type": "sum"
         },
         {
-          "name": "salesamountquota",
-          "source_dataset": "sales_targets",
-          "aggregation_type": "sum"
-        },
-        {
           "name": "amount",
           "source_dataset": "financial_reporting",
           "aggregation_type": "sum"

@@ -278,12 +278,20 @@ class TestBuildSpecFromRecommendation:
         spec = build_spec_from_recommendation(rec, wh_tables)
         assert spec.semantic_model.hierarchies == []
 
-    def test_empty_relationships_handled(self):
+    def test_empty_relationships_auto_detected_from_fk(self):
+        """When LLM provides no relationships, auto-detect from warehouse FK metadata."""
         wh_tables = _make_warehouse_tables()
         rec = _make_star_schema_rec()
         rec["relationships"] = []
         spec = build_spec_from_recommendation(rec, wh_tables)
-        assert spec.semantic_model.relationships == []
+        # Auto-detection should create relationships from FK columns
+        assert len(spec.semantic_model.relationships) > 0
+        # All relationships should connect to fact tables
+        rel_tables = set()
+        for rel in spec.semantic_model.relationships:
+            rel_tables.add(rel.left_dataset.lower())
+            rel_tables.add(rel.right_dataset.lower())
+        assert "fact_internet_sales" in rel_tables
 
     def test_case_insensitive_table_matching(self):
         wh_tables = _make_warehouse_tables()

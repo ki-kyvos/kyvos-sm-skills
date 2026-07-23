@@ -623,6 +623,28 @@ def _deploy_spec(
         prov.refresh_dataset_columns(ds_id)
         print(f"  Dataset: {server_name} (id={ds_id})")
 
+    # Fallback: if any datasets were created with empty IDs (Kyvos API sometimes
+    # returns empty entityId on creation), fetch actual IDs by listing the folder.
+    empty_id_datasets = [
+        ds for ds in created_entities
+        if ds["entity_type"] == "DATASET" and not ds["id"]
+    ]
+    if empty_id_datasets:
+        print(f"  {len(empty_id_datasets)} dataset(s) created with empty ID — fetching from folder...")
+        list_result = insp.list_datasets_in_folder(dataset_folder_label)
+        if list_result.succeeded and list_result.entity_refs:
+            folder_ds_map = {
+                ref.name.lower(): ref.id for ref in list_result.entity_refs
+            }
+            for ds_info in empty_id_datasets:
+                actual_id = folder_ds_map.get(ds_info["name"].lower(), "")
+                if actual_id:
+                    ds_info["id"] = actual_id
+                    dataset_name_to_id[ds_info["name"]] = actual_id
+                    print(f"  Resolved dataset ID: {ds_info['name']} (id={actual_id})")
+                else:
+                    print(f"  WARNING: Could not resolve dataset ID for '{ds_info['name']}' from folder listing")
+
     # Second refresh sweep + validate all datasets
     validation_errors = []
     for ds_info in created_entities:
@@ -733,11 +755,69 @@ def _deploy_spec(
     print(f"  Valid relationships: {len(validated_rels)} / {len(semantic_model.relationships)}")
 
     fact_dataset_names = set()
+    bridge_dataset_names = set()
     for table in tables:
+        server_name = dataset_aliases.get(table.name, table.name)
         if table.table_type == "fact":
-            server_name = dataset_aliases.get(table.name, table.name)
             fact_dataset_names.add(server_name)
-    print(f"  Fact datasets: {fact_dataset_names}")
+        elif table.table_type == "bridge":
+            bridge_dataset_names.add(server_name)
+
+    # Auto-detect bridge tables using relationship structure + column analysis.
+    # A bridge table in a many-to-many pattern has:
+    # - An incoming relationship from a fact table via a NON-PK column (business key)
+    # - An outgoing relationship to a dimension
+    # - No measures assigned to it
+    # Snowflake dimensions (Fact → Dim → SubDim via PK) are NOT bridges.
+    measure_source_datasets = {
+        m.source_dataset.lower() for m in semantic_model.measures if m.source_dataset
+    }
+    fact_names_lower = {n.lower() for n in fact_dataset_names}
+    dim_names_lower = {
+        dataset_aliases.get(t.name, t.name).lower()
+        for t in tables if t.table_type == "dimension"
+    }
+    # Build map: for each non-fact table, track if it has incoming from fact
+    # via a non-PK column (bridge pattern) vs via PK column (regular dim pattern)
+    incoming_from_fact_via_pk: set[str] = set()
+    incoming_from_fact_via_non_pk: set[str] = set()
+    outgoing_to_dim: set[str] = set()
+    # Build PK column lookup per table
+    table_pk_cols: dict[str, set[str]] = {}
+    for t in tables:
+        server_name = dataset_aliases.get(t.name, t.name).lower()
+        table_pk_cols[server_name] = {
+            c.name.lower() for c in (t.columns or []) if c.is_primary_key
+        }
+    for rel in validated_rels:
+        left_kyvos = dataset_aliases.get(rel.left_dataset, rel.left_dataset)
+        right_kyvos = dataset_aliases.get(rel.right_dataset, rel.right_dataset)
+        if left_kyvos.lower() in fact_names_lower:
+            right_lower = right_kyvos.lower()
+            rel_col_lower = rel.right_column.lower()
+            right_pk_cols = table_pk_cols.get(right_lower, set())
+            if rel_col_lower in right_pk_cols:
+                incoming_from_fact_via_pk.add(right_lower)
+            else:
+                incoming_from_fact_via_non_pk.add(right_lower)
+        if right_kyvos.lower() in dim_names_lower:
+            outgoing_to_dim.add(left_kyvos.lower())
+
+    for table in tables:
+        if table.table_type not in ("unknown", "", "dimension"):
+            continue
+        server_name = dataset_aliases.get(table.name, table.name)
+        if server_name in fact_dataset_names or server_name in bridge_dataset_names:
+            continue
+        if table.name.lower() in measure_source_datasets:
+            continue
+        server_lower = server_name.lower()
+        # Bridge = incoming from fact via non-PK column AND outgoing to dimension
+        if server_lower in incoming_from_fact_via_non_pk and server_lower in outgoing_to_dim:
+            bridge_dataset_names.add(server_name)
+
+    if bridge_dataset_names:
+        print(f"  Bridge datasets: {bridge_dataset_names}")
 
     drd_artifact = compile_drd_artifact(
         drd_name=drd_name,
@@ -748,6 +828,7 @@ def _deploy_spec(
         relationships=validated_rels,
         dataset_aliases=dataset_aliases,
         fact_dataset_names=fact_dataset_names,
+        bridge_dataset_names=bridge_dataset_names,
         fmt=config.payload_format,
     )
 
@@ -809,9 +890,10 @@ def _deploy_spec(
         folder_name=smodel_folder_label,
         connection_name=config.warehouse_connection_name,
         dataset_name_to_id=dataset_name_to_id,
-        relationships=semantic_model.relationships,
+        relationships=validated_rels,
         dataset_aliases=dataset_aliases,
         fact_dataset_names=fact_dataset_names,
+        bridge_dataset_names=bridge_dataset_names,
         dataset_columns=dataset_cols,
         fmt=config.payload_format,
     )

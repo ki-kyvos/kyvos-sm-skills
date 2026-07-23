@@ -1,38 +1,52 @@
-I want to build a production-ready MVP semantic model for Adventure Works analytics. Leverage deep domain research on the AdventureWorks bicycle manufacturing and retail business to ensure the model reflects real-world enterprise analytics patterns.
+I want to build a production-ready MVP semantic model with comprehensive enterprise analytics. Leverage deep domain research to ensure the model reflects real-world enterprise analytics patterns for the specified domain.
 
-**Schema Discovery & Fact Table Inclusion:**
-- Analyze ALL fact tables discovered in the warehouse schema and include every relevant one in a multifact schema
-- Fact tables identified: internet_sales, internet_orders, internet_customers, reseller_sales, reseller_orders, sales_summary, sales_orders, financial_reporting
-- Include all conformed dimensions shared across fact tables (Product, Date, Sales Territory, Customer, Promotion, Source Currency, etc.)
-- Model as a multifact star/snowflake schema based on actual warehouse structure
-- Include bridge/junction tables (e.g., sales_reasons) as many-to-many relationships where applicable
+**Schema Comprehensiveness — discover from warehouse:**
+- Analyze ALL tables discovered in the warehouse schema and classify each as fact, dimension, bridge, or parent-child dimension
+- Include EVERY fact table that shares conformed dimensions with other fact tables — model as multifact schema
+- Include ALL conformed dimensions shared across fact tables
+- Detect and include bridge/junction tables (tables with FK columns referencing two or more dimensions) as many-to-many relationships
+- Detect and include parent-child dimensions (tables with self-referencing FK columns) — model as parent-child hierarchies, NOT as self-join relationships
+- Detect and include scenario/budget dimensions (tables or columns containing scenario, budget, actual, variance, target, quota patterns) for variance analysis
+- Detect and include currency conversion tables (exchange rate tables, source/destination currency dimensions) if present
+- Detect role-playing dimensions (fact table with multiple FK columns to the same dimension) and model each FK as a separate relationship
+- Detect and include sales quota/target tables if present (tables containing quota, target, or budget in their name)
 
-**Core Analytics Requirements:**
-- Revenue analysis across all sales channels (internet + reseller) by product category/subcategory, sales territory, customer demographics, and time periods
-- Profit margin analysis (gross margin, margin %) with safe division handling for each sales channel
-- Time intelligence: Year-over-Year (YoY) growth, Year-to-Date (YTD), Quarter-to-Date (QTD), and Month-to-Date (MTD) cumulative measures
-- Sales performance vs prior year comparisons using ParallelPeriod
-- Financial reporting metrics where the financial_reporting fact table is included
+**Base Measures — discover from numeric columns:**
+- Create base measures from ALL numeric columns in each fact table
+- Use appropriate aggregation types: SUM for amounts/prices/costs, COUNT for transaction counts, DISTINCTCOUNT for order/customer counts
+- Assign business-meaningful measure names, prefixed by source channel/fact table for uniqueness across fact tables
+- Assign format strings: Currency for monetary, Percent for ratios, #,# for counts
+
+**Calculated Measures — generate based on available base measures:**
+- All calculated measures MUST use Kyvos MDX syntax strictly following the official Kyvos MDX Functions Guide: https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1232535557/Kyvos+MDX+Functions+Guide
+- Use MDX functions: SUM, IIF, YTD, QTD, MTD, ParallelPeriod, PeriodsToDate, CurrentMember, Rank, AVG, MIN, MAX, COUNT, CASE WHEN
+- Do NOT use DAX functions: TOTALYTD, TOTALQTD, TOTALMTD, CALCULATE, SAMEPERIODLASTYEAR, SUMX, RANKX, FILTER, ALL
+- Include divide-by-zero protection using IIF for all ratio measures
+- Generate these calculated measure categories where source data supports them (per fact table / sales channel):
+  - Profitability: Gross Profit (Revenue - Cost), Gross Profit Margin (Profit / Revenue), Discount Percentage (Discount / Revenue)
+  - Averages: Average Unit Price (Unit Price / Transaction Count), Average Sales Amount (Revenue / Order Count)
+  - Ratios: Ratio to All (Revenue / Root(Product) * Revenue), Ratio to Parent (CASE-based on hierarchy level ordinal)
+  - Time Intelligence: YTD, QTD, MTD (using PERIODSTODATE), Prior Year (ParallelPeriod), YoY Growth %
+  - Budget Variance (if scenario dimension exists): Variance = CASE WHEN IsEmpty(Budget) THEN NULL WHEN expenditures THEN Budget - Actual ELSE Actual - Budget END, Variance % = Variance / Budget
+
+**KPI Requirements:**
+- Generate KPIs with value, goal, status, and trend expressions for key business metrics where source data supports them:
+  - Revenue (total and per-channel), Gross Profit Margin, Customer Growth, Expense to Revenue Ratio, Return on Assets, Operating Profit
+- Each KPI produces up to 4 calculated measures: {kpi_name}, {kpi_name}_goal, {kpi_name}_status, {kpi_name}_trend
+- KPI status: CASE WHEN value >= goal THEN 1 WHEN value >= goal * 0.9 THEN 0 ELSE -1 END
+- KPI trend: compare current vs prior period using ParallelPeriod
 
 **Hierarchy Requirements:**
-- Product hierarchy: Category → Subcategory → Product (only if actual columns exist on the Product table)
-- Sales Territory hierarchy: Group → Country → Region (only if actual columns exist)
-- Date hierarchy: Year → Quarter → Month → Date (only if actual columns exist on the Date table)
-- Customer geography hierarchy if applicable (only using actual columns)
-- Parent-child hierarchies for Employee/Organization/Account if those tables are included
-- Every hierarchy level MUST be an actual column on the source_dataset dimension table — no fabricated or business-friendly names
-- Omit any hierarchy where the natural rollup columns don't exist on the table
-
-**KPI/Calculated Measure Requirements:**
-- All calculated measures and calculated members MUST use Kyvos MDX syntax strictly following the official Kyvos MDX Functions Guide: https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1232535557/Kyvos+MDX+Functions+Guide
-- Reference this documentation for correct MDX function names, syntax, and usage patterns when generating any calculated expression
-- Use MDX functions: SUM, IIF, DIVIDE, YTD, QTD, MTD, ParallelPeriod, PeriodsToDate, CurrentMember, Rank, AVG, MIN, MAX, COUNT
-- Do NOT use DAX functions: TOTALYTD, TOTALQTD, TOTALMTD, CALCULATE, SAMEPERIODLASTYEAR, SUMX, RANKX, FILTER, ALL
-- Include divide-by-zero protection using IIF or DIVIDE for all ratio measures
-- KPIs should be production-grade: Gross Margin, Margin %, YoY Growth %, YTD Sales, QTD Sales, Prior Year Sales — for each sales channel where applicable
+- Discover and create hierarchies from dimension table columns:
+  - Natural hierarchies: detect rollup patterns in dimension columns (e.g., category -> subcategory -> product, group -> country -> region, year -> quarter -> month -> date)
+  - Parent-child hierarchies: detect self-referencing FK columns and set is_parent_child=true with parent_column, child_column, display_column, root_member_type
+  - Every hierarchy level MUST be an actual column on the source_dataset dimension table — no fabricated names
+  - Omit any hierarchy where the natural rollup columns don't exist on the table
+  - Create at least one hierarchy per dimension table
 
 **Quality Bar:**
 - The model should be deployable as an MVP to production with minimal post-deployment adjustments
 - Measures should have clear business-meaningful names, prefixed by source where needed for uniqueness across fact tables
 - Schema type should reflect the actual warehouse structure (star/snowflake/multifact)
-- Only include tables and relationships that are directly relevant to the analytics use cases above
+- Only include tables and relationships that are directly relevant to the analytics use cases
+- Generate at least 2 dashboard definitions relevant to the domain
