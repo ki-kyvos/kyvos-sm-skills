@@ -7,6 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+try:
+    import kyvos_sdk  # noqa: F401
+
+    _has_sdk = True
+except ImportError:
+    _has_sdk = False
+
+_sdk_required = pytest.mark.skipif(not _has_sdk, reason="requires kyvos-sdk-python")
+
 from kyvos_sm_skills.skill_runner import run_discover_sm_from_warehouse
 
 # ── Test fixtures ──────────────────────────────────────────────────────────
@@ -98,6 +107,7 @@ def _mock_inspect_schema(config, schema_filter=None, max_tables=500):
 # ── Tests ──────────────────────────────────────────────────────────────────
 
 
+@_sdk_required
 class TestRunDiscoverSmFromWarehouse:
     def test_dry_run_with_inline_sm_design(self, tmp_path, monkeypatch):
         """Dry run with inline SM design should inspect + build spec, no API calls."""
@@ -258,6 +268,7 @@ _LLM_RESPONSE = {
 }
 
 
+@_sdk_required
 class TestRunDiscoverSmFromWarehouseLLMMode:
     def test_llm_mode_dry_run(self, tmp_path):
         """LLM mode dry run should inspect + design + build spec, no API calls to Kyvos."""

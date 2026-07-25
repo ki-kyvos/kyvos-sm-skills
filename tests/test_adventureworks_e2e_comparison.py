@@ -9,6 +9,17 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+try:
+    import kyvos_sdk  # noqa: F401
+
+    _has_sdk = True
+except ImportError:
+    _has_sdk = False
+
+_sdk_required = pytest.mark.skipif(not _has_sdk, reason="requires kyvos-sdk-python")
+
 from kyvos_sm_skills.skill_runner import run_discover_sm_from_warehouse
 
 # ── AdventureWorks mock schema ──────────────────────────────────────────────
@@ -398,6 +409,7 @@ def _validate_sm_recommendation(sm_design: dict):
 # ── Test classes ────────────────────────────────────────────────────────────
 
 
+@_sdk_required
 class TestFlowAIntentFile:
     """Flow A: Pre-written intent file → LLM → SM design → compile."""
 
@@ -474,6 +486,7 @@ class TestFlowAIntentFile:
             assert m["actualSummaryFunction"] == ""
 
 
+@_sdk_required
 class TestFlowBGenerateIntent:
     """Flow B: Auto-generated intent → LLM → SM design → compile."""
 
@@ -539,6 +552,7 @@ class TestFlowBGenerateIntent:
         _validate_mdx_expressions(sm_json)
 
 
+@_sdk_required
 class TestModelComparison:
     """Compare Flow A and Flow B outputs for structural equivalence."""
 

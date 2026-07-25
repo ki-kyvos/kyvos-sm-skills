@@ -5,6 +5,17 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+try:
+    import kyvos_sdk  # noqa: F401
+
+    _has_sdk = True
+except ImportError:
+    _has_sdk = False
+
+_sdk_required = pytest.mark.skipif(not _has_sdk, reason="requires kyvos-sdk-python")
+
 from kyvos_sm_skills.skill_runner import (
     _check_prefix_collision,
     _collect_and_cleanup_entities,
@@ -132,6 +143,7 @@ class TestAuditLog:
 # ── Suffix-scoped cleanup tests ────────────────────────────────────────────
 
 
+@_sdk_required
 class TestSuffixScopedCleanup:
     """Tests that folder_suffix prevents cross-flow cleanup."""
 

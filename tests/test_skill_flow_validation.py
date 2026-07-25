@@ -19,22 +19,31 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
-from kyvos_sdk.client import KyvosServiceError
-from kyvos_sdk.contracts.artifacts import (
-    ArtifactFormat,
-    ArtifactKind,
-    CompiledArtifact,
-)
-from kyvos_sdk.contracts.common import ContractMetadata
-from kyvos_sdk.contracts.identity import EntityType
-from kyvos_sdk.contracts.results import OperationStatus
-from kyvos_sdk.contracts.versioning import CONTRACT_VERSION
-from kyvos_sdk.provisioning import ProvisioningClient
 
-from kyvos_sm_skills.contract_adapter import (
-    compile_drd_artifact,
-    compile_smodel_artifact,
-)
+try:
+    from kyvos_sdk.client import KyvosServiceError
+    from kyvos_sdk.contracts.artifacts import (
+        ArtifactFormat,
+        ArtifactKind,
+        CompiledArtifact,
+    )
+    from kyvos_sdk.contracts.common import ContractMetadata
+    from kyvos_sdk.contracts.identity import EntityType
+    from kyvos_sdk.contracts.results import OperationStatus
+    from kyvos_sdk.contracts.versioning import CONTRACT_VERSION
+    from kyvos_sdk.provisioning import ProvisioningClient
+
+    from kyvos_sm_skills.contract_adapter import (
+        compile_drd_artifact,
+        compile_smodel_artifact,
+    )
+
+    _has_sdk = True
+except ImportError:
+    _has_sdk = False
+
+_sdk_required = pytest.mark.skipif(not _has_sdk, reason="requires kyvos-sdk-python")
+
 from kyvos_sm_skills.generators.drd_xml import SimpleRel
 from kyvos_sm_skills.models import (
     ColumnSpec,
@@ -159,6 +168,7 @@ def _make_dataset_name_to_id() -> dict[str, str]:
 # ── GAP-4: DRD entity ID capture ─────────────────────────────────────────
 
 
+@_sdk_required
 class TestGap4DrdEntityIdCapture:
     """Validate that DRD creation captures the server-assigned entity ID."""
 
@@ -201,6 +211,7 @@ class TestGap4DrdEntityIdCapture:
 # ── GAP-5: SM entity ID capture ──────────────────────────────────────────
 
 
+@_sdk_required
 class TestGap5SmEntityIdCapture:
     """Validate that SM creation captures the server-assigned entity ID."""
 
@@ -244,6 +255,7 @@ class TestGap5SmEntityIdCapture:
 # ── GAP-7: Measure source_dataset remapping + fact detection ─────────────
 
 
+@_sdk_required
 class TestGap7MeasureRemappingAndFactDetection:
     """Validate that measure source_dataset is remapped and fact datasets are detected."""
 
@@ -403,6 +415,7 @@ class TestGap7MeasureRemappingAndFactDetection:
 # ── GAP-15: Relationship column validation ───────────────────────────────
 
 
+@_sdk_required
 class TestGap15RelationshipColumnValidation:
     """Validate that relationship columns are checked against dataset columns."""
 
@@ -490,6 +503,7 @@ class TestGap15RelationshipColumnValidation:
 # ── End-to-end: Full pipeline with mocked services ───────────────────────
 
 
+@_sdk_required
 class TestEndToEndPipelineFlow:
     """Simulate the full skill flow pipeline with mocked KyvosService."""
 

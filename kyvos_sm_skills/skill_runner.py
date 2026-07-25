@@ -21,7 +21,15 @@ import time
 from datetime import datetime
 from typing import Any
 
-from kyvos_sdk.contracts.common import Severity
+try:
+    from kyvos_sdk.contracts.common import Severity
+except ImportError:
+    from enum import Enum
+
+    class Severity(str, Enum):
+        ERROR = "error"
+        WARNING = "warning"
+        INFO = "info"
 
 _MIN_PREFIX_LEN = 8
 
