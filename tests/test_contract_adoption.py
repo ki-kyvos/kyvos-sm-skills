@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import warnings
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from typing import Any
 from unittest.mock import patch
 
 import pytest
 
+from kyvos_sm_skills.contract_adapter import (
+    build_drd_graph,
+    compile_connection_artifact,
+    compile_dataset_artifact,
+    compile_drd_artifact,
+    compile_smodel_artifact,
+)
+from kyvos_sm_skills.generators.drd_xml import SimpleRel
 from kyvos_sm_skills.models import (
     ColumnSpec,
     DatasetSpec,
@@ -19,15 +24,6 @@ from kyvos_sm_skills.models import (
     SemanticModelSpec,
     TableSpec,
 )
-from kyvos_sm_skills.generators.drd_xml import SimpleRel
-from kyvos_sm_skills.contract_adapter import (
-    build_drd_graph,
-    compile_connection_artifact,
-    compile_dataset_artifact,
-    compile_drd_artifact,
-    compile_smodel_artifact,
-)
-
 
 # ── Test fixtures ──────────────────────────────────────────────────────────
 
@@ -96,6 +92,7 @@ class TestNoDeprecationWarning:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             import importlib
+
             import kyvos_sm_skills as pkg
             importlib.reload(pkg)
             dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]

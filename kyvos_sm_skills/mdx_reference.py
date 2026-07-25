@@ -16,7 +16,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # ─── Kyvos MDX Function Catalog ──────────────────────────────────────────────
 # Sourced from the official Kyvos MDX Functions Guide (2026.6).
 # Each entry: name -> (category, syntax, description)
@@ -532,8 +531,10 @@ def get_mdx_prompt_summary() -> str:
         "- YTD: SUM(YTD([Date].[Calendar].CurrentMember), [Measures].[Measure Name])\n"
         "- QTD: SUM(QTD([Date].[Calendar].CurrentMember), [Measures].[Measure Name])\n"
         "- MTD: SUM(MTD([Date].[Calendar].CurrentMember), [Measures].[Measure Name])\n"
-        "- Prior Year: ([Measures].[Measure Name], ParallelPeriod([Date].[Calendar].[Calendar Year], 1, [Date].[Calendar].CurrentMember))\n"
-        "- YoY Growth: IIF([Measures].[Prior Year Sales] = 0, NULL, ([Measures].[Sales] - [Measures].[Prior Year Sales]) / [Measures].[Prior Year Sales])\n"
+        "- Prior Year: ([Measures].[Measure Name], "
+        "ParallelPeriod([Date].[Calendar].[Calendar Year], 1, [Date].[Calendar].CurrentMember))\n"
+        "- YoY Growth: IIF([Measures].[Prior Year Sales] = 0, NULL, "
+        "([Measures].[Sales] - [Measures].[Prior Year Sales]) / [Measures].[Prior Year Sales])\n"
         "- Safe Division: DIVIDE(numerator, denominator, 0)\n"
         "- Conditional: IIF(condition, true_value, false_value) or CASE WHEN ... THEN ... END\n"
         "Reference: https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1232535557/Kyvos+MDX+Functions+Guide\n"

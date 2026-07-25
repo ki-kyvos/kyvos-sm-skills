@@ -15,7 +15,6 @@ from kyvos_sm_skills.llm_designer import (
     validate_sm_recommendation,
 )
 
-
 # ── Test fixtures ──────────────────────────────────────────────────────────
 
 

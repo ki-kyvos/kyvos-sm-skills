@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -15,22 +12,19 @@ from kyvos_sm_skills.intent_generator import (
     generate_intent,
     generate_intent_from_file,
 )
+from kyvos_sm_skills.models import (
+    MeasureSpec,
+    RelationshipSpec,
+    SemanticModelSpec,
+    TableSpec,
+)
+from kyvos_sm_skills.sm_diff import compare_specs
 from kyvos_sm_skills.spec_builder import (
     DiscoveredSpec,
     _connectivity_sweep,
     _map_table_type,
     build_spec_from_recommendation,
 )
-from kyvos_sm_skills.models import (
-    ColumnSpec,
-    HierarchySpec,
-    MeasureSpec,
-    RelationshipSpec,
-    SemanticModelSpec,
-    TableSpec,
-)
-from kyvos_sm_skills.sm_diff import DiffResult, compare_specs
-
 
 # ── Test fixtures ──────────────────────────────────────────────────────────
 

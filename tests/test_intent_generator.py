@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
 import pytest
 
 from kyvos_sm_skills.intent_generator import (
@@ -12,7 +12,6 @@ from kyvos_sm_skills.intent_generator import (
     generate_intent,
     generate_intent_from_file,
 )
-
 
 # ── Test fixtures ──────────────────────────────────────────────────────────
 

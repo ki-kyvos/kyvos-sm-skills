@@ -11,11 +11,12 @@ IDs and ``relDataset`` objects, and ``relations[]`` with ``sourceId``,
 
 from __future__ import annotations
 
-import structlog
-import time
 import random
+import time
 from datetime import datetime, timezone
 from typing import Any, Iterable
+
+import structlog
 
 from kyvos_sm_skills.generators.drd_xml import SimpleRel
 

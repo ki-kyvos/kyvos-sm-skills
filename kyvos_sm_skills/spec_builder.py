@@ -89,7 +89,7 @@ def build_spec_from_recommendation(
 
     # Build TableSpec objects for each recommended table
     table_specs: list[TableSpec] = []
-    table_name_set = {t.lower() for t in rec_table_names}
+    {t.lower() for t in rec_table_names}
 
     for table_name in rec_table_names:
         wt = wh_table_map[table_name.lower()]
@@ -135,7 +135,11 @@ def build_spec_from_recommendation(
     # Auto-add any tables referenced by measure source_dataset but missing from table_specs
     measures_to_drop: set[str] = set()
     for ms in measures:
-        if ms.source_dataset and ms.source_dataset.lower() not in _existing_table_names and ms.source_dataset.lower() in wh_table_map:
+        if (
+            ms.source_dataset
+            and ms.source_dataset.lower() not in _existing_table_names
+            and ms.source_dataset.lower() in wh_table_map
+        ):
             wt = wh_table_map[ms.source_dataset.lower()]
             columns = _build_column_specs(wt)
             table_type = _map_table_type(wt.get("estimated_table_type", "unknown"), wt)
@@ -432,7 +436,6 @@ def _auto_detect_missing_relationships(
         left_is_fact = left in fact_table_names
         right_is_fact = right in fact_table_names
         left_is_dim = not left_is_fact
-        right_is_dim = not right_is_fact
 
         if left_is_dim and right_is_fact:
             # Wrong direction: dim → fact. Flip to fact → dim.
@@ -1065,8 +1068,14 @@ def _build_relationships(
             )
 
         # Check column type compatibility — skip incompatible relationships
-        from_col_type = next((c.get("data_type", "") for c in from_cols_list if c["name"].lower() == from_column.lower()), "")
-        to_col_type = next((c.get("data_type", "") for c in to_cols_list if c["name"].lower() == to_column.lower()), "")
+        from_col_type = next(
+            (c.get("data_type", "") for c in from_cols_list
+             if c["name"].lower() == from_column.lower()), "",
+        )
+        to_col_type = next(
+            (c.get("data_type", "") for c in to_cols_list
+             if c["name"].lower() == to_column.lower()), "",
+        )
         _from_is_date = "DATE" in from_col_type.upper()
         _to_is_date = "DATE" in to_col_type.upper()
         _from_is_int = "INT" in from_col_type.upper()
@@ -1222,14 +1231,23 @@ def _build_measures(
                 col_lookup = {c["name"].lower(): c for c in cols}
                 matched_col = col_lookup.get(source_column.lower())
                 if not matched_col:
-                    print(f"  WARNING: Skipping measure '{name}' — source_column '{source_column}' not found on '{actual_source}'")
+                    print(
+                        f"  WARNING: Skipping measure '{name}' — "
+                        f"source_column '{source_column}' not found on '{actual_source}'"
+                    )
                     continue
                 _numeric_aggs = {"sum", "avg", "min", "max", "median", "stdev", "var"}
                 if agg_type.lower() in _numeric_aggs:
                     col_type = str(matched_col.get("data_type", "")).upper()
-                    _numeric_type_markers = ("INT", "NUMERIC", "DECIMAL", "FLOAT", "DOUBLE", "REAL", "BIGINT", "SMALLINT", "SERIAL")
+                    _numeric_type_markers = (
+                        "INT", "NUMERIC", "DECIMAL", "FLOAT",
+                        "DOUBLE", "REAL", "BIGINT", "SMALLINT", "SERIAL",
+                    )
                     if not any(t in col_type for t in _numeric_type_markers):
-                        print(f"  WARNING: Skipping measure '{name}' — aggregation '{agg_type}' on non-numeric column '{source_column}' ({col_type}) on '{actual_source}'")
+                        print(
+                            f"  WARNING: Skipping measure '{name}' — aggregation '{agg_type}' "
+                            f"on non-numeric column '{source_column}' ({col_type}) on '{actual_source}'"
+                        )
                         continue
 
         # Convert DAX patterns to Kyvos MDX if the LLM produced DAX syntax

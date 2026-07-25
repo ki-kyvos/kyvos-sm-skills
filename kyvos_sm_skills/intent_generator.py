@@ -157,7 +157,7 @@ def _fill_template(
 
     # Derive KPI categories from schema patterns
     tables = schema_summary.get("tables", [])
-    detected = schema_summary.get("detected_patterns", {})
+    schema_summary.get("detected_patterns", {})
 
     kpi_parts: list[str] = []
     # Revenue-related KPIs if fact tables with amount/price columns exist
@@ -187,7 +187,10 @@ def _fill_template(
     if has_asset_cols:
         kpi_parts.append("Return on Assets")
     if not kpi_parts:
-        kpi_parts.append("Revenue (total and per-channel), Gross Profit Margin, Customer Growth, Expense to Revenue Ratio, Operating Profit")
+        kpi_parts.append(
+            "Revenue (total and per-channel), Gross Profit Margin, "
+            "Customer Growth, Expense to Revenue Ratio, Operating Profit"
+        )
 
     kpi_categories = "\n  - ".join(kpi_parts)
 

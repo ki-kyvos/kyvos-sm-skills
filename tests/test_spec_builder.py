@@ -4,19 +4,15 @@ from __future__ import annotations
 
 import pytest
 
+from kyvos_sm_skills.models import (
+    HierarchySpec,
+    MeasureSpec,
+    RelationshipSpec,
+)
 from kyvos_sm_skills.spec_builder import (
     DiscoveredSpec,
     build_spec_from_recommendation,
 )
-from kyvos_sm_skills.models import (
-    ColumnSpec,
-    HierarchySpec,
-    MeasureSpec,
-    RelationshipSpec,
-    SemanticModelSpec,
-    TableSpec,
-)
-
 
 # ── Test fixtures ──────────────────────────────────────────────────────────
 

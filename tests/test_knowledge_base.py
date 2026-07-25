@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from kyvos_sm_skills.knowledge_base import (
-    DocReference,
     KNOWLEDGE_BASE,
     get_knowledge_base_summary,
     get_knowledge_base_urls,

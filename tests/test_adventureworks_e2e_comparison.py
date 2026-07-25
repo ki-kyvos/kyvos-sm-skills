@@ -9,10 +9,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from kyvos_sm_skills.skill_runner import run_discover_sm_from_warehouse
-
 
 # ── AdventureWorks mock schema ──────────────────────────────────────────────
 
@@ -518,7 +515,7 @@ class TestFlowBGenerateIntent:
 
     def test_intent_generator_called_with_correct_schema(self, tmp_path):
         """generate_intent_from_file should receive the correct schema summary."""
-        env_file = _make_env_file(tmp_path)
+        _make_env_file(tmp_path)
 
         mock_gen = MagicMock(return_value=_GENERATED_INTENT)
         with patch("kyvos_sdk.warehouse_inspector.inspect_schema", side_effect=_mock_inspect_schema), \

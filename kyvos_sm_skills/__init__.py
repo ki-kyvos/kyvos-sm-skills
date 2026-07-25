@@ -21,9 +21,9 @@ from kyvos_sm_skills.generators import (
     DatasetXmlGenerator,
     DrdJsonGenerator,
     DrdXmlGenerator,
+    SimpleRel,
     SModelJsonGenerator,
     SModelXmlGenerator,
-    SimpleRel,
     generate_connection_json,
     generate_connection_xml,
 )

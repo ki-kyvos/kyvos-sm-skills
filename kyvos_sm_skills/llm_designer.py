@@ -25,8 +25,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from kyvos_sm_skills.mdx_reference import get_mdx_prompt_summary
 from kyvos_sm_skills.knowledge_base import get_knowledge_base_summary
+from kyvos_sm_skills.mdx_reference import get_mdx_prompt_summary
 
 
 def _ensure_anthropic() -> None:
@@ -92,7 +92,8 @@ def _build_user_message(
                 "name": t["name"],
                 "type": t.get("estimated_table_type", "unknown"),
                 "columns": [
-                    {"name": c["name"], "type": c.get("data_type", ""), "pk": c.get("is_pk", False), "fk": c.get("is_fk", False)}
+                    {"name": c["name"], "type": c.get("data_type", ""),
+                     "pk": c.get("is_pk", False), "fk": c.get("is_fk", False)}
                     for c in t.get("columns", [])
                 ],
             }
@@ -119,8 +120,9 @@ def _build_user_message(
         "If the warehouse has multiple fact tables sharing conformed dimensions, recommend a multifact schema. "
         "Include all relevant fact tables and their shared dimensions.\n\n"
         "### Many-to-Many Relationships\n"
-        "For bridge/junction tables (e.g., sales_reasons linking orders to sales_reason, exchange_rates linking currencies), "
-        "model them as many-to-many relationships. Set relationship_type to 'many_to_many' for these. "
+        "For bridge/junction tables (e.g., sales_reasons linking orders to sales_reason, "
+        "exchange_rates linking currencies), model them as many-to-many relationships. "
+        "Set relationship_type to 'many_to_many' for these. "
         "Include the bridge table in the tables list.\n\n"
         "### Calculated Measures\n"
         "For derived KPIs that don't map directly to a single column, create calculated measures. "
@@ -132,15 +134,18 @@ def _build_user_message(
         "- YTD (Year-to-Date): SUM(YTD([Date].[Calendar].CurrentMember), [Measures].[Sales Amount])\n"
         "- QTD (Quarter-to-Date): SUM(QTD([Date].[Calendar].CurrentMember), [Measures].[Sales Amount])\n"
         "- MTD (Month-to-Date): SUM(MTD([Date].[Calendar].CurrentMember), [Measures].[Sales Amount])\n"
-        "- Prior Year: ([Measures].[Sales Amount], ParallelPeriod([Date].[Calendar].[Calendar Year], 1, [Date].[Calendar].CurrentMember))\n"
-        "- YoY Growth: IIF([Measures].[Prior Year Sales] = 0, NULL, ([Measures].[Sales Amount] - [Measures].[Prior Year Sales]) / [Measures].[Prior Year Sales])\n"
+        "- Prior Year: ([Measures].[Sales Amount], "
+        "ParallelPeriod([Date].[Calendar].[Calendar Year], 1, [Date].[Calendar].CurrentMember))\n"
+        "- YoY Growth: IIF([Measures].[Prior Year Sales] = 0, NULL, "
+        "([Measures].[Sales Amount] - [Measures].[Prior Year Sales]) / [Measures].[Prior Year Sales])\n"
         "These should be calculated measures (is_calculated=true) with the expression field populated.\n\n"
         "### Relationship Types\n"
         "For each relationship, include a 'relationship_type' field: 'many_to_one' (default) or 'many_to_many'.\n\n"
         "### No Self-Join Relationships\n"
         "Do NOT create relationships where from_table and to_table are the same table (self-joins). "
         "Parent-child relationships (e.g., employee.parentemployeekey -> employee.employeekey, "
-        "account.parentaccountkey -> account.accountkey, organization.parentorganizationkey -> organization.organizationkey) "
+        "account.parentaccountkey -> account.accountkey, "
+        "organization.parentorganizationkey -> organization.organizationkey) "
         "should be modeled as hierarchies in the hierarchies list, NOT as relationships. "
         "Kyvos DRD does not support self-join relationships.\n\n"
         "### Hard Deployment Constraints — MUST follow\n"
@@ -149,7 +154,8 @@ def _build_user_message(
         "1. **Measures only on fact tables**: Every measure's source_dataset MUST be a table classified as 'fact'. "
         "Do NOT create measures referencing tables classified as 'dimension', 'bridge', or 'unknown'. "
         "The compiler silently drops measures on non-fact tables, causing measure loss.\n\n"
-        "2. **No dimension-to-dimension relationships**: Every relationship must originate from a fact or bridge table. "
+        "2. **No dimension-to-dimension relationships**: Every relationship must originate "
+        "from a fact or bridge table. "
         "Relationships between two dimension tables cause cube build failures (ENTITY_ID null errors). "
         "Valid patterns: fact→dimension, fact→bridge→dimension.\n\n"
         "3. **All dimensions must be connected**: Every dimension table included in the model MUST have a directed "
@@ -163,14 +169,16 @@ def _build_user_message(
         "Do NOT create date relationships using mismatched column types (e.g., INTEGER datekey to DATE startdate). "
         "If no proper date key FK exists in the fact table, omit the date relationship.\n\n"
         "### Measure Output Format\n"
-        "Each measure should include: name, source_dataset, aggregation_type, and optionally expression and is_calculated. "
+        "Each measure should include: name, source_dataset, aggregation_type, "
+        "and optionally expression and is_calculated. "
         "For base measures, source_dataset and aggregation_type are required. "
         "For calculated measures, expression and is_calculated=true are required; source_dataset may be omitted.\n\n"
         "### Hierarchies\n"
         "Include rich hierarchies reflecting business rollups. Each hierarchy MUST:\n"
         "1. Specify a 'source_dataset' — the dimension table the hierarchy belongs to.\n"
         "2. List 'levels' as ACTUAL COLUMN NAMES that exist on that source_dataset table. "
-        "Each level must be a real column from the table's schema (shown in the Existing Schema Context above). "
+        "Each level must be a real column from the table's schema "
+        "(shown in the Existing Schema Context above). "
         "Do NOT use made-up or business-friendly names — use the exact column names from the warehouse schema.\n"
         "3. Order levels from the broadest (top of hierarchy) to the most granular (leaf level).\n"
         "4. For parent-child hierarchies (e.g., Employee, Organization, Account), set is_parent_child=true, "
@@ -183,30 +191,44 @@ def _build_user_message(
         "non_leaf_data_member_visible (true/false), and non_leaf_data_member_caption (e.g., 'self').\n\n"
         "Reference: https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1228748942/Creating+parent+child+hierarchies\n\n"
         "Examples (levels must match actual columns on the dimension table):\n"
-        "- Product (source_dataset=Product): [productcategorykey, productsubcategorykey, productkey] if those columns exist on the Product table\n"
-        "- Sales Territory (source_dataset=SalesTerritory): [salesterritorygroup, salesterritorycountry, salesterritorykey]\n"
-        "- Date (source_dataset=Date): [calendaryear, calendarquarter, monthnumber, datekey] or similar columns that exist on the Date table\n"
-        "- Employee (source_dataset=Employee, parent-child): parent_column=parentemployeekey, child_column=employeekey, "
-        "display_column=fullname, root_member_type=parent_is_blank, pc_level_naming_pattern=CEO,VP,Manager,Employee\n"
-        "- Organization (source_dataset=Organization, parent-child): parent_column=parentorganizationkey, child_column=organizationkey\n"
-        "- Account (source_dataset=Account, parent-child): parent_column=parentaccountkey, child_column=accountkey\n"
-        "IMPORTANT: Before listing a level, verify the column exists on the source_dataset table in the schema context. "
+        "- Product (source_dataset=Product): [productcategorykey, productsubcategorykey, productkey] "
+        "if those columns exist on the Product table\n"
+        "- Sales Territory (source_dataset=SalesTerritory): "
+        "[salesterritorygroup, salesterritorycountry, salesterritorykey]\n"
+        "- Date (source_dataset=Date): [calendaryear, calendarquarter, monthnumber, datekey] "
+        "or similar columns that exist on the Date table\n"
+        "- Employee (source_dataset=Employee, parent-child): "
+        "parent_column=parentemployeekey, child_column=employeekey, "
+        "display_column=fullname, root_member_type=parent_is_blank, "
+        "pc_level_naming_pattern=CEO,VP,Manager,Employee\n"
+        "- Organization (source_dataset=Organization, parent-child): "
+        "parent_column=parentorganizationkey, child_column=organizationkey\n"
+        "- Account (source_dataset=Account, parent-child): "
+        "parent_column=parentaccountkey, child_column=accountkey\n"
+        "IMPORTANT: Before listing a level, verify the column exists on the "
+        "source_dataset table in the schema context. "
         "If a natural hierarchy column doesn't exist, omit that hierarchy rather than guessing.\n"
         "\n### Bridge Table Detection\n"
-        "Identify bridge/junction tables by scanning for tables with FK columns referencing two or more dimension tables. "
-        "These resolve many-to-many relationships between dimensions. Set relationship_type to 'many_to_many' for these. "
+        "Identify bridge/junction tables by scanning for tables with FK columns "
+        "referencing two or more dimension tables. "
+        "These resolve many-to-many relationships between dimensions. "
+        "Set relationship_type to 'many_to_many' for these. "
         "Include the bridge table in the tables list.\n\n"
         "### Scenario/Budget Dimension Detection\n"
         "If a table or its columns contain 'scenario', 'budget', 'actual', 'variance', 'target', or 'quota' patterns, "
         "include it as a scenario dimension. Generate budget variance calculated measures: "
-        "Variance = CASE WHEN IsEmpty([Budget]) THEN NULL WHEN account_type is expenditures THEN [Budget] - [Actual] ELSE [Actual] - [Budget] END, "
+        "Variance = CASE WHEN IsEmpty([Budget]) THEN NULL WHEN account_type is expenditures "
+        "THEN [Budget] - [Actual] ELSE [Actual] - [Budget] END, "
         "Variance% = IIF([Budget]=0, NULL, [Variance] / [Budget]).\n\n"
         "### Currency Conversion\n"
-        "If the warehouse has currency-related tables (exchange rates, source/destination currency), include them. "
-        "Note any measure expressions involving currency conversion (e.g., [Sales Amount] / [Average Rate]) in measure descriptions.\n\n"
+        "If the warehouse has currency-related tables (exchange rates, source/destination currency), "
+        "include them. "
+        "Note any measure expressions involving currency conversion "
+        "(e.g., [Sales Amount] / [Average Rate]) in measure descriptions.\n\n"
         "### Role-Playing Dimensions\n"
-        "If a fact table has multiple FK columns referencing the same dimension (e.g., order_date_key, ship_date_key, "
-        "due_date_key all referencing a date dimension), model each FK as a separate relationship to the same dimension. "
+        "If a fact table has multiple FK columns referencing the same dimension "
+        "(e.g., order_date_key, ship_date_key, due_date_key all referencing a date dimension), "
+        "model each FK as a separate relationship to the same dimension. "
         "Do NOT create duplicate dimension tables — use the same dimension with different relationship aliases.\n\n"
         "### KPI Generation\n"
         "For key business metrics where source data supports them, generate KPIs with 4 calculated measures each: "
@@ -216,20 +238,26 @@ def _build_user_message(
         "Generate KPIs for: Revenue, Gross Profit Margin, Customer Growth, Expense Ratio, Return on Assets — "
         "where the corresponding base measures exist.\n\n"
         "### Measure Format Strings\n"
-        "Assign format_string to every measure: 'Currency' for monetary values, 'Percent' for ratios/percentages, "
-        "'#,#' for integer counts. This ensures consistent display in Kyvos dashboards.\n\n"
+        "Assign format_string to every measure: 'Currency' for monetary values, "
+        "'Percent' for ratios/percentages, '#,#' for integer counts. "
+        "This ensures consistent display in Kyvos dashboards.\n\n"
         "### Calculated Measure Categories\n"
-        "Generate calculated measures in these categories where source data supports them (per fact table/sales channel):\n"
-        "- Profitability: Gross Profit = [Revenue] - [Cost]; Gross Profit Margin = IIF([Revenue]=0, NULL, ([Revenue] - [Cost]) / [Revenue])\n"
+        "Generate calculated measures in these categories where source data supports them "
+        "(per fact table/sales channel):\n"
+        "- Profitability: Gross Profit = [Revenue] - [Cost]; "
+        "Gross Profit Margin = IIF([Revenue]=0, NULL, ([Revenue] - [Cost]) / [Revenue])\n"
         "- Averages: Average Unit Price = IIF([Transaction Count]=0, NULL, [Unit Price] / [Transaction Count]); "
         "Average Sales Amount = IIF([Order Count]=0, NULL, [Sales Amount] / [Order Count])\n"
         "- Ratios: Ratio to All = [Sales Amount] / (Root([Product]), [Sales Amount]); "
         "Ratio to Parent = CASE WHEN Level Ordinal = 0 THEN 1 ELSE [Sales Amount] / (Parent, [Sales Amount]) END\n"
         "- Discount: Discount Percentage = IIF([Sales Amount]=0, NULL, [Discount Amount] / [Sales Amount])\n"
-        "- Time Intelligence: YTD = SUM(PERIODSTODATE([Date].[Calendar].[Year], [Date].[Calendar].CurrentMember), [Measures].[X]); "
-        "QTD, MTD similarly; Prior Year = ([Measures].[X], ParallelPeriod([Date].[Calendar].[Year], 1, [Date].[Calendar].CurrentMember)); "
+        "- Time Intelligence: YTD = SUM(PERIODSTODATE([Date].[Calendar].[Year], "
+        "[Date].[Calendar].CurrentMember), [Measures].[X]); "
+        "QTD, MTD similarly; Prior Year = ([Measures].[X], ParallelPeriod([Date].[Calendar].[Year], 1, "
+        "[Date].[Calendar].CurrentMember)); "
         "YoY Growth = IIF([Prior Year]=0, NULL, ([X] - [Prior Year]) / [Prior Year])\n"
-        "- Budget Variance: Variance = CASE WHEN IsEmpty([Budget]) THEN NULL WHEN expenditures THEN [Budget] - [Actual] ELSE [Actual] - [Budget] END; "
+        "- Budget Variance: Variance = CASE WHEN IsEmpty([Budget]) THEN NULL "
+        "WHEN expenditures THEN [Budget] - [Actual] ELSE [Actual] - [Budget] END; "
         "Variance% = IIF([Budget]=0, NULL, [Variance] / [Budget])\n\n"
         "### Sales Quota/Target Tables\n"
         "If tables containing 'quota', 'target', or 'budget' in their name exist, include them in the model. "
@@ -495,7 +523,10 @@ def design_sm_from_schema(
             raise ValueError(
                 "Azure OpenAI endpoint required. Set AZURE_OPENAI_ENDPOINT or AZURE_ENDPOINT env var."
             )
-        deployment = model if model != "claude-sonnet-4-20250514" else os.environ.get("AZURE_DEPLOYMENT_NAME", "gpt-4.1")
+        deployment = (
+            model if model != "claude-sonnet-4-20250514"
+            else os.environ.get("AZURE_DEPLOYMENT_NAME", "gpt-4.1")
+        )
         api_version = os.environ.get("AZURE_API_VERSION", "2024-12-01-preview")
 
         def _call_llm(msg: str) -> str:
@@ -685,17 +716,17 @@ def format_recommendation_for_review(rec: dict[str, Any]) -> str:
     # Domain info
     domain = rec.get("identified_domain", "unknown")
     lines.append(f"\n  Identified Domain: {domain}")
-    lines.append(f"\n  Domain Research Summary:")
+    lines.append("\n  Domain Research Summary:")
     lines.append(f"  {rec.get('domain_research_summary', 'N/A')}")
 
     if rec.get("domain_reasoning"):
-        lines.append(f"\n  Domain Reasoning:")
+        lines.append("\n  Domain Reasoning:")
         lines.append(f"  {rec['domain_reasoning']}")
 
     # Gaps
     gaps = rec.get("gaps_identified", [])
     if gaps:
-        lines.append(f"\n  Gaps Identified:")
+        lines.append("\n  Gaps Identified:")
         for gap in gaps:
             lines.append(f"    - {gap}")
 

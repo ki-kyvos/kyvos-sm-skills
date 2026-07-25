@@ -16,17 +16,16 @@ Run: .venv/bin/python -m pytest tests/test_skill_flow_validation.py -v
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 from kyvos_sdk.client import KyvosServiceError
 from kyvos_sdk.contracts.artifacts import (
     ArtifactFormat,
     ArtifactKind,
     CompiledArtifact,
 )
-from kyvos_sdk.contracts.common import ContractMetadata, Diagnostic, Severity
+from kyvos_sdk.contracts.common import ContractMetadata
 from kyvos_sdk.contracts.identity import EntityType
 from kyvos_sdk.contracts.results import OperationStatus
 from kyvos_sdk.contracts.versioning import CONTRACT_VERSION
@@ -36,17 +35,16 @@ from kyvos_sm_skills.contract_adapter import (
     compile_drd_artifact,
     compile_smodel_artifact,
 )
+from kyvos_sm_skills.generators.drd_xml import SimpleRel
 from kyvos_sm_skills.models import (
+    ColumnSpec,
     DatasetSpec,
     HierarchySpec,
     MeasureSpec,
     RelationshipSpec,
     SemanticModelSpec,
     TableSpec,
-    ColumnSpec,
 )
-from kyvos_sm_skills.generators.drd_xml import SimpleRel
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -410,7 +408,7 @@ class TestGap15RelationshipColumnValidation:
 
     def test_valid_relationships_pass(self):
         """Relationships with valid columns should produce a DRD artifact."""
-        rels = [
+        [
             SimpleRel(
                 left_dataset="FactSales",
                 left_column="customer_key",
@@ -509,7 +507,7 @@ class TestEndToEndPipelineFlow:
 
         # Step 8: SM creation (uses server_drd_id)
         mock_service.create_semantic_model_xml = MagicMock(
-            return_value=f'<RESPONSE><CODE>0</CODE><ID>sm-e2e-001</ID></RESPONSE>'
+            return_value='<RESPONSE><CODE>0</CODE><ID>sm-e2e-001</ID></RESPONSE>'
         )
         sm_artifact = _make_artifact(ArtifactKind.SEMANTIC_MODEL, ArtifactFormat.XML, "<SM>...</SM>")
         sm_result = prov.apply_artifact(sm_artifact)

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from kyvos_sm_skills.skill_runner import (
     _check_prefix_collision,
@@ -14,7 +12,6 @@ from kyvos_sm_skills.skill_runner import (
     _get_protected_folders,
     _write_audit_log,
 )
-
 
 # ── Protected folders tests ────────────────────────────────────────────────
 

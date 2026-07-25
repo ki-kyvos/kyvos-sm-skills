@@ -95,8 +95,8 @@ def compile_dataset_artifact(
         ImportError: If ``kyvos-sdk-python`` is not installed.
     """
     try:
-        from kyvos_sdk.contracts.adapters import adapt_table
         from kyvos_sdk.compiler import compile_dataset
+        from kyvos_sdk.contracts.adapters import adapt_table
         from kyvos_sdk.contracts.artifacts import ArtifactFormat
     except ImportError as exc:
         raise ImportError(
@@ -348,10 +348,10 @@ def compile_smodel_artifact(
         ImportError: If ``kyvos-sdk-python`` is not installed.
     """
     try:
+        from kyvos_sdk.compiler import compile_semantic_model
         from kyvos_sdk.contracts.adapters import (
             adapt_semantic_model,
         )
-        from kyvos_sdk.compiler import compile_semantic_model
         from kyvos_sdk.contracts.artifacts import ArtifactFormat
     except ImportError as exc:
         raise ImportError(

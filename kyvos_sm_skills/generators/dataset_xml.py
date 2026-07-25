@@ -7,12 +7,13 @@ but generates XML programmatically — the template file is never modified.
 
 from __future__ import annotations
 
-import structlog
 import re
 import time
 from pathlib import Path
 from xml.dom import minidom
 from xml.etree import ElementTree as ET
+
+import structlog
 
 from kyvos_sm_skills.models import ColumnSpec, TableSpec
 from kyvos_sm_skills.type_mapping import (

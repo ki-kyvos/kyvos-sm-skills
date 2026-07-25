@@ -8,11 +8,12 @@ sent as a form-encoded ``json`` parameter.
 from __future__ import annotations
 
 import hashlib
-import structlog
 import re
 import time
 import xml.etree.ElementTree as ET
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -509,8 +510,16 @@ class SModelJsonGenerator:
                         non_fk_cols = [c for c in fact_cols if not c.get("isForeignKey", False)]
                         # If no PK/FK metadata available, use name-based heuristics
                         if not pk_cols and not non_fk_cols:
-                            pk_cols = [c for c in fact_cols if c.get("name", "").lower().endswith("_key") or c.get("name", "").lower().endswith("_pk")]
-                            non_fk_cols = [c for c in fact_cols if not (c.get("name", "").lower().endswith("_key") or c.get("name", "").lower().endswith("_fk"))]
+                            pk_cols = [
+                                c for c in fact_cols
+                                if c.get("name", "").lower().endswith("_key")
+                                or c.get("name", "").lower().endswith("_pk")
+                            ]
+                            non_fk_cols = [
+                                c for c in fact_cols
+                                if not (c.get("name", "").lower().endswith("_key")
+                                        or c.get("name", "").lower().endswith("_fk"))
+                            ]
                         fallback_col = (pk_cols or non_fk_cols or fact_cols)[0]
                         effective_source_column = fallback_col.get("name", "")
                         logger.info(

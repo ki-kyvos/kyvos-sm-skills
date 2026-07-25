@@ -26,7 +26,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -107,7 +106,7 @@ def cmd_export_skill(args: argparse.Namespace) -> int:
         dest_shared.mkdir(exist_ok=True)
         for f in shared.glob("*.md"):
             shutil.copy2(f, dest_shared / f.name)
-        print(f"  (also exported _shared/ resources)")
+        print("  (also exported _shared/ resources)")
 
     return 0
 
@@ -141,15 +140,16 @@ def cmd_discover(args: argparse.Namespace) -> int:
     # Handle --generate-intent: auto-generate intent from schema
     _user_intent = args.user_intent
     if args.generate_intent:
-        from kyvos_sm_skills.intent_generator import generate_intent_from_file
-        from kyvos_sdk.warehouse_inspector import inspect_schema
         from kyvos_sdk.config import KyvosConfig
+        from kyvos_sdk.warehouse_inspector import inspect_schema
+
+        from kyvos_sm_skills.intent_generator import generate_intent_from_file
 
         config = KyvosConfig.from_env_file(args.env_file)
         schema_summary = inspect_schema(config, schema_filter=args.schema, max_tables=args.max_tables)
 
         intent_path = args.intent_output or f"intent_{args.domain or 'auto'}.txt"
-        print(f"  Generating intent via LLM from schema analysis...")
+        print("  Generating intent via LLM from schema analysis...")
         _user_intent = generate_intent_from_file(
             intent_path=intent_path,
             schema_summary=schema_summary,
@@ -208,9 +208,18 @@ def main() -> int:
     dep.add_argument("--env-file", default=".env", help="Path to .env file (default: .env)")
     dep.add_argument("--payload-format", default=None, choices=["json", "xml"], help="Override payload format")
     dep.add_argument("--dry-run", action="store_true", help="Parse + compile only, no API calls")
-    dep.add_argument("--cleanup-dry-run", action="store_true", help="List old entities that would be deleted, without actually deleting them (cleanup is default)")
-    dep.add_argument("--auto-approve", action="store_true", help="Skip interactive cleanup confirmation gate (for CI/CD)")
-    dep.add_argument("--sm-folder-suffix", default="", help="Suffix for SM folder name to avoid conflicts when deploying multiple SMs to the same schema")
+    dep.add_argument(
+        "--cleanup-dry-run", action="store_true",
+        help="List old entities that would be deleted, without actually deleting them (cleanup is default)",
+    )
+    dep.add_argument(
+        "--auto-approve", action="store_true",
+        help="Skip interactive cleanup confirmation gate (for CI/CD)",
+    )
+    dep.add_argument(
+        "--sm-folder-suffix", default="",
+        help="Suffix for SM folder name to avoid conflicts when deploying multiple SMs to the same schema",
+    )
 
     # discover
     dis = sub.add_parser("discover", help="Run the discover-sm-from-warehouse skill flow")
@@ -224,17 +233,39 @@ def main() -> int:
     dis.add_argument("--max-tables", type=int, default=500, help="Max tables to inspect (default: 500)")
     dis.add_argument("--payload-format", default=None, choices=["json", "xml"], help="Override payload format")
     dis.add_argument("--dry-run", action="store_true", help="Inspect + build spec only, no API calls")
-    dis.add_argument("--cleanup-dry-run", action="store_true", help="List old entities that would be deleted, without actually deleting them (cleanup is default)")
-    dis.add_argument("--cleanup", action="store_true", help="Explicitly enable cleanup (this is the default; use --cleanup-dry-run to preview instead)")
-    dis.add_argument("--sm-folder-suffix", default="", help="Suffix for SM folder name to avoid conflicts when deploying multiple SMs to the same schema (e.g., 'B' for awdw2019multidimensionalee_SModelB)")
-    dis.add_argument("--generate-intent", action="store_true", help="Auto-generate user intent via LLM from schema analysis (replaces --user-intent)")
-    dis.add_argument("--intent-output", default=None, help="Path to save the generated intent (default: intent_<domain>.txt)")
+    dis.add_argument(
+        "--cleanup-dry-run", action="store_true",
+        help="List old entities that would be deleted, without actually deleting them (cleanup is default)",
+    )
+    dis.add_argument(
+        "--cleanup", action="store_true",
+        help="Explicitly enable cleanup (this is the default; use --cleanup-dry-run to preview instead)",
+    )
+    dis.add_argument(
+        "--sm-folder-suffix", default="",
+        help="Suffix for SM folder name to avoid conflicts when deploying multiple SMs "
+        "to the same schema (e.g., 'B' for awdw2019multidimensionalee_SModelB)",
+    )
+    dis.add_argument(
+        "--generate-intent", action="store_true",
+        help="Auto-generate user intent via LLM from schema analysis (replaces --user-intent)",
+    )
+    dis.add_argument(
+        "--intent-output", default=None,
+        help="Path to save the generated intent (default: intent_<domain>.txt)",
+    )
 
     # cleanup
     cln = sub.add_parser("cleanup", help="Clean up old entities from Kyvos matching the base name")
     cln.add_argument("--env-file", default=".env", help="Path to .env file (default: .env)")
-    cln.add_argument("--base-name", default=None, help="Base name to derive cleanup prefixes from (default: from warehouse database name)")
-    cln.add_argument("--dry-run", action="store_true", help="List entities that would be deleted, without actually deleting them (recommended first)")
+    cln.add_argument(
+        "--base-name", default=None,
+        help="Base name to derive cleanup prefixes from (default: from warehouse database name)",
+    )
+    cln.add_argument(
+        "--dry-run", action="store_true",
+        help="List entities that would be deleted, without actually deleting them (recommended first)",
+    )
 
     args = parser.parse_args()
 

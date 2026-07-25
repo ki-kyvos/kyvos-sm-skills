@@ -21,8 +21,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kyvos_sm_skills.models import (
-    HierarchySpec,
-    MeasureSpec,
     RelationshipSpec,
     SemanticModelSpec,
     TableSpec,

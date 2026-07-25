@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from kyvos_sm_skills.skill_runner import run_discover_sm_from_warehouse
-
 
 # ── Test fixtures ──────────────────────────────────────────────────────────
 

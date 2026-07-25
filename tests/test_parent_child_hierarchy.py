@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-import json
-
-import pytest
-
 from kyvos_sm_skills.models import HierarchySpec
 from kyvos_sm_skills.spec_builder import _build_hierarchies
-
 
 # ── Test fixtures ──────────────────────────────────────────────────────────
 

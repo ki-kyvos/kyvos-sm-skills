@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
 from xml.etree import ElementTree as ET
+
+import structlog
 
 _logger = structlog.get_logger(__name__)
 

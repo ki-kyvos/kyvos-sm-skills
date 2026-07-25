@@ -19,11 +19,9 @@ import os
 import re
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from kyvos_sdk.contracts.common import Severity
-
 
 _MIN_PREFIX_LEN = 8
 
@@ -33,7 +31,7 @@ def _safe_input(prompt: str) -> str:
     try:
         return input(prompt).strip().lower()
     except EOFError:
-        print(f"\n  (Non-interactive environment detected — defaulting to rejection.)")
+        print("\n  (Non-interactive environment detected — defaulting to rejection.)")
         return ""
 
 
@@ -105,14 +103,14 @@ def _write_audit_log(
     log_path = f"cleanup_{timestamp}.log"
 
     with open(log_path, "w") as f:
-        f.write(f"Cleanup Audit Log\n")
+        f.write("Cleanup Audit Log\n")
         f.write(f"Timestamp: {now.isoformat()}\n")
         f.write(f"Mode: {'DRY RUN' if dry_run else 'LIVE'}\n")
         f.write(f"Base name: {base_name}\n")
         f.write(f"Prefixes: {list(prefixes)}\n")
         f.write(f"Entities found: {len(targets)}\n")
         f.write(f"Entities deleted: {deleted}\n")
-        f.write(f"\n--- Entity Details ---\n")
+        f.write("\n--- Entity Details ---\n")
         for etype, ename, eid, folder in targets:
             status = "DRY_RUN" if dry_run else "DELETED"
             f.write(f"  [{etype:8s}] {ename} (id={eid}) in '{folder}' — {status}\n")
@@ -181,11 +179,11 @@ def _collect_and_cleanup_entities(
     # Check for prefix collisions with generic names
     collision_warnings = _check_prefix_collision(prefixes)
     if collision_warnings:
-        print(f"\n  ⚠️  PREFIX COLLISION WARNING:")
+        print("\n  ⚠️  PREFIX COLLISION WARNING:")
         for w in collision_warnings:
             print(f"    {w}")
         if not dry_run:
-            print(f"  Aborting cleanup due to prefix collision risk.")
+            print("  Aborting cleanup due to prefix collision risk.")
             return False
 
     # Merge skip_folders with protected folders
@@ -254,7 +252,7 @@ def _collect_and_cleanup_entities(
         print(f"    [{etype:8s}] {ename} (id={eid}) in folder '{folder}'")
 
     if dry_run:
-        print(f"\n  DRY RUN: No entities were deleted.")
+        print("\n  DRY RUN: No entities were deleted.")
         # Write audit log even for dry runs
         log_path = _write_audit_log(targets, 0, base_name, prefixes, dry_run=True)
         print(f"  Audit log written to: {log_path}")
@@ -263,16 +261,16 @@ def _collect_and_cleanup_entities(
     # Confirmation gate — even with auto_approve, warn for live deletes
     if not auto_approve:
         print(f"\n  ⚠️  About to delete {len(targets)} entities. This cannot be undone.")
-        response = _safe_input(f"  Type 'yes' to proceed: ")
+        response = _safe_input("  Type 'yes' to proceed: ")
         if response != "yes":
-            print(f"  Cleanup aborted by user.")
+            print("  Cleanup aborted by user.")
             log_path = _write_audit_log(targets, 0, base_name, prefixes, dry_run=False)
             print(f"  Audit log written to: {log_path}")
             return False
     else:
         print(f"\n  Auto-approved: skipping confirmation gate for {len(targets)} entities.")
 
-    print(f"\n  Performing cleanup...")
+    print("\n  Performing cleanup...")
     deleted = 0
     for etype, ename, eid, folder in targets:
         try:
@@ -322,10 +320,10 @@ def cleanup_entities(
     Returns:
         0 on success, 1 on failure.
     """
-    from kyvos_sdk.config import KyvosConfig
     from kyvos_sdk.client import KyvosService
-    from kyvos_sdk.provisioning import ProvisioningClient
+    from kyvos_sdk.config import KyvosConfig
     from kyvos_sdk.inspection import InspectionClient
+    from kyvos_sdk.provisioning import ProvisioningClient
 
     config = KyvosConfig.from_env_file(env_file)
     if config.payload_format.lower() == "json":
@@ -356,7 +354,7 @@ def cleanup_entities(
     )
 
     if not dry_run:
-        print(f"  Waiting 10s for server to process deletions...")
+        print("  Waiting 10s for server to process deletions...")
         time.sleep(10)
 
     return 0
@@ -395,13 +393,13 @@ def _deploy_spec(
     # Step 3: Initialize Kyvos client
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 3: Initialize Kyvos client")
+    print("  Step 3: Initialize Kyvos client")
     print(f"{'─' * 70}")
 
     from kyvos_sdk.client import KyvosService
-    from kyvos_sdk.provisioning import ProvisioningClient
-    from kyvos_sdk.inspection import InspectionClient
     from kyvos_sdk.contracts.identity import FolderType
+    from kyvos_sdk.inspection import InspectionClient
+    from kyvos_sdk.provisioning import ProvisioningClient
 
     # Prevent XML fallback when JSON is configured — surface errors as-is
     if config.payload_format.lower() == "json":
@@ -417,7 +415,7 @@ def _deploy_spec(
     # Step 4: Create or reuse folders + clean up existing entities
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 4: Create or reuse folders")
+    print("  Step 4: Create or reuse folders")
     print(f"{'─' * 70}")
 
     _ts = datetime.now().strftime("%m%d%y_%H%M")
@@ -493,7 +491,7 @@ def _deploy_spec(
         folder_suffix=sm_folder_suffix,
     )
     if _did_cleanup:
-        print(f"  Waiting 10s for server to process deletions...")
+        print("  Waiting 10s for server to process deletions...")
         time.sleep(10)
 
     # --- Dataset folder: find or create ---
@@ -501,7 +499,7 @@ def _deploy_spec(
     if existing_ds_folder_id:
         folder_id = existing_ds_folder_id
         print(f"Dataset folder: {dataset_folder_label} (id={folder_id}) — reusing existing")
-        print(f"  Cleaning up existing datasets...")
+        print("  Cleaning up existing datasets...")
         _cleanup_folder_entities(FolderType.RDATASET, dataset_folder_label)
     else:
         dataset_folder_result = prov.create_folder(dataset_folder_label, FolderType.RDATASET)
@@ -517,7 +515,7 @@ def _deploy_spec(
     if existing_drd_folder_id:
         drd_folder_id = existing_drd_folder_id
         print(f"DRD folder: {drd_folder_label} (id={drd_folder_id}) — reusing existing")
-        print(f"  Cleaning up existing DRDs...")
+        print("  Cleaning up existing DRDs...")
         _cleanup_folder_entities(FolderType.DATASET_RELATIONSHIP, drd_folder_label)
     else:
         drd_folder_result = prov.create_folder(drd_folder_label, FolderType.DATASET_RELATIONSHIP)
@@ -533,7 +531,7 @@ def _deploy_spec(
     if existing_sm_folder_id:
         smodel_folder_id = existing_sm_folder_id
         print(f"Semantic model folder: {smodel_folder_label} (id={smodel_folder_id}) — reusing existing")
-        print(f"  Cleaning up existing semantic models...")
+        print("  Cleaning up existing semantic models...")
         _cleanup_folder_entities(FolderType.SMODEL, smodel_folder_label)
     else:
         smodel_folder_result = prov.create_folder(smodel_folder_label, FolderType.SMODEL)
@@ -546,14 +544,14 @@ def _deploy_spec(
 
     # Brief delay after cleanup to let Kyvos server process deletions
     if existing_ds_folder_id or existing_drd_folder_id or existing_sm_folder_id:
-        print(f"  Waiting 10s for server to process folder entity deletions...")
+        print("  Waiting 10s for server to process folder entity deletions...")
         time.sleep(10)
 
     # ═══════════════════════════════════════════════════════════════════════
     # Step 5: Create connection
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 5: Create connection")
+    print("  Step 5: Create connection")
     print(f"{'─' * 70}")
 
     from kyvos_sdk.warehouse_registry import build_jdbc_url, get_warehouse_profile
@@ -593,7 +591,7 @@ def _deploy_spec(
     # Step 6: Create datasets
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 6: Create datasets")
+    print("  Step 6: Create datasets")
     print(f"{'─' * 70}")
 
     from kyvos_sm_skills.contract_adapter import compile_dataset_artifact
@@ -675,7 +673,7 @@ def _deploy_spec(
 
     if validation_errors:
         raise RuntimeError(
-            f"Dataset validation failed — pipeline halted:\n" +
+            "Dataset validation failed — pipeline halted:\n" +
             "\n".join(validation_errors)
         )
 
@@ -719,7 +717,7 @@ def _deploy_spec(
     # Step 7: Build DRD graph + create DRD
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 7: Build DRD graph + create DRD")
+    print("  Step 7: Build DRD graph + create DRD")
     print(f"{'─' * 70}")
 
     from kyvos_sm_skills.contract_adapter import compile_drd_artifact
@@ -745,7 +743,9 @@ def _deploy_spec(
             )
             skip = True
 
-        if not skip and right_cols_raw is not None and rel.right_column.lower() not in {c["name"].lower() for c in right_cols_raw}:
+        if not skip and right_cols_raw is not None and rel.right_column.lower() not in {
+            c["name"].lower() for c in right_cols_raw
+        }:
             failed_relationships.append(
                 f"Column '{rel.right_column}' not found in dataset '{rel.right_dataset}' "
                 f"(Kyvos: '{right_kyvos}')"
@@ -868,7 +868,10 @@ def _deploy_spec(
         if drd_val_result.succeeded:
             break
         if _attempt < _max_validation_retries:
-            print(f"  DRD validation pending (attempt {_attempt}/{_max_validation_retries}), retrying in {_validation_delay}s...")
+            print(
+                f"  DRD validation pending (attempt {_attempt}/{_max_validation_retries}), "
+                f"retrying in {_validation_delay}s..."
+            )
             time.sleep(_validation_delay)
         else:
             errs = [d.message for d in drd_val_result.diagnostics if d.severity in (Severity.ERROR, Severity.WARNING)]
@@ -882,7 +885,7 @@ def _deploy_spec(
     # Step 8: Compile + create semantic model
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 8: Compile + create semantic model")
+    print("  Step 8: Compile + create semantic model")
     print(f"{'─' * 70}")
 
     from kyvos_sm_skills.contract_adapter import compile_smodel_artifact
@@ -964,9 +967,9 @@ def _deploy_spec(
             time.sleep(_sm_retry_delay)
         else:
             errs = [d.message for d in sm_val_result.diagnostics]
-            print(f"  WARNING: SM validation could not complete due to server capacity limits.")
+            print("  WARNING: SM validation could not complete due to server capacity limits.")
             print(f"  SM was created successfully (id={smodel_id}) but validation timed out.")
-            print(f"  The model can be validated manually from the Kyvos UI.")
+            print("  The model can be validated manually from the Kyvos UI.")
             break
 
     print(f"Semantic Model: {smodel_name} (id={smodel_id}) — validated")
@@ -975,7 +978,7 @@ def _deploy_spec(
     # Step 9: Report results
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 9: Report results")
+    print("  Step 9: Report results")
     print(f"{'─' * 70}")
 
     result = {
@@ -1000,7 +1003,7 @@ def _deploy_spec(
         "errors": [],
         "warnings": [],
     }
-    print(f"\n✅ Deployment Successful")
+    print("\n✅ Deployment Successful")
     print(f"   Timestamp     : {_ts}")
     print(f"   Tables        : {len(tables)}")
     print(f"   Datasets      : {len(dataset_name_to_id)}")
@@ -1040,7 +1043,7 @@ def run_deploy_from_xmla(
     # Step 1: Load config
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 1: Load config")
+    print("  Step 1: Load config")
     print(f"{'─' * 70}")
 
     from kyvos_sdk.config import KyvosConfig
@@ -1055,7 +1058,7 @@ def run_deploy_from_xmla(
     # Step 2: Parse XMLA + derive names
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 2: Parse XMLA + derive names")
+    print("  Step 2: Parse XMLA + derive names")
     print(f"{'─' * 70}")
 
     from kyvos_xmla_parser.xmla_parser import parse_xmla
@@ -1077,7 +1080,6 @@ def run_deploy_from_xmla(
 
     smodel_name      = f"{spec.semantic_model.name}_{_ts}"
     drd_name         = f"{smodel_name} DRD"
-    drd_id           = f"drd_{smodel_name}"
 
     print(f"Base name     : {base_name}")
     print(f"Timestamp     : {_ts}")
@@ -1091,7 +1093,7 @@ def run_deploy_from_xmla(
         return 0
 
     # Steps 3-9: Deploy via shared pipeline
-    result = _deploy_spec(
+    _deploy_spec(
         tables=spec.tables,
         semantic_model=spec.semantic_model,
         metadata=spec.metadata if isinstance(spec.metadata, dict) else {},
@@ -1161,7 +1163,7 @@ def run_discover_sm_from_warehouse(
     # Step 1: Load config
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 1: Load config")
+    print("  Step 1: Load config")
     print(f"{'─' * 70}")
 
     from kyvos_sdk.config import KyvosConfig
@@ -1177,7 +1179,7 @@ def run_discover_sm_from_warehouse(
     # Step 2: Inspect warehouse schema
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 2: Inspect warehouse schema")
+    print("  Step 2: Inspect warehouse schema")
     print(f"{'─' * 70}")
 
     from kyvos_sdk.warehouse_inspector import inspect_schema
@@ -1205,7 +1207,7 @@ def run_discover_sm_from_warehouse(
     # Step 3: Obtain SM design (pre-approved JSON or LLM-generated)
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 3: Obtain SM design")
+    print("  Step 3: Obtain SM design")
     print(f"{'─' * 70}")
 
     if sm_design_path:
@@ -1214,7 +1216,7 @@ def run_discover_sm_from_warehouse(
         print(f"  SM design loaded from {sm_design_path}")
     elif sm_design is not None:
         sm_design_dict = sm_design
-        print(f"  SM design loaded from inline dict")
+        print("  SM design loaded from inline dict")
     elif user_intent:
         _provider = os.environ.get("LLM_PROVIDER", "anthropic")
         print(f"  Mode: LLM-based design via {_provider}")
@@ -1237,13 +1239,13 @@ def run_discover_sm_from_warehouse(
             llm_provider=_provider,
         )
 
-        print(f"  LLM design complete")
+        print("  LLM design complete")
         print(f"  Identified domain: {sm_design_dict.get('identified_domain', 'unknown')}")
 
         # Validate recommendation against inspected schema
         validation_errors = validate_sm_recommendation(sm_design_dict, schema_summary)
         if validation_errors:
-            print(f"  WARNING: Validation errors in LLM recommendation:")
+            print("  WARNING: Validation errors in LLM recommendation:")
             for err in validation_errors:
                 print(f"    - {err}")
             raise ValueError(
@@ -1285,7 +1287,7 @@ def run_discover_sm_from_warehouse(
     # Step 4: Build spec from recommendation
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print(f"  Step 4: Build spec from recommendation")
+    print("  Step 4: Build spec from recommendation")
     print(f"{'─' * 70}")
 
     from kyvos_sm_skills.spec_builder import build_spec_from_recommendation
@@ -1316,8 +1318,8 @@ def run_discover_sm_from_warehouse(
         print(f"  Cleanup Dry Run (base_name={_safe_base})")
         print(f"{'─' * 70}")
         from kyvos_sdk.client import KyvosService
-        from kyvos_sdk.provisioning import ProvisioningClient
         from kyvos_sdk.inspection import InspectionClient
+        from kyvos_sdk.provisioning import ProvisioningClient
         _svc = KyvosService(config=config)
         _svc.initialize()
         _prov = ProvisioningClient(_svc)
@@ -1343,7 +1345,7 @@ def run_discover_sm_from_warehouse(
     # ═══════════════════════════════════════════════════════════════════════
     # Steps 5-11: Deploy via shared pipeline
     # ═══════════════════════════════════════════════════════════════════════
-    result = _deploy_spec(
+    _deploy_spec(
         tables=discovered_spec.tables,
         semantic_model=discovered_spec.semantic_model,
         metadata=discovered_spec.metadata,
@@ -1354,6 +1356,6 @@ def run_discover_sm_from_warehouse(
         auto_approve=auto_approve,
         sm_folder_suffix=sm_folder_suffix,
     )
-    print(f"\n   Discovery source: warehouse schema inspection")
+    print("\n   Discovery source: warehouse schema inspection")
     print(f"   Schema type: {discovered_spec.metadata.get('schema_type', 'unknown')}")
     return 0

@@ -1,6 +1,6 @@
 """Tests for cleanup prefix safety — ensures unrelated entities are never matched."""
 
-from kyvos_sm_skills.skill_runner import _derive_cleanup_prefixes, _MIN_PREFIX_LEN
+from kyvos_sm_skills.skill_runner import _MIN_PREFIX_LEN, _derive_cleanup_prefixes
 
 
 class TestDeriveCleanupPrefixes:

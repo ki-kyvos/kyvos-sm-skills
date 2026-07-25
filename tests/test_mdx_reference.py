@@ -4,7 +4,6 @@ import pytest
 
 from kyvos_sm_skills.mdx_reference import (
     MDX_FUNCTIONS,
-    EXPRESSION_TEMPLATES,
     build_expression,
     convert_dax_to_mdx,
     get_mdx_prompt_summary,
