@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from typing import Any
 
 from kyvos_sm_skills.knowledge_base import get_knowledge_base_summary
 from kyvos_sm_skills.mdx_reference import get_mdx_prompt_summary
+from kyvos_sm_skills.prompt_loader import get_system_prompt, get_user_prompt
 
 
 def _ensure_anthropic() -> None:
@@ -52,14 +52,8 @@ def _ensure_openai() -> None:
 
 
 def _load_skill_system_prompt() -> str:
-    """Load the discover-sm-from-warehouse skill file as the system prompt."""
-    skill_path = Path(__file__).resolve().parent / "skills" / "discover-sm-from-warehouse.md"
-    if not skill_path.exists():
-        raise FileNotFoundError(
-            f"Skill file not found: {skill_path}. "
-            "Ensure kyvos-sm-skills is properly installed."
-        )
-    return skill_path.read_text()
+    """Load the system prompt for SM discovery from the config file."""
+    return get_system_prompt("discover_sm_from_warehouse")
 
 
 def _build_user_message(
@@ -104,165 +98,10 @@ def _build_user_message(
     }
     parts.append(f"## Existing Schema Context\n```json\n{json.dumps(schema_compact, indent=2)}\n```\n")
 
-    parts.append(
-        "## Instructions\n"
-        "Based on the warehouse schema above and the user's analytics intent, "
-        "recommend one or more enterprise-quality semantic models. "
-        "Return your response as JSON matching the output schema in the system prompt. "
-        "Include: recommended_sms (with name, schema_type, rationale, tables, relationships, measures, hierarchies), "
-        "identified_domain, domain_research_summary, domain_reasoning, and gaps_identified.\n\n"
-        "IMPORTANT: Keep rationale, domain_research_summary, and domain_reasoning concise (1-2 sentences each). "
-        "Do NOT include lengthy prose explanations inside JSON string values. "
-        "Focus tokens on the structural model (tables, measures, hierarchies, relationships) not on prose.\n\n"
-        "## Advanced Design Requirements\n"
-        "When the user intent calls for advanced analytics, incorporate these capabilities:\n\n"
-        "### Multiple Fact Tables (Multifact Schema)\n"
-        "If the warehouse has multiple fact tables sharing conformed dimensions, recommend a multifact schema. "
-        "Include all relevant fact tables and their shared dimensions.\n\n"
-        "### Many-to-Many Relationships\n"
-        "For bridge/junction tables (e.g., sales_reasons linking orders to sales_reason, "
-        "exchange_rates linking currencies), model them as many-to-many relationships. "
-        "Set relationship_type to 'many_to_many' for these. "
-        "Include the bridge table in the tables list.\n\n"
-        "### Calculated Measures\n"
-        "For derived KPIs that don't map directly to a single column, create calculated measures. "
-        "Set is_calculated to true and provide the expression.\n\n"
-        + get_mdx_prompt_summary() +
-        "\n" + get_knowledge_base_summary() +
-        "\n### Time Intelligence Measures\n"
-        "If a date dimension exists or can be derived, include time intelligence calculated measures using MDX:\n"
-        "- YTD (Year-to-Date): SUM(YTD([Date].[Calendar].CurrentMember), [Measures].[Sales Amount])\n"
-        "- QTD (Quarter-to-Date): SUM(QTD([Date].[Calendar].CurrentMember), [Measures].[Sales Amount])\n"
-        "- MTD (Month-to-Date): SUM(MTD([Date].[Calendar].CurrentMember), [Measures].[Sales Amount])\n"
-        "- Prior Year: ([Measures].[Sales Amount], "
-        "ParallelPeriod([Date].[Calendar].[Calendar Year], 1, [Date].[Calendar].CurrentMember))\n"
-        "- YoY Growth: IIF([Measures].[Prior Year Sales] = 0, NULL, "
-        "([Measures].[Sales Amount] - [Measures].[Prior Year Sales]) / [Measures].[Prior Year Sales])\n"
-        "These should be calculated measures (is_calculated=true) with the expression field populated.\n\n"
-        "### Relationship Types\n"
-        "For each relationship, include a 'relationship_type' field: 'many_to_one' (default) or 'many_to_many'.\n\n"
-        "### No Self-Join Relationships\n"
-        "Do NOT create relationships where from_table and to_table are the same table (self-joins). "
-        "Parent-child relationships (e.g., employee.parentemployeekey -> employee.employeekey, "
-        "account.parentaccountkey -> account.accountkey, "
-        "organization.parentorganizationkey -> organization.organizationkey) "
-        "should be modeled as hierarchies in the hierarchies list, NOT as relationships. "
-        "Kyvos DRD does not support self-join relationships.\n\n"
-        "### Hard Deployment Constraints — MUST follow\n"
-        "These constraints are enforced by the Kyvos compiler and deployment pipeline. "
-        "Violations cause deployment failures or silent data loss.\n\n"
-        "1. **Measures only on fact tables**: Every measure's source_dataset MUST be a table classified as 'fact'. "
-        "Do NOT create measures referencing tables classified as 'dimension', 'bridge', or 'unknown'. "
-        "The compiler silently drops measures on non-fact tables, causing measure loss.\n\n"
-        "2. **No dimension-to-dimension relationships**: Every relationship must originate "
-        "from a fact or bridge table. "
-        "Relationships between two dimension tables cause cube build failures (ENTITY_ID null errors). "
-        "Valid patterns: fact→dimension, fact→bridge→dimension.\n\n"
-        "3. **All dimensions must be connected**: Every dimension table included in the model MUST have a directed "
-        "relationship path from at least one fact table. Omit any dimension that cannot be connected.\n\n"
-        "4. **No numeric hierarchy levels**: Hierarchy levels MUST NOT use columns with numeric data types "
-        "(NUMBER, NUMERIC, DECIMAL, FLOAT, DOUBLE, INT, INTEGER, BIGINT, SMALLINT, REAL). "
-        "Only string, date, and boolean columns are valid hierarchy levels.\n\n"
-        "### Date Dimension Relationships\n"
-        "Only create relationships between a date dimension and fact tables if the fact table has a column "
-        "with the same name and compatible type as the date dimension's primary key. "
-        "Do NOT create date relationships using mismatched column types (e.g., INTEGER datekey to DATE startdate). "
-        "If no proper date key FK exists in the fact table, omit the date relationship.\n\n"
-        "### Measure Output Format\n"
-        "Each measure should include: name, source_dataset, aggregation_type, "
-        "and optionally expression and is_calculated. "
-        "For base measures, source_dataset and aggregation_type are required. "
-        "For calculated measures, expression and is_calculated=true are required; source_dataset may be omitted.\n\n"
-        "### Hierarchies\n"
-        "Include rich hierarchies reflecting business rollups. Each hierarchy MUST:\n"
-        "1. Specify a 'source_dataset' — the dimension table the hierarchy belongs to.\n"
-        "2. List 'levels' as ACTUAL COLUMN NAMES that exist on that source_dataset table. "
-        "Each level must be a real column from the table's schema "
-        "(shown in the Existing Schema Context above). "
-        "Do NOT use made-up or business-friendly names — use the exact column names from the warehouse schema.\n"
-        "3. Order levels from the broadest (top of hierarchy) to the most granular (leaf level).\n"
-        "4. For parent-child hierarchies (e.g., Employee, Organization, Account), set is_parent_child=true, "
-        "and provide parent_column and child_column as the actual column names. "
-        "Parent-child hierarchies do NOT need a 'levels' list — they use parent_column and child_column instead. "
-        "Both parent_column and child_column MUST exist on the same source_dataset table and have the same data type. "
-        "You may also provide: root_member_type ('auto', 'parent_is_self', or 'parent_is_blank'), "
-        "display_column (a column name for display, e.g., 'fullname'), "
-        "pc_level_naming_pattern (e.g., 'Level_*' or 'CEO,VP,Manager,Employee'), "
-        "non_leaf_data_member_visible (true/false), and non_leaf_data_member_caption (e.g., 'self').\n\n"
-        "Reference: https://docs.support.kyvosinsights.com/wiki/spaces/KD20266/pages/1228748942/Creating+parent+child+hierarchies\n\n"
-        "Examples (levels must match actual columns on the dimension table):\n"
-        "- Product (source_dataset=Product): [productcategorykey, productsubcategorykey, productkey] "
-        "if those columns exist on the Product table\n"
-        "- Sales Territory (source_dataset=SalesTerritory): "
-        "[salesterritorygroup, salesterritorycountry, salesterritorykey]\n"
-        "- Date (source_dataset=Date): [calendaryear, calendarquarter, monthnumber, datekey] "
-        "or similar columns that exist on the Date table\n"
-        "- Employee (source_dataset=Employee, parent-child): "
-        "parent_column=parentemployeekey, child_column=employeekey, "
-        "display_column=fullname, root_member_type=parent_is_blank, "
-        "pc_level_naming_pattern=CEO,VP,Manager,Employee\n"
-        "- Organization (source_dataset=Organization, parent-child): "
-        "parent_column=parentorganizationkey, child_column=organizationkey\n"
-        "- Account (source_dataset=Account, parent-child): "
-        "parent_column=parentaccountkey, child_column=accountkey\n"
-        "IMPORTANT: Before listing a level, verify the column exists on the "
-        "source_dataset table in the schema context. "
-        "If a natural hierarchy column doesn't exist, omit that hierarchy rather than guessing.\n"
-        "\n### Bridge Table Detection\n"
-        "Identify bridge/junction tables by scanning for tables with FK columns "
-        "referencing two or more dimension tables. "
-        "These resolve many-to-many relationships between dimensions. "
-        "Set relationship_type to 'many_to_many' for these. "
-        "Include the bridge table in the tables list.\n\n"
-        "### Scenario/Budget Dimension Detection\n"
-        "If a table or its columns contain 'scenario', 'budget', 'actual', 'variance', 'target', or 'quota' patterns, "
-        "include it as a scenario dimension. Generate budget variance calculated measures: "
-        "Variance = CASE WHEN IsEmpty([Budget]) THEN NULL WHEN account_type is expenditures "
-        "THEN [Budget] - [Actual] ELSE [Actual] - [Budget] END, "
-        "Variance% = IIF([Budget]=0, NULL, [Variance] / [Budget]).\n\n"
-        "### Currency Conversion\n"
-        "If the warehouse has currency-related tables (exchange rates, source/destination currency), "
-        "include them. "
-        "Note any measure expressions involving currency conversion "
-        "(e.g., [Sales Amount] / [Average Rate]) in measure descriptions.\n\n"
-        "### Role-Playing Dimensions\n"
-        "If a fact table has multiple FK columns referencing the same dimension "
-        "(e.g., order_date_key, ship_date_key, due_date_key all referencing a date dimension), "
-        "model each FK as a separate relationship to the same dimension. "
-        "Do NOT create duplicate dimension tables — use the same dimension with different relationship aliases.\n\n"
-        "### KPI Generation\n"
-        "For key business metrics where source data supports them, generate KPIs with 4 calculated measures each: "
-        "{kpi_name} (value), {kpi_name}_goal, {kpi_name}_status, {kpi_name}_trend. "
-        "Status: CASE WHEN value >= goal THEN 1 WHEN value >= goal * 0.9 THEN 0 ELSE -1 END. "
-        "Trend: compare current period vs prior period using ParallelPeriod. "
-        "Generate KPIs for: Revenue, Gross Profit Margin, Customer Growth, Expense Ratio, Return on Assets — "
-        "where the corresponding base measures exist.\n\n"
-        "### Measure Format Strings\n"
-        "Assign format_string to every measure: 'Currency' for monetary values, "
-        "'Percent' for ratios/percentages, '#,#' for integer counts. "
-        "This ensures consistent display in Kyvos dashboards.\n\n"
-        "### Calculated Measure Categories\n"
-        "Generate calculated measures in these categories where source data supports them "
-        "(per fact table/sales channel):\n"
-        "- Profitability: Gross Profit = [Revenue] - [Cost]; "
-        "Gross Profit Margin = IIF([Revenue]=0, NULL, ([Revenue] - [Cost]) / [Revenue])\n"
-        "- Averages: Average Unit Price = IIF([Transaction Count]=0, NULL, [Unit Price] / [Transaction Count]); "
-        "Average Sales Amount = IIF([Order Count]=0, NULL, [Sales Amount] / [Order Count])\n"
-        "- Ratios: Ratio to All = [Sales Amount] / (Root([Product]), [Sales Amount]); "
-        "Ratio to Parent = CASE WHEN Level Ordinal = 0 THEN 1 ELSE [Sales Amount] / (Parent, [Sales Amount]) END\n"
-        "- Discount: Discount Percentage = IIF([Sales Amount]=0, NULL, [Discount Amount] / [Sales Amount])\n"
-        "- Time Intelligence: YTD = SUM(PERIODSTODATE([Date].[Calendar].[Year], "
-        "[Date].[Calendar].CurrentMember), [Measures].[X]); "
-        "QTD, MTD similarly; Prior Year = ([Measures].[X], ParallelPeriod([Date].[Calendar].[Year], 1, "
-        "[Date].[Calendar].CurrentMember)); "
-        "YoY Growth = IIF([Prior Year]=0, NULL, ([X] - [Prior Year]) / [Prior Year])\n"
-        "- Budget Variance: Variance = CASE WHEN IsEmpty([Budget]) THEN NULL "
-        "WHEN expenditures THEN [Budget] - [Actual] ELSE [Actual] - [Budget] END; "
-        "Variance% = IIF([Budget]=0, NULL, [Variance] / [Budget])\n\n"
-        "### Sales Quota/Target Tables\n"
-        "If tables containing 'quota', 'target', or 'budget' in their name exist, include them in the model. "
-        "These tables support sales performance tracking and quota allocation analysis.\n"
-    )
+    instructions = get_user_prompt("discover_sm_from_warehouse")
+    instructions = instructions.replace("{mdx_reference}", get_mdx_prompt_summary())
+    instructions = instructions.replace("{knowledge_base}", get_knowledge_base_summary())
+    parts.append(instructions)
 
     return "\n".join(parts)
 
@@ -387,24 +226,36 @@ def _call_anthropic(
     model: str,
     max_tokens: int,
 ) -> str:
-    """Call Anthropic API and return response text."""
+    """Call Anthropic API and return response text.
+
+    Supports a custom base URL via the ANTHROPIC_BASE_URL env var,
+    which enables Azure AI Services endpoints that proxy Anthropic models.
+
+    Uses streaming to avoid the 10-minute non-streaming timeout for large
+    max_tokens values.
+    """
     _ensure_anthropic()
     import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key)
-    response = client.messages.create(
+    base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
+    client_kwargs: dict[str, Any] = {"api_key": api_key}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    client = anthropic.Anthropic(**client_kwargs)
+
+    response_text = ""
+    stop_reason = None
+    with client.messages.stream(
         model=model,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
-    )
+    ) as stream:
+        for text in stream.text_stream:
+            response_text += text
+        stop_reason = stream.get_final_message().stop_reason
 
-    response_text = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            response_text += block.text
-
-    if response.stop_reason == "max_tokens":
+    if stop_reason == "max_tokens":
         print(f"  WARNING: LLM response truncated (stop_reason=max_tokens, max_tokens={max_tokens}). "
               f"Response may be incomplete — consider increasing max_tokens or simplifying the intent.")
 
@@ -453,8 +304,8 @@ def design_sm_from_schema(
     allow_web_research: bool = True,
     sm_hints: dict[str, Any] | None = None,
     api_key: str | None = None,
-    model: str = "claude-sonnet-4-20250514",
-    max_tokens: int = 32768,
+    model: str | None = None,
+    max_tokens: int | None = None,
     llm_provider: str | None = None,
 ) -> dict[str, Any]:
     """Generate an SM recommendation from warehouse schema + user intent via LLM.
@@ -498,6 +349,17 @@ def design_sm_from_schema(
     """
     # Resolve provider
     provider = (llm_provider or os.environ.get("LLM_PROVIDER", "anthropic")).lower()
+
+    # Resolve model from env var or use default
+    if model is None:
+        model = os.environ.get("LLM_MODEL", "") or os.environ.get("ANTHROPIC_MODEL", "")
+        if not model:
+            model = "claude-sonnet-4-20250514"
+
+    # Resolve max_tokens from env var or use default
+    if max_tokens is None:
+        env_max = os.environ.get("LLM_MAX_TOKENS", "")
+        max_tokens = int(env_max) if env_max else 32768
 
     # Load system prompt from skill file
     system_prompt = _load_skill_system_prompt()

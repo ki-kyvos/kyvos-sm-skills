@@ -786,61 +786,45 @@ def _deploy_spec(
         elif table.table_type == "bridge":
             bridge_dataset_names.add(server_name)
 
-    # Auto-detect bridge tables using relationship structure + column analysis.
-    # A bridge table in a many-to-many pattern has:
-    # - An incoming relationship from a fact table via a NON-PK column (business key)
-    # - An outgoing relationship to a dimension
-    # - No measures assigned to it
-    # Snowflake dimensions (Fact → Dim → SubDim via PK) are NOT bridges.
-    measure_source_datasets = {
-        m.source_dataset.lower() for m in semantic_model.measures if m.source_dataset
-    }
-    fact_names_lower = {n.lower() for n in fact_dataset_names}
-    dim_names_lower = {
-        dataset_aliases.get(t.name, t.name).lower()
-        for t in tables if t.table_type == "dimension"
-    }
-    # Build map: for each non-fact table, track if it has incoming from fact
-    # via a non-PK column (bridge pattern) vs via PK column (regular dim pattern)
-    incoming_from_fact_via_pk: set[str] = set()
-    incoming_from_fact_via_non_pk: set[str] = set()
-    outgoing_to_dim: set[str] = set()
-    # Build PK column lookup per table
-    table_pk_cols: dict[str, set[str]] = {}
-    for t in tables:
-        server_name = dataset_aliases.get(t.name, t.name).lower()
-        table_pk_cols[server_name] = {
-            c.name.lower() for c in (t.columns or []) if c.is_primary_key
-        }
-    for rel in validated_rels:
-        left_kyvos = dataset_aliases.get(rel.left_dataset, rel.left_dataset)
-        right_kyvos = dataset_aliases.get(rel.right_dataset, rel.right_dataset)
-        if left_kyvos.lower() in fact_names_lower:
-            right_lower = right_kyvos.lower()
-            rel_col_lower = rel.right_column.lower()
-            right_pk_cols = table_pk_cols.get(right_lower, set())
-            if rel_col_lower in right_pk_cols:
-                incoming_from_fact_via_pk.add(right_lower)
-            else:
-                incoming_from_fact_via_non_pk.add(right_lower)
-        if right_kyvos.lower() in dim_names_lower:
-            outgoing_to_dim.add(left_kyvos.lower())
+    # Dump a snapshot for offline analysis (bridge_detector + analyzer script)
+    try:
+        import os as _os
+        _snapshot_dir = _os.environ.get("KYVOS_SNAPSHOT_DIR", "samples/output")
+        _snapshot_path = _os.path.join(_snapshot_dir, "bridge_snapshot.json")
+        _os.makedirs(_snapshot_dir, exist_ok=True)
+        with open(_snapshot_path, "w") as _f:
+            json.dump({
+                "tables": [t.model_dump() for t in tables],
+                "relationships": [r.model_dump() for r in validated_rels],
+                "measures": [m.model_dump() for m in semantic_model.measures],
+                "dataset_aliases": dataset_aliases,
+            }, _f, indent=2, default=str)
+        print(f"  Bridge snapshot saved: {_snapshot_path}")
+    except Exception:
+        pass
 
-    for table in tables:
-        if table.table_type not in ("unknown", "", "dimension"):
-            continue
-        server_name = dataset_aliases.get(table.name, table.name)
-        if server_name in fact_dataset_names or server_name in bridge_dataset_names:
-            continue
-        if table.name.lower() in measure_source_datasets:
-            continue
-        server_lower = server_name.lower()
-        # Bridge = incoming from fact via non-PK column AND outgoing to dimension
-        if server_lower in incoming_from_fact_via_non_pk and server_lower in outgoing_to_dim:
-            bridge_dataset_names.add(server_name)
+    # Run bridge detection via the pure function
+    from kyvos_sm_skills.bridge_detector import detect_bridges
+    _bridge_result = detect_bridges(
+        tables=tables,
+        relationships=validated_rels,
+        measures=semantic_model.measures,
+        dataset_aliases=dataset_aliases,
+    )
 
-    if bridge_dataset_names:
-        print(f"  Bridge datasets: {bridge_dataset_names}")
+    # Print decisions for traceability
+    for _d in _bridge_result.decisions:
+        if _d.is_bridge:
+            print(f"  Bridge detected: '{_d.table_name}' ({_d.reason})")
+    for _name, _reason in sorted(_bridge_result.reclassified.items()):
+        print(f"  Reclassified '{_name}' from bridge → dimension ({_reason})")
+    if _bridge_result.reclassified:
+        print(f"  Reclassified {len(_bridge_result.reclassified)} misclassified bridge table(s) → dimension")
+    if _bridge_result.bridge_names:
+        print(f"  Bridge datasets: {_bridge_result.bridge_names}")
+
+    fact_dataset_names = _bridge_result.fact_names
+    bridge_dataset_names = _bridge_result.bridge_names
 
     drd_artifact = compile_drd_artifact(
         drd_name=drd_name,

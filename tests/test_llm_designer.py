@@ -221,16 +221,24 @@ class TestFormatRecommendation:
 # ── Test design_sm_from_schema (with mocked Anthropic API) ─────────────────
 
 
+def _make_mock_stream(response_text: str, stop_reason: str = "end_turn"):
+    """Create a mock for Anthropic streaming API."""
+    mock_stream = MagicMock()
+    mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+    mock_stream.__exit__ = MagicMock(return_value=None)
+    mock_stream.text_stream = iter([response_text])
+    mock_final_msg = MagicMock()
+    mock_final_msg.stop_reason = stop_reason
+    mock_stream.get_final_message.return_value = mock_final_msg
+    return mock_stream
+
+
 class TestDesignSmFromSchema:
     def test_successful_design(self):
         """Mock Anthropic API and verify the recommendation is parsed correctly."""
-        mock_response = MagicMock()
-        mock_block = MagicMock()
-        mock_block.text = f"```json\n{json.dumps(_LLM_RESPONSE)}\n```"
-        mock_response.content = [mock_block]
-
+        response_text = f"```json\n{json.dumps(_LLM_RESPONSE)}\n```"
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.stream.return_value = _make_mock_stream(response_text)
 
         with patch("anthropic.Anthropic", return_value=mock_client):
             result = design_sm_from_schema(
@@ -252,13 +260,8 @@ class TestDesignSmFromSchema:
                 )
 
     def test_invalid_json_response_raises(self):
-        mock_response = MagicMock()
-        mock_block = MagicMock()
-        mock_block.text = "This is not JSON at all"
-        mock_response.content = [mock_block]
-
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.stream.return_value = _make_mock_stream("This is not JSON at all")
 
         with patch("anthropic.Anthropic", return_value=mock_client):
             with pytest.raises(ValueError, match="Failed to parse"):
@@ -270,15 +273,11 @@ class TestDesignSmFromSchema:
 
     def test_api_key_from_env(self):
         """API key should be read from ANTHROPIC_API_KEY env var."""
-        mock_response = MagicMock()
-        mock_block = MagicMock()
-        mock_block.text = json.dumps(_LLM_RESPONSE)
-        mock_response.content = [mock_block]
-
+        response_text = json.dumps(_LLM_RESPONSE)
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.stream.return_value = _make_mock_stream(response_text)
 
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "env-key"}):
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "env-key"}, clear=True):
             with patch("anthropic.Anthropic", return_value=mock_client) as mock_anthropic:
                 design_sm_from_schema(
                     schema_summary=_SCHEMA_SUMMARY,

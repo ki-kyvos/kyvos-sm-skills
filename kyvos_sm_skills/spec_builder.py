@@ -182,6 +182,16 @@ def build_spec_from_recommendation(
     if measures_to_drop:
         measures = [m for m in measures if m.name not in measures_to_drop]
 
+    # Auto-include bridge tables the LLM may have missed.
+    # Scans warehouse for tables with FK to a dimension that's already in the spec
+    # AND business key columns matching fact tables in the spec.
+    _auto_include_bridge_tables(
+        table_specs=table_specs,
+        relationships=relationships,
+        wh_table_map=wh_table_map,
+        existing_table_names=_existing_table_names,
+    )
+
     _promote_bridge_tables(table_specs, relationships, measures)
 
     # Auto-detect missing relationships from warehouse FK metadata.
@@ -196,6 +206,30 @@ def build_spec_from_recommendation(
         measures=measures,
     )
 
+    # Run bridge detection before the connectivity sweep so that bridge
+    # tables get their table_type updated to "bridge". The sweep's BFS
+    # includes edges from "bridge" type tables, so this ensures bridge
+    # tables propagate connectivity to their associated dimensions.
+    try:
+        from kyvos_sm_skills.bridge_detector import detect_bridges
+        _pre_sweep_result = detect_bridges(
+            tables=table_specs,
+            relationships=relationships,
+            measures=measures,
+            reclassify=False,
+        )
+        # detect_bridges mutates table_type on auto-detected bridges
+        _bridge_lower = {n.lower() for n in _pre_sweep_result.bridge_names}
+        _reclass_lower = {n.lower() for n in _pre_sweep_result.reclassified}
+        for _t in table_specs:
+            _sn = _t.name.lower()
+            if _sn in _bridge_lower:
+                _t.table_type = "bridge"
+            elif _sn in _reclass_lower:
+                _t.table_type = "dimension"
+    except Exception:
+        pass
+
     # Final connectivity sweep: remove any table not reachable from a fact
     # table via directed relationships. This is a safety net — the auto-detection
     # should catch most cases, but LLM-generated relationships may still leave
@@ -204,6 +238,7 @@ def build_spec_from_recommendation(
         table_specs=table_specs,
         relationships=relationships,
         measures=measures,
+        wh_table_map=wh_table_map,
     )
 
     # Build HierarchySpec objects (filter out hierarchies referencing pruned tables)
@@ -216,6 +251,28 @@ def build_spec_from_recommendation(
         h for h in hierarchies
         if h.source_dataset.lower() in remaining_table_names
     ]
+
+    # Kyvos constraint: a dimension with a parent-child hierarchy cannot have
+    # multiple hierarchies. If the LLM generated more than one hierarchy for a
+    # parent-child dimension, keep only the parent-child one.
+    _pc_dims = {h.source_dataset.lower() for h in hierarchies if h.is_parent_child}
+    if _pc_dims:
+        _seen_pc = set()
+        _filtered = []
+        for h in hierarchies:
+            src_lower = h.source_dataset.lower()
+            if src_lower in _pc_dims:
+                if h.is_parent_child and src_lower not in _seen_pc:
+                    _filtered.append(h)
+                    _seen_pc.add(src_lower)
+                elif not h.is_parent_child:
+                    print(
+                        f"  Dropping non-parent-child hierarchy '{h.name}' on "
+                        f"'{h.source_dataset}' — dimension has a parent-child hierarchy"
+                    )
+            else:
+                _filtered.append(h)
+        hierarchies = _filtered
 
     # Build DatasetSpec objects for each table (needed for contract validation)
     dataset_specs = [
@@ -252,6 +309,164 @@ def build_spec_from_recommendation(
     )
 
 
+_BRIDGE_NAME_PATTERNS = (
+    "reasons", "reason", "bridge", "junction", "xref", "crossref",
+    "association", "assoc", "mapping", "linkage",
+)
+
+
+def _is_bridge_by_name(table_name: str) -> bool:
+    """Check if a table name matches common bridge/junction table patterns."""
+    lower = table_name.lower()
+    return any(p in lower for p in _BRIDGE_NAME_PATTERNS)
+
+
+def _auto_include_bridge_tables(
+    table_specs: list[TableSpec],
+    relationships: list[RelationshipSpec],
+    wh_table_map: dict[str, dict[str, Any]],
+    existing_table_names: set[str],
+) -> None:
+    """Auto-include bridge tables the LLM may have missed.
+
+    Scans warehouse tables not already in the spec for bridge table patterns:
+    - Has FK columns referencing a dimension table that IS in the spec
+    - Has non-FK business key columns matching fact table columns in the spec
+    - Or has a bridge-like name pattern with FK to a dimension in the spec
+
+    When a bridge table is found, also adds its associated dimension table
+    if not already in the spec, and creates the necessary relationships:
+    fact_table → bridge_table (via matching business key)
+    bridge_table → dimension_table (via FK)
+    """
+    spec_table_names = {ts.name.lower() for ts in table_specs}
+    fact_names = {ts.name.lower() for ts in table_specs if ts.table_type == "fact"}
+    dim_names = {ts.name.lower() for ts in table_specs if ts.table_type == "dimension"}
+
+    # Build fact table column sets for business key matching
+    fact_columns: dict[str, set[str]] = {}
+    for ts in table_specs:
+        if ts.table_type == "fact":
+            fact_columns[ts.name.lower()] = {c.name.lower() for c in (ts.columns or [])}
+
+    # Build existing relationship pairs to avoid duplicates
+    existing_rel_pairs: set[tuple[str, str]] = set()
+    for rel in relationships:
+        existing_rel_pairs.add((rel.left_dataset.lower(), rel.right_dataset.lower()))
+        existing_rel_pairs.add((rel.right_dataset.lower(), rel.left_dataset.lower()))
+
+    for wh_name, wh_table in wh_table_map.items():
+        if wh_name in spec_table_names:
+            continue
+
+        wt_columns = wh_table.get("columns", [])
+        fk_cols = [c for c in wt_columns if c.get("is_fk")]
+        non_fk_cols = [c for c in wt_columns if not c.get("is_fk") and not c.get("is_pk")]
+
+        # Check if any FK references a dimension table — either one already in
+        # the spec, or one in the warehouse that could be auto-included.
+        referenced_dims: list[tuple[str, str, str]] = []  # (dim_name, fk_col, ref_col)
+        for fk_col in fk_cols:
+            ref = fk_col.get("references", "")
+            if not ref:
+                continue
+            ref_table, ref_column = ref.rsplit(".", 1) if "." in ref else (ref, "")
+            ref_table_lower = ref_table.lower()
+            # Dimension already in spec, or dimension in warehouse not yet in spec
+            if ref_table_lower in dim_names:
+                referenced_dims.append((ref_table, fk_col["name"], ref_column))
+            elif ref_table_lower in wh_table_map and ref_table_lower not in spec_table_names:
+                # Check if the referenced table looks like a dimension (has PK, not a fact)
+                ref_wt = wh_table_map.get(ref_table_lower, {})
+                ref_estimated_type = ref_wt.get("estimated_table_type", "unknown")
+                if ref_estimated_type in ("dimension", "unknown"):
+                    referenced_dims.append((ref_table, fk_col["name"], ref_column))
+
+        if not referenced_dims:
+            continue
+
+        # Check if non-FK columns match fact table columns (business key pattern)
+        matching_facts: list[tuple[str, str, str]] = []  # (fact_name, fact_col, bridge_col)
+        for fact_name, fact_cols in fact_columns.items():
+            for nf_col in non_fk_cols:
+                if nf_col["name"].lower() in fact_cols:
+                    matching_facts.append((fact_name, nf_col["name"], nf_col["name"]))
+
+        # Also check name-based heuristic
+        name_match = _is_bridge_by_name(wh_table.get("name", wh_name))
+
+        if not matching_facts and not name_match:
+            continue
+
+        # This is a bridge table — add it to the spec
+        bridge_name = wh_table.get("name", wh_name)
+        bridge_columns = _build_column_specs(wh_table)
+        table_specs.append(TableSpec(
+            name=bridge_name,
+            schema_name=wh_table.get("schema", "public"),
+            table_type="bridge",
+            columns=bridge_columns,
+        ))
+        spec_table_names.add(bridge_name.lower())
+        existing_table_names.add(bridge_name.lower())
+        print(f"  Auto-included bridge table '{bridge_name}' from warehouse schema")
+
+        # Add the associated dimension table if not already in spec
+        for dim_name, fk_col_name, ref_col_name in referenced_dims:
+            if dim_name.lower() not in spec_table_names:
+                dim_wt = wh_table_map.get(dim_name.lower())
+                if dim_wt:
+                    dim_columns = _build_column_specs(dim_wt)
+                    table_specs.append(TableSpec(
+                        name=dim_wt.get("name", dim_name),
+                        schema_name=dim_wt.get("schema", "public"),
+                        table_type="dimension",
+                        columns=dim_columns,
+                    ))
+                    spec_table_names.add(dim_wt.get("name", dim_name).lower())
+                    existing_table_names.add(dim_wt.get("name", dim_name).lower())
+                    print(f"  Auto-included dimension table '{dim_wt.get('name', dim_name)}' "
+                          f"for bridge '{bridge_name}'")
+
+            # Create relationship: bridge → dimension
+            actual_dim_name = wh_table_map.get(dim_name.lower(), {}).get("name", dim_name)
+            rel_key = (bridge_name.lower(), actual_dim_name.lower())
+            if rel_key not in existing_rel_pairs:
+                relationships.append(RelationshipSpec(
+                    left_dataset=bridge_name,
+                    left_column=fk_col_name,
+                    right_dataset=actual_dim_name,
+                    right_column=ref_col_name,
+                    relationship_type="many_to_one",
+                ))
+                existing_rel_pairs.add(rel_key)
+                existing_rel_pairs.add((actual_dim_name.lower(), bridge_name.lower()))
+                print(f"  Auto-created relationship: {bridge_name}.{fk_col_name} "
+                      f"-> {actual_dim_name}.{ref_col_name}")
+
+        # Create relationships: fact → bridge (via matching business keys)
+        for fact_name, fact_col, bridge_col in matching_facts:
+            actual_fact_name = wh_table_map.get(fact_name.lower(), {}).get("name", fact_name)
+            # Use the actual fact table name from the spec
+            for ts in table_specs:
+                if ts.name.lower() == fact_name.lower() and ts.table_type == "fact":
+                    actual_fact_name = ts.name
+                    break
+            rel_key = (actual_fact_name.lower(), bridge_name.lower())
+            if rel_key not in existing_rel_pairs:
+                relationships.append(RelationshipSpec(
+                    left_dataset=actual_fact_name,
+                    left_column=fact_col,
+                    right_dataset=bridge_name,
+                    right_column=bridge_col,
+                    relationship_type="many_to_one",
+                ))
+                existing_rel_pairs.add(rel_key)
+                existing_rel_pairs.add((bridge_name.lower(), actual_fact_name.lower()))
+                print(f"  Auto-created relationship: {actual_fact_name}.{fact_col} "
+                      f"-> {bridge_name}.{bridge_col}")
+
+
 def _promote_bridge_tables(
     table_specs: list[TableSpec],
     relationships: list[RelationshipSpec],
@@ -277,17 +492,47 @@ def _promote_bridge_tables(
         if left in table_by_name and right in table_by_name and right not in fact_names:
             candidates_with_output.add(left)
 
+    # Standard bridge detection: fact → bridge → dimension
     for table_name in candidates_with_fact_input & candidates_with_output:
         table = table_by_name[table_name]
         if table.table_type == "dimension" and table_name not in measure_sources:
             table.table_type = "bridge"
             print(f"  Promoted bridge table '{table.name}' from fact-to-dimension path")
 
+    # Composite PK detection: a table with 2+ PK columns where a fact relationship
+    # only uses one PK column is a bridge table (e.g., SalesReasons has a composite
+    # PK of salesordernumber + salesorderlinenumber + salesreasonkey, but the fact
+    # table only joins on salesordernumber).
+    for table_name in candidates_with_fact_input:
+        table = table_by_name.get(table_name)
+        if table is None or table.table_type != "dimension":
+            continue
+        if table_name in measure_sources:
+            continue
+        pk_cols = {c.name.lower() for c in (table.columns or []) if c.is_primary_key}
+        if len(pk_cols) >= 2:
+            table.table_type = "bridge"
+            print(f"  Promoted bridge table '{table.name}' from composite PK pattern "
+                  f"(PK columns: {sorted(pk_cols)})")
+
+    # Name-based heuristic: tables with common bridge/junction name patterns
+    # that have incoming fact relationships and no measures.
+    for table_name in candidates_with_fact_input:
+        table = table_by_name.get(table_name)
+        if table is None or table.table_type != "dimension":
+            continue
+        if table_name in measure_sources:
+            continue
+        if _is_bridge_by_name(table.name):
+            table.table_type = "bridge"
+            print(f"  Promoted bridge table '{table.name}' from name pattern heuristic")
+
 
 def _connectivity_sweep(
     table_specs: list[TableSpec],
     relationships: list[RelationshipSpec],
     measures: list[MeasureSpec],
+    wh_table_map: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[TableSpec], list[RelationshipSpec], list[MeasureSpec]]:
     """Remove tables not reachable from any fact table with measures via directed relationships.
 
@@ -334,7 +579,7 @@ def _connectivity_sweep(
         if (
             left in directed_graph
             and right in directed_graph
-            and table_type_map.get(left) in {"fact", "bridge"}
+            and table_type_map.get(left) in {"fact", "bridge", "unknown", ""}
         ):
             directed_graph[left].add(right)
 
@@ -351,6 +596,110 @@ def _connectivity_sweep(
                 queue.append(neighbor)
 
     disconnected = spec_table_names - connected
+    if not disconnected:
+        return table_specs, relationships, measures
+
+    # Before removing disconnected tables, try to reconnect them to fact
+    # tables WITH measures via exact column name matching. This handles the
+    # case where a bridge table was connected to a fact table without measures
+    # (which the sweep will remove). For example, sales_reasons may be
+    # connected to internet_customers (no measures) but also shares
+    # salesordernumber with internet_sales (has measures).
+    measure_dataset_names = {m.source_dataset.lower() for m in measures if m.source_dataset}
+    fact_with_measures = {
+        ts.name.lower() for ts in table_specs
+        if ts.table_type == "fact" and ts.name.lower() in measure_dataset_names
+    }
+    if fact_with_measures and disconnected and wh_table_map:
+        # Build a set of existing relationship keys to avoid duplicates
+        _existing_rel_keys: set[tuple[str, str, str, str]] = set()
+        _existing_table_pairs: set[tuple[str, str]] = set()
+        for rel in relationships:
+            l = rel.left_dataset.lower()
+            r = rel.right_dataset.lower()
+            _existing_rel_keys.add((l, rel.left_column.lower(), r, rel.right_column.lower()))
+            _existing_rel_keys.add((r, rel.right_column.lower(), l, rel.left_column.lower()))
+            _existing_table_pairs.add((l, r))
+            _existing_table_pairs.add((r, l))
+
+        _new_rels: list[RelationshipSpec] = []
+        _reconnected: set[str] = set()
+        for disc in sorted(disconnected):
+            disc_wt = wh_table_map.get(disc)
+            if not disc_wt:
+                continue
+            disc_cols = disc_wt.get("columns", [])
+            for fwm in sorted(fact_with_measures):
+                if fwm == disc or (fwm, disc) in _existing_table_pairs:
+                    continue
+                fwm_wt = wh_table_map.get(fwm)
+                if not fwm_wt:
+                    continue
+                # Try exact column name match
+                fwm_col_names = {c["name"].lower(): c for c in fwm_wt.get("columns", [])}
+                _found_match = False
+                for disc_col in disc_cols:
+                    disc_col_lower = disc_col["name"].lower()
+                    if disc_col_lower not in fwm_col_names:
+                        continue
+                    # Type compatibility check
+                    disc_col_type = disc_col.get("data_type", "").upper()
+                    fwm_col_type = fwm_col_names[disc_col_lower].get("data_type", "").upper()
+                    _disc_is_int = "INT" in disc_col_type
+                    _fwm_is_date = "DATE" in fwm_col_type
+                    _fwm_is_int = "INT" in fwm_col_type
+                    _disc_is_date = "DATE" in disc_col_type
+                    if (_fwm_is_date and _disc_is_int) or (_fwm_is_int and _disc_is_date):
+                        continue
+                    rel_key = (fwm, disc_col_lower, disc, disc_col_lower)
+                    if rel_key in _existing_rel_keys:
+                        continue
+                    actual_from = fwm_wt["name"]
+                    actual_to = disc_wt["name"]
+                    actual_from_col = fwm_col_names[disc_col_lower]["name"]
+                    actual_to_col = disc_col["name"]
+                    _new_rels.append(RelationshipSpec(
+                        left_dataset=actual_from,
+                        left_column=actual_from_col,
+                        right_dataset=actual_to,
+                        right_column=actual_to_col,
+                        relationship_type="many_to_one",
+                    ))
+                    _existing_rel_keys.add(rel_key)
+                    _existing_rel_keys.add((disc, disc_col_lower, fwm, disc_col_lower))
+                    _existing_table_pairs.add((fwm, disc))
+                    _existing_table_pairs.add((disc, fwm))
+                    print(f"  Reconnect (sweep): {actual_from}.{actual_from_col} -> {actual_to}.{actual_to_col}")
+                    _reconnected.add(disc)
+                    break  # One connection is enough
+
+        if _new_rels:
+            relationships = relationships + _new_rels
+            # Rebuild directed graph and redo BFS
+            directed_graph = {ts.name.lower(): set() for ts in table_specs}
+            for rel in relationships:
+                left = rel.left_dataset.lower()
+                right = rel.right_dataset.lower()
+                if (
+                    left in directed_graph
+                    and right in directed_graph
+                    and table_type_map.get(left) in {"fact", "bridge", "unknown", ""}
+                ):
+                    directed_graph[left].add(right)
+            connected = set()
+            queue = list(fact_table_names_with_measures)
+            while queue:
+                current = queue.pop(0)
+                if current in connected:
+                    continue
+                connected.add(current)
+                for neighbor in directed_graph.get(current, set()):
+                    if neighbor not in connected:
+                        queue.append(neighbor)
+            disconnected = spec_table_names - connected
+            if _reconnected:
+                print(f"  Reconnected {len(_reconnected)} table(s) to fact tables with measures")
+
     if not disconnected:
         return table_specs, relationships, measures
 

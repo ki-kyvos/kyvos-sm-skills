@@ -21,8 +21,11 @@ from kyvos_sm_skills.models import (
 from kyvos_sm_skills.sm_diff import compare_specs
 from kyvos_sm_skills.spec_builder import (
     DiscoveredSpec,
+    _auto_include_bridge_tables,
     _connectivity_sweep,
+    _is_bridge_by_name,
     _map_table_type,
+    _promote_bridge_tables,
     build_spec_from_recommendation,
 )
 
@@ -557,3 +560,189 @@ class TestSmDiff:
         result = compare_specs(spec, spec)
         summary = result.summary()
         assert "COMPATIBLE" in summary
+
+
+class TestCompositePBridgeDetection:
+    """Tests for composite PK and name-based bridge table detection in _promote_bridge_tables."""
+
+    def test_composite_pk_promotes_to_bridge(self):
+        """Table with 2+ PK columns and incoming fact relationship → bridge."""
+        from kyvos_sm_skills.models import ColumnSpec
+
+        sales_reasons = TableSpec(
+            name="SalesReasons",
+            schema_name="public",
+            table_type="dimension",
+            columns=[
+                ColumnSpec(name="salesordernumber", data_type="VARCHAR", is_primary_key=True),
+                ColumnSpec(name="salesorderlinenumber", data_type="INTEGER", is_primary_key=True),
+                ColumnSpec(name="salesreasonkey", data_type="INTEGER", is_primary_key=True),
+                ColumnSpec(name="salesreasonreasontype", data_type="VARCHAR"),
+            ],
+        )
+        fact = TableSpec(name="InternetSales", schema_name="public", table_type="fact", columns=[])
+        tables = [fact, sales_reasons]
+        rels = [RelationshipSpec(
+            left_dataset="InternetSales", left_column="salesordernumber",
+            right_dataset="SalesReasons", right_column="salesordernumber",
+            relationship_type="many_to_one",
+        )]
+        measures = [MeasureSpec(name="SalesAmount", expression="[SalesAmount]",
+                                source_dataset="InternetSales", aggregation_type="sum")]
+        _promote_bridge_tables(tables, rels, measures)
+        assert sales_reasons.table_type == "bridge"
+
+    def test_single_pk_not_promoted_to_bridge(self):
+        """Table with single PK and incoming fact relationship → stays dimension."""
+        from kyvos_sm_skills.models import ColumnSpec
+
+        dim_product = TableSpec(
+            name="DimProduct",
+            schema_name="public",
+            table_type="dimension",
+            columns=[
+                ColumnSpec(name="productkey", data_type="INTEGER", is_primary_key=True),
+                ColumnSpec(name="productname", data_type="VARCHAR"),
+            ],
+        )
+        fact = TableSpec(name="InternetSales", schema_name="public", table_type="fact", columns=[])
+        tables = [fact, dim_product]
+        rels = [RelationshipSpec(
+            left_dataset="InternetSales", left_column="productkey",
+            right_dataset="DimProduct", right_column="productkey",
+            relationship_type="many_to_one",
+        )]
+        measures = [MeasureSpec(name="SalesAmount", expression="[SalesAmount]",
+                                source_dataset="InternetSales", aggregation_type="sum")]
+        _promote_bridge_tables(tables, rels, measures)
+        assert dim_product.table_type == "dimension"
+
+    def test_name_pattern_promotes_to_bridge(self):
+        """Table with bridge-like name and incoming fact relationship → bridge."""
+        sales_reasons = TableSpec(
+            name="SalesReasons",
+            schema_name="public",
+            table_type="dimension",
+            columns=[],
+        )
+        fact = TableSpec(name="InternetSales", schema_name="public", table_type="fact", columns=[])
+        tables = [fact, sales_reasons]
+        rels = [RelationshipSpec(
+            left_dataset="InternetSales", left_column="salesordernumber",
+            right_dataset="SalesReasons", right_column="salesordernumber",
+            relationship_type="many_to_one",
+        )]
+        measures = [MeasureSpec(name="SalesAmount", expression="[SalesAmount]",
+                                source_dataset="InternetSales", aggregation_type="sum")]
+        _promote_bridge_tables(tables, rels, measures)
+        assert sales_reasons.table_type == "bridge"
+
+    def test_table_with_measures_not_promoted(self):
+        """Table with measures should not be promoted to bridge."""
+        from kyvos_sm_skills.models import ColumnSpec
+
+        sales_reasons = TableSpec(
+            name="SalesReasons",
+            schema_name="public",
+            table_type="dimension",
+            columns=[
+                ColumnSpec(name="salesordernumber", data_type="VARCHAR", is_primary_key=True),
+                ColumnSpec(name="salesorderlinenumber", data_type="INTEGER", is_primary_key=True),
+                ColumnSpec(name="salesreasonkey", data_type="INTEGER", is_primary_key=True),
+            ],
+        )
+        fact = TableSpec(name="InternetSales", schema_name="public", table_type="fact", columns=[])
+        tables = [fact, sales_reasons]
+        rels = [RelationshipSpec(
+            left_dataset="InternetSales", left_column="salesordernumber",
+            right_dataset="SalesReasons", right_column="salesordernumber",
+            relationship_type="many_to_one",
+        )]
+        measures = [
+            MeasureSpec(name="SalesAmount", expression="[SalesAmount]",
+                        source_dataset="InternetSales", aggregation_type="sum"),
+            MeasureSpec(name="ReasonCount", expression="[reasonkey]",
+                        source_dataset="SalesReasons", aggregation_type="count"),
+        ]
+        _promote_bridge_tables(tables, rels, measures)
+        assert sales_reasons.table_type == "dimension"
+
+    def test_is_bridge_by_name_matches(self):
+        assert _is_bridge_by_name("SalesReasons") is True
+        assert _is_bridge_by_name("order_bridge") is True
+        assert _is_bridge_by_name("customer_junction") is True
+        assert _is_bridge_by_name("product_mapping") is True
+
+    def test_is_bridge_by_name_no_match(self):
+        assert _is_bridge_by_name("DimProduct") is False
+        assert _is_bridge_by_name("FactInternetSales") is False
+        assert _is_bridge_by_name("Date") is False
+
+    def test_auto_include_bridge_table_from_warehouse(self):
+        """Bridge table in warehouse but not in LLM spec should be auto-included."""
+        from kyvos_sm_skills.models import ColumnSpec
+
+        fact = TableSpec(
+            name="InternetSales",
+            schema_name="public",
+            table_type="fact",
+            columns=[
+                ColumnSpec(name="salesordernumber", data_type="VARCHAR"),
+                ColumnSpec(name="salesorderlinenumber", data_type="INTEGER"),
+                ColumnSpec(name="salesamount", data_type="NUMERIC"),
+            ],
+        )
+        # Note: SalesReasons and SalesReason are NOT in the spec
+        tables = [fact]
+        rels: list[RelationshipSpec] = []
+        existing_names = {fact.name.lower()}
+
+        wh_table_map = {
+            "internetsales": {
+                "name": "InternetSales",
+                "schema": "public",
+                "columns": [
+                    {"name": "salesordernumber", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                    {"name": "salesorderlinenumber", "data_type": "INTEGER", "is_pk": False, "is_fk": False},
+                    {"name": "salesamount", "data_type": "NUMERIC", "is_pk": False, "is_fk": False},
+                ],
+            },
+            "sales_reasons": {
+                "name": "SalesReasons",
+                "schema": "public",
+                "columns": [
+                    {"name": "salesreasonkey", "data_type": "INTEGER", "is_pk": False, "is_fk": True,
+                     "references": "sales_reason.salesreasonkey"},
+                    {"name": "salesreasonreasontype", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                    {"name": "salesordernumber", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                    {"name": "salesorderlinenumber", "data_type": "INTEGER", "is_pk": False, "is_fk": False},
+                ],
+            },
+            "sales_reason": {
+                "name": "SalesReason",
+                "schema": "public",
+                "columns": [
+                    {"name": "salesreasonkey", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                    {"name": "salesreasonreasontype", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                ],
+            },
+        }
+
+        _auto_include_bridge_tables(
+            table_specs=tables,
+            relationships=rels,
+            wh_table_map=wh_table_map,
+            existing_table_names=existing_names,
+        )
+
+        table_names = {t.name for t in tables}
+        assert "SalesReasons" in table_names, f"SalesReasons should be auto-included, got: {table_names}"
+        assert "SalesReason" in table_names, f"SalesReason dimension should be auto-included, got: {table_names}"
+
+        bridge = next(t for t in tables if t.name == "SalesReasons")
+        assert bridge.table_type == "bridge"
+
+        # Check relationships were created
+        rel_pairs = {(r.left_dataset, r.right_dataset) for r in rels}
+        assert ("SalesReasons", "SalesReason") in rel_pairs, f"Bridge→dim rel missing, got: {rel_pairs}"
+        assert ("InternetSales", "SalesReasons") in rel_pairs, f"Fact→bridge rel missing, got: {rel_pairs}"

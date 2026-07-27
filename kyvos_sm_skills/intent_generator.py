@@ -20,35 +20,17 @@ from typing import Any
 
 from kyvos_sm_skills.knowledge_base import get_knowledge_base_summary
 from kyvos_sm_skills.mdx_reference import get_mdx_prompt_summary
+from kyvos_sm_skills.prompt_loader import get_system_prompt, get_user_prompt
 
 _TEMPLATE_PATH = Path(__file__).parent / "templates" / "intent_template.txt"
 
 
 def _build_intent_system_prompt() -> str:
-    """Build the system prompt for intent generation."""
-    return (
-        "You are an expert enterprise AI/BI solutions architect specializing in "
-        "Kyvos semantic model design. Your task is to generate a comprehensive, "
-        "production-ready user intent document for designing a semantic model.\n\n"
-        "The intent document must cover:\n"
-        "1. Business Context: What the organization does, key business processes, "
-        "and analytical goals.\n"
-        "2. Schema Analysis: Key fact tables, dimension tables, and relationships "
-        "identified from the warehouse schema.\n"
-        "3. Hierarchy Requirements: Natural business hierarchies that should be "
-        "modeled, including parent-child hierarchies where applicable.\n"
-        "4. KPI/Measure Requirements: Base measures and calculated KPIs using "
-        "Kyvos MDX syntax (NOT DAX). Include time intelligence, growth metrics, "
-        "and industry-standard KPIs.\n"
-        "5. Quality Bar: MVP deployment expectations — the semantic model must be "
-        "production-ready with enterprise-grade hierarchies and KPIs.\n\n"
-        "The intent should be specific enough to guide LLM-based semantic model "
-        "design without further human input. It should reflect deep understanding "
-        "of the domain and the warehouse schema.\n\n"
-        + get_mdx_prompt_summary()
-        + "\n"
-        + get_knowledge_base_summary()
-    )
+    """Build the system prompt for intent generation from config file."""
+    prompt = get_system_prompt("intent_generation")
+    prompt = prompt.replace("{mdx_reference}", get_mdx_prompt_summary())
+    prompt = prompt.replace("{knowledge_base}", get_knowledge_base_summary())
+    return prompt
 
 
 def _build_intent_user_message(
@@ -103,30 +85,8 @@ def _build_intent_user_message(
         f"## Warehouse Schema\n```json\n{json.dumps(schema_compact, indent=2)}\n```\n"
     )
 
-    parts.append(
-        "## Instructions\n"
-        "Based on the warehouse schema above, generate a comprehensive user intent "
-        "document for designing a production-ready Kyvos semantic model.\n\n"
-        "The intent should include:\n"
-        "1. **Business Context**: What this organization does and the key analytical "
-        "questions users would ask.\n"
-        "2. **Fact Tables**: Identify all fact tables and their key measures.\n"
-        "3. **Dimension Tables**: Identify all dimension tables and their attributes.\n"
-        "4. **Hierarchy Requirements**: List natural business hierarchies (e.g., "
-        "Product Category → Subcategory → Product, Geography → Country → State → City, "
-        "Date → Year → Quarter → Month). For any self-referencing tables (parent_key → "
-        "child_key), specify parent-child hierarchies with root_member_type and "
-        "level naming.\n"
-        "5. **KPI Requirements**: List base measures (sum, count, distinct count) "
-        "and calculated KPIs using Kyvos MDX syntax. Include:\n"
-        "   - Time intelligence (YTD, QTD, MTD, prior year, YoY growth)\n"
-        "   - Profitability (margin, ratio, variance)\n"
-        "   - Performance (rank, percentile, running total)\n"
-        "6. **Quality Bar**: The semantic model must be MVP-ready with enterprise-grade "
-        "hierarchies, KPIs, and MDX calculations suitable for production deployment.\n\n"
-        "Format the intent as a structured text document with clear sections. "
-        "Do NOT output JSON — output a natural language intent document."
-    )
+    instructions = get_user_prompt("intent_generation")
+    parts.append(instructions)
 
     return "\n".join(parts)
 
@@ -209,7 +169,7 @@ def generate_intent(
     domain: str | None = None,
     enterprise_context: str | None = None,
     api_key: str | None = None,
-    model: str = "claude-sonnet-4-20250514",
+    model: str | None = None,
     max_tokens: int = 8192,
     llm_provider: str | None = None,
     use_template: bool = True,
@@ -246,6 +206,12 @@ def generate_intent(
 
     # Fall back to LLM-based generation
     provider = (llm_provider or os.environ.get("LLM_PROVIDER", "anthropic")).lower()
+
+    # Resolve model from env var or use default
+    if model is None:
+        model = os.environ.get("LLM_MODEL", "") or os.environ.get("ANTHROPIC_MODEL", "")
+        if not model:
+            model = "claude-sonnet-4-20250514"
 
     system_prompt = _build_intent_system_prompt()
     user_message = _build_intent_user_message(

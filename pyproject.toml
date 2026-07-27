@@ -49,7 +49,7 @@ build-backend = "setuptools.build_meta"
 include = ["kyvos_sm_skills*"]
 
 [tool.setuptools.package-data]
-kyvos_sm_skills = ["skills/*.md", "skills/**/*.md"]
+kyvos_sm_skills = ["skills/*.md", "skills/**/*.md", "prompts/*.json", "templates/*.txt"]
 
 [tool.ruff]
 target-version = "py311"
