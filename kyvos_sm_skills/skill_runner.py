@@ -1351,3 +1351,477 @@ def run_discover_sm_from_warehouse(
     print("\n   Discovery source: warehouse schema inspection")
     print(f"   Schema type: {discovered_spec.metadata.get('schema_type', 'unknown')}")
     return 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PBIT Deployment Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _auto_discover_jar_path() -> str:
+    """Try to locate the DAX→MDX converter JAR.
+
+    Checks in order:
+    1. ``DAX_TO_MDX_JAR_PATH`` environment variable.
+    2. Common project directories relative to the user's CascadeProjects folder.
+
+    Returns:
+        Path to the JAR if found, empty string otherwise.
+    """
+    # 1. Environment variable
+    jar = os.environ.get("DAX_TO_MDX_JAR_PATH", "")
+    if jar and os.path.isfile(jar):
+        return jar
+
+    # 2. Common project locations
+    import glob as _glob
+    _home = os.path.expanduser("~")
+    _patterns = [
+        os.path.join(_home, "CascadeProjects", "dax-to-mdx-converter-utility",
+                     "target", "dax-to-mdx-converter-*.jar"),
+    ]
+    for pattern in _patterns:
+        _matches = sorted(_glob.glob(pattern))
+        # Prefer the shaded JAR (larger), skip 'original-' prefix
+        _matches = [m for m in _matches if "original-" not in os.path.basename(m)]
+        if _matches:
+            return _matches[0]
+    return ""
+
+
+# Patterns that indicate invalid/placeholder MDX that Kyvos cannot execute.
+_INVALID_MDX_PATTERNS = [
+    re.compile(r"\{set\}", re.IGNORECASE),
+    re.compile(r"\{measure\}", re.IGNORECASE),
+    re.compile(r"\.\[\]"),           # empty member reference
+    re.compile(r"\[Measures\]\.\[Value\]", re.IGNORECASE),  # default measure
+    re.compile(r"Guide-backed approximation", re.IGNORECASE),
+]
+
+
+def _has_invalid_mdx(mdx: str) -> bool:
+    """Return True if the MDX expression contains placeholder/invalid patterns."""
+    for pat in _INVALID_MDX_PATTERNS:
+        if pat.search(mdx):
+            return True
+    return False
+
+
+def _apply_converted_mdx_to_measures(spec: Any) -> None:
+    """Apply Java DAX→MDX conversions to calculated measure expressions.
+
+    Reads ``spec.metadata["java_converted_mdx"]`` and replaces DAX expressions
+    with converted MDX for calculated measures.  Measures with invalid/placeholder
+    MDX or no successful conversion are dropped — Kyvos cannot execute DAX.
+
+    Base measures (``is_calculated=False``) are kept as-is.
+
+    Modifies ``spec.semantic_model.measures`` in place.
+    """
+    java_mdx: dict[str, dict[str, Any]] = {}
+    if isinstance(spec.metadata, dict):
+        java_mdx = spec.metadata.get("java_converted_mdx", {})
+
+    if not java_mdx:
+        print("  No DAX→MDX conversions available — dropping all calculated measures")
+    else:
+        print(f"  DAX→MDX conversions available for {len(java_mdx)} measure(s)")
+
+    kept: list[Any] = []
+    dropped_calc = 0
+    dropped_invalid = 0
+    converted = 0
+
+    for m in spec.semantic_model.measures:
+        if not m.is_calculated:
+            # Base measure — keep as-is
+            kept.append(m)
+            continue
+
+        # Calculated measure — need MDX conversion
+        conv = java_mdx.get(m.name)
+        if not conv:
+            # No conversion available — can't deploy DAX to Kyvos
+            dropped_calc += 1
+            continue
+
+        status = conv.get("status", "")
+        mdx = conv.get("mdx", "")
+
+        if status not in ("CONVERTED", "CONVERTED_WITH_APPROXIMATION"):
+            # Conversion failed or needs manual review
+            dropped_calc += 1
+            continue
+
+        if not mdx or _has_invalid_mdx(mdx):
+            # MDX contains placeholder/invalid patterns
+            dropped_invalid += 1
+            continue
+
+        # Apply the converted MDX
+        m.expression = mdx
+        converted += 1
+        kept.append(m)
+
+    spec.semantic_model.measures = kept
+    print(f"  Measures: {len(kept)} kept ({converted} converted, "
+          f"{dropped_calc} dropped [no conversion], "
+          f"{dropped_invalid} dropped [invalid MDX])")
+
+
+def _normalize_measure_source_columns(spec: Any) -> None:
+    """Normalize base measure ``source_column`` from PBIT display names to warehouse column names.
+
+    The PBIT parser stores display names (e.g. ``"Prorated Budget"``) in
+    ``MeasureSpec.source_column``, while ``ColumnSpec.name`` holds the actual
+    warehouse column name (e.g. ``prorated_budget``).  The Kyvos compiler uses
+    ``source_column`` as-is for base SUM measures, so it must match the warehouse
+    column name exactly.
+
+    For each table, builds a mapping from display name → warehouse name using
+    ``ColumnSpec.source_column`` (display) → ``ColumnSpec.name`` (warehouse).
+    Falls back to fuzzy matching (lowercase, spaces→underscores) when the
+    display name is not explicitly stored.
+
+    Modifies ``spec.semantic_model.measures`` in place.
+    """
+    # Build per-table lookup maps: display_name → warehouse_name
+    # Also build a fuzzy map: normalized_name → warehouse_name
+    display_maps: dict[str, dict[str, str]] = {}   # table_lower → {display_lower → warehouse}
+    fuzzy_maps: dict[str, dict[str, str]] = {}      # table_lower → {fuzzy_lower → warehouse}
+
+    for t in spec.tables:
+        t_lower = t.name.lower()
+        d_map: dict[str, str] = {}
+        f_map: dict[str, str] = {}
+        for c in t.columns:
+            # Exact display name → warehouse name
+            if c.source_column:
+                d_map[c.source_column.lower()] = c.name
+            # Fuzzy: normalize warehouse name (already snake_case)
+            f_map[c.name.lower().replace(" ", "_")] = c.name
+        display_maps[t_lower] = d_map
+        fuzzy_maps[t_lower] = f_map
+
+    normalized = 0
+    unmatched: list[str] = []
+
+    for m in spec.semantic_model.measures:
+        if m.is_calculated or not m.source_column or not m.source_dataset:
+            continue
+
+        ds_lower = m.source_dataset.lower()
+        sc = m.source_column
+        d_map = display_maps.get(ds_lower, {})
+        f_map = fuzzy_maps.get(ds_lower, {})
+
+        # 1. Exact display-name match
+        if sc.lower() in d_map:
+            m.source_column = d_map[sc.lower()]
+            normalized += 1
+            continue
+
+        # 2. Fuzzy match (lowercase, spaces→underscores)
+        fuzzy = sc.lower().replace(" ", "_")
+        if fuzzy in f_map:
+            m.source_column = f_map[fuzzy]
+            normalized += 1
+            continue
+
+        # 3. Already matches a warehouse column name
+        if sc in f_map.values():
+            normalized += 1
+            continue
+
+        # No match found
+        unmatched.append(f"{m.source_dataset}.{sc}")
+
+    print(f"  Source column normalization: {normalized} matched, "
+          f"{len(unmatched)} unmatched")
+    if unmatched:
+        print(f"  WARNING: Unmatched source columns: {unmatched[:10]}")
+
+
+def _resolve_measure_dependencies(spec: Any) -> None:
+    """Resolve implicit measure references in converted MDX expressions.
+
+    Power BI DAX expressions often reference columns as implicit measures
+    (e.g. ``[Net Sales]`` refers to the ``net_sales`` column on the current
+    row context).  The Java DAX→MDX converter emits these as
+    ``[Measures].[Net Sales]``, but Kyvos requires an explicit base measure
+    with that name.
+
+    This function:
+    1. Extracts all ``[Measures].[Name]`` references from kept calculated measures.
+    2. For references not in the measure set, tries to find a matching column
+       on any fact table (by display name or fuzzy match).
+    3. Creates base SUM measures for matches.
+    4. Drops calculated measures that still reference non-existent measures
+       (transitive — iterates until stable).
+
+    Modifies ``spec.semantic_model.measures`` in place.
+    """
+    from kyvos_sm_skills.models import MeasureSpec
+
+    # Build fact-table column lookup: display_name_lower → (table_name, column_name)
+    fact_tables = [t for t in spec.tables if t.table_type == "fact"]
+    col_lookup: dict[str, tuple[str, str]] = {}  # display_lower → (table, warehouse_col)
+    fuzzy_lookup: dict[str, tuple[str, str]] = {}  # fuzzy_lower → (table, warehouse_col)
+
+    for t in fact_tables:
+        for c in t.columns:
+            if c.source_column:
+                col_lookup[c.source_column.lower()] = (t.name, c.name)
+            fuzzy_key = c.name.lower().replace(" ", "_")
+            fuzzy_lookup[fuzzy_key] = (t.name, c.name)
+
+    _ref_pattern = re.compile(r"\[Measures\]\.\[([^\]]+)\]")
+
+    created_base = 0
+    dropped_unresolved = 0
+
+    # Iterate until stable (transitive closure)
+    for _iteration in range(10):
+        kept_measures = spec.semantic_model.measures
+        kept_names = {m.name for m in kept_measures}
+
+        # Collect all referenced measure names from calculated measures
+        referenced: set[str] = set()
+        for m in kept_measures:
+            if m.is_calculated and m.expression:
+                referenced.update(_ref_pattern.findall(m.expression))
+
+        # Find missing references
+        missing = referenced - kept_names
+        if not missing:
+            break
+
+        # Try to create base measures for missing references
+        still_missing: set[str] = set()
+        for ref_name in sorted(missing):
+            # 1. Exact display-name match
+            match = col_lookup.get(ref_name.lower())
+            # 2. Fuzzy match (lowercase, spaces→underscores)
+            if not match:
+                fuzzy = ref_name.lower().replace(" ", "_")
+                match = fuzzy_lookup.get(fuzzy)
+
+            if match:
+                table_name, col_name = match
+                # Check if we already created this (avoid duplicates)
+                if ref_name not in kept_names:
+                    spec.semantic_model.measures.append(MeasureSpec(
+                        name=ref_name,
+                        expression="",
+                        format_string="#,##0.00",
+                        description=f"Auto-created base measure for {col_name} on {table_name}",
+                        is_calculated=False,
+                        source_dataset=table_name,
+                        aggregation_type="sum",
+                        source_column=col_name,
+                        is_hidden=False,
+                    ))
+                    created_base += 1
+                    print(f"  Auto-created base measure: '{ref_name}' → "
+                          f"{table_name}.{col_name}")
+            else:
+                still_missing.add(ref_name)
+
+        if still_missing:
+            # Drop calculated measures that reference non-existent measures
+            new_measures = []
+            for m in spec.semantic_model.measures:
+                if m.is_calculated and m.expression:
+                    refs = set(_ref_pattern.findall(m.expression))
+                    if refs & still_missing:
+                        dropped_unresolved += 1
+                        print(f"  Dropped '{m.name}' — references "
+                              f"non-existent measure(s): {sorted(refs & still_missing)}")
+                        continue
+                new_measures.append(m)
+            spec.semantic_model.measures = new_measures
+
+        if not still_missing and created_base == 0:
+            break
+
+    if created_base:
+        print(f"  Dependency resolution: {created_base} base measure(s) auto-created, "
+              f"{dropped_unresolved} calculated measure(s) dropped [unresolved refs]")
+
+
+def run_deploy_from_pbit(
+    *,
+    pbit_file_path: str,
+    env_file: str,
+    jar_path: str = "",
+    warehouse_schema: str | None = None,
+    payload_format: str | None = None,
+    dry_run: bool = False,
+    cleanup_dry_run: bool = False,
+    auto_approve: bool = False,
+    sm_folder_suffix: str = "",
+) -> int:
+    """Run the deploy-from-pbit skill flow.
+
+    Parses a PBIT file, converts DAX measures to MDX (via the Java converter
+    if available), normalizes measure source columns, removes disconnected
+    dimensions, and deploys the semantic model to Kyvos.
+
+    Args:
+        pbit_file_path: Path to the ``.pbit`` file.
+        env_file: Path to the ``.env`` config file.
+        jar_path: Path to the DAX→MDX converter JAR.  If empty, auto-discovers
+            via ``DAX_TO_MDX_JAR_PATH`` env var or common project locations.
+            If not found, conversion is skipped and calculated measures are dropped.
+        warehouse_schema: Override the warehouse schema name for all datasets.
+            If ``None``, uses the schema derived from the PBIT filename.
+        payload_format: Override payload format (``"json"`` or ``"xml"``).
+        dry_run: If True, parse + process only, no API calls.
+        cleanup_dry_run: If True, scan for old entities but don't delete or deploy.
+        auto_approve: If True, skip interactive approval prompts.
+        sm_folder_suffix: Optional suffix for the semantic model folder name.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    # ═══════════════════════════════════════════════════════════════════════
+    # Step 1: Load config
+    # ═══════════════════════════════════════════════════════════════════════
+    print(f"\n{'─' * 70}")
+    print("  Step 1: Load config")
+    print(f"{'─' * 70}")
+
+    from kyvos_sdk.config import KyvosConfig
+
+    config = KyvosConfig.from_env_file(env_file)
+    if payload_format:
+        config.payload_format = payload_format
+    print(f"  Config loaded from {env_file}")
+    print(f"  Payload format: {config.payload_format}")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Step 2: Parse PBIT + derive names
+    # ═══════════════════════════════════════════════════════════════════════
+    print(f"\n{'─' * 70}")
+    print("  Step 2: Parse PBIT + derive names")
+    print(f"{'─' * 70}")
+
+    from kyvos_xmla_parser.pbit_adapter import enrich_spec_from_pbit
+
+    # Resolve JAR path for DAX→MDX conversion
+    _jar = jar_path or _auto_discover_jar_path()
+    if _jar:
+        print(f"  DAX→MDX converter JAR: {_jar}")
+    else:
+        print("  DAX→MDX converter JAR: not found — calculated measures will be dropped")
+
+    with open(pbit_file_path, "rb") as f:
+        spec = enrich_spec_from_pbit(
+            f.read(),
+            filename=os.path.basename(pbit_file_path),
+            skip_conversion=not bool(_jar),
+            jar_path=_jar,
+        )
+
+    print(f"  Parsed: {len(spec.tables)} tables, "
+          f"{len(spec.semantic_model.relationships)} relationships, "
+          f"{len(spec.semantic_model.measures)} measures")
+
+    # Derive base name from PBIT filename (not the GUID in semantic_model.name)
+    _filename = os.path.basename(pbit_file_path)
+    _stem = _filename.rsplit(".", 1)[0] if "." in _filename else _filename
+    base_name = _stem
+
+    # Override warehouse schema if explicitly provided
+    if warehouse_schema:
+        for t in spec.tables:
+            t.schema_name = warehouse_schema
+        spec.metadata["schema_name"] = warehouse_schema
+        print(f"  Schema override: {warehouse_schema}")
+    else:
+        _derived_schema = spec.metadata.get("schema_name", "")
+        print(f"  Schema (from filename): {_derived_schema}")
+
+    print(f"  Base name: {base_name}")
+
+    if dry_run:
+        print(f"\n  Dry run — parsed {len(spec.tables)} tables, "
+              f"{len(spec.semantic_model.relationships)} relationships, "
+              f"{len(spec.semantic_model.measures)} measures")
+        # Still show what the measure processing would do
+        print(f"\n{'─' * 70}")
+        print("  Dry run: measure processing preview")
+        print(f"{'─' * 70}")
+        _apply_converted_mdx_to_measures(spec)
+        _normalize_measure_source_columns(spec)
+        _resolve_measure_dependencies(spec)
+        print(f"\n  After processing: {len(spec.semantic_model.measures)} measures, "
+              f"{len(spec.tables)} tables")
+        return 0
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Step 3: Process measures
+    # ═══════════════════════════════════════════════════════════════════════
+    print(f"\n{'─' * 70}")
+    print("  Step 3: Process measures (DAX→MDX + source column normalization)")
+    print(f"{'─' * 70}")
+
+    # 3a. Apply converted MDX to calculated measures
+    _apply_converted_mdx_to_measures(spec)
+
+    # 3b. Normalize base measure source_columns from display names to warehouse names
+    _normalize_measure_source_columns(spec)
+
+    # 3c. Resolve implicit measure references in converted MDX — auto-create
+    # base measures for column references that Power BI treated as implicit measures
+    _resolve_measure_dependencies(spec)
+
+    # 3d. Set a human-readable SM name (not the GUID from PBIT)
+    spec.semantic_model.name = base_name
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Step 4: Connectivity sweep — remove disconnected dimensions
+    # ═══════════════════════════════════════════════════════════════════════
+    print(f"\n{'─' * 70}")
+    print("  Step 4: Connectivity sweep")
+    print(f"{'─' * 70}")
+
+    from kyvos_sm_skills.spec_builder import _connectivity_sweep
+
+    _before_tables = len(spec.tables)
+    spec.tables, spec.semantic_model.relationships, spec.semantic_model.measures = (
+        _connectivity_sweep(
+            table_specs=spec.tables,
+            relationships=spec.semantic_model.relationships,
+            measures=spec.semantic_model.measures,
+            wh_table_map=None,  # No warehouse metadata in PBIT flow — just drop disconnected
+            follow_all_edges=True,  # PBIT relationships may be dim→bridge, etc.
+        )
+    )
+    _dropped = _before_tables - len(spec.tables)
+    if _dropped:
+        print(f"  Dropped {_dropped} disconnected table(s): "
+              f"{_before_tables} → {len(spec.tables)} tables")
+    else:
+        print(f"  All {len(spec.tables)} table(s) reachable from fact tables with measures")
+
+    print(f"  Final: {len(spec.tables)} tables, "
+          f"{len(spec.semantic_model.relationships)} relationships, "
+          f"{len(spec.semantic_model.measures)} measures")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Steps 5-9: Deploy via shared pipeline
+    # ═══════════════════════════════════════════════════════════════════════
+    _deploy_spec(
+        tables=spec.tables,
+        semantic_model=spec.semantic_model,
+        metadata=spec.metadata if isinstance(spec.metadata, dict) else {},
+        base_name=base_name,
+        config=config,
+        skip_hidden_tables=config.skip_hidden_tables,
+        cleanup_dry_run=cleanup_dry_run,
+        perform_cleanup=not cleanup_dry_run,
+        auto_approve=auto_approve,
+        sm_folder_suffix=sm_folder_suffix,
+    )
+    print(f"\n   PBIT source: {pbit_file_path}")
+    return 0

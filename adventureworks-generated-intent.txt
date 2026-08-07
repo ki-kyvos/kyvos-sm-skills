@@ -31,8 +31,7 @@ I want to build a production-ready MVP semantic model with comprehensive enterpr
 
 **KPI Requirements:**
 - Generate KPIs with value, goal, status, and trend expressions for key business metrics where source data supports them:
-  - Revenue (total and per-channel), Gross Profit Margin, Customer Growth
-  - Expense to Revenue Ratio, Operating Profit
+  - Revenue (total and per-channel), Gross Profit Margin, Customer Growth, Expense to Revenue Ratio, Operating Profit
 - Each KPI produces up to 4 calculated measures: {kpi_name}, {kpi_name}_goal, {kpi_name}_status, {kpi_name}_trend
 - KPI status: CASE WHEN value >= goal THEN 1 WHEN value >= goal * 0.9 THEN 0 ELSE -1 END
 - KPI trend: compare current vs prior period using ParallelPeriod

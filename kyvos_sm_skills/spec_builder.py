@@ -533,6 +533,7 @@ def _connectivity_sweep(
     relationships: list[RelationshipSpec],
     measures: list[MeasureSpec],
     wh_table_map: dict[str, dict[str, Any]] | None = None,
+    follow_all_edges: bool = False,
 ) -> tuple[list[TableSpec], list[RelationshipSpec], list[MeasureSpec]]:
     """Remove tables not reachable from any fact table with measures via directed relationships.
 
@@ -541,6 +542,12 @@ def _connectivity_sweep(
     reachable. Kyvos requires every dimension to have a directed path to a
     measure; a dimension connected only to a measure-less fact table will
     fail validation.
+
+    Args:
+        follow_all_edges: If True, follow all edges regardless of the left
+            table's type (not just fact/bridge/unknown). Appropriate for PBIT
+            flows where relationship directions may vary (e.g. dimension →
+            bridge edges). Default False (discovery-flow behaviour).
 
     Returns:
         Trimmed (table_specs, relationships, measures) tuple.
@@ -576,11 +583,9 @@ def _connectivity_sweep(
     for rel in relationships:
         left = rel.left_dataset.lower()
         right = rel.right_dataset.lower()
-        if (
-            left in directed_graph
-            and right in directed_graph
-            and table_type_map.get(left) in {"fact", "bridge", "unknown", ""}
-        ):
+        if left not in directed_graph or right not in directed_graph:
+            continue
+        if follow_all_edges or table_type_map.get(left) in {"fact", "bridge", "unknown", ""}:
             directed_graph[left].add(right)
 
     # Directed BFS from fact tables that have measures

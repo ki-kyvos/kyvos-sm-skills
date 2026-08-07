@@ -38,3 +38,4 @@ kyvos_sm_skills/.DS_Store
 *.log
 .DS_Store
 .env.discover
+samples/output/bridge_snapshot.json
