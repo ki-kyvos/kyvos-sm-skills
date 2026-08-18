@@ -83,11 +83,11 @@ class TestDatasetXmlGenerator:
         gen = DatasetXmlGenerator(connection_name="MyConn")
         xml_path = gen.generate_dataset_xml(_sample_fact_table(), tmp_path)
         assert xml_path.exists()
-        xml = xml_path.read_text()
+        xml = xml_path.read_text(encoding='utf-8')
         assert len(xml) > 0
 
     def test_xml_has_qo(self, tmp_path):
         gen = DatasetXmlGenerator(connection_name="Conn")
         xml_path = gen.generate_dataset_xml(_sample_fact_table(), tmp_path)
-        xml = xml_path.read_text()
+        xml = xml_path.read_text(encoding='utf-8')
         assert "QO" in xml or "TRANSFORMATION" in xml

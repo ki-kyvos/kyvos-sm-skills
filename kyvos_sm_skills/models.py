@@ -22,6 +22,7 @@ class ColumnSpec(BaseModel):
     column_samples: list[str] = Field(default_factory=list)
     source_column: str | None = None
     display_folder: str = ""
+    is_hidden: bool = False
 
 
 class TableSpec(BaseModel):
@@ -43,6 +44,7 @@ class DatasetSpec(BaseModel):
     source_table: str
     connection_name: str
     columns: list[str] = Field(default_factory=list)
+    is_hidden: bool = False
 
 
 class RelationshipSpec(BaseModel):

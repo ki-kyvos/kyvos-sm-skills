@@ -14,7 +14,10 @@ Install with: ``pip install kyvos-sm-skills[sdk]``
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 from kyvos_sm_skills.generators.drd_xml import SimpleRel
 
@@ -204,6 +207,10 @@ def build_drd_graph(
         ))
 
     # Build relations
+    # Source/target and the join columns are preserved exactly as they are
+    # declared in the semantic model.  The relationship type is normalized to
+    # Kyvos values (e.g. MANY_TO_ONE stays MANY_TO_ONE) so the DRD reflects the
+    # original fact -> dimension direction.
     relations: list[DrdRelation] = []
     for rel_idx, rel in enumerate(relationships, start=1):
         left_kyvos = aliases.get(rel.left_dataset) or aliases_ci.get(rel.left_dataset.lower()) or rel.left_dataset
@@ -214,13 +221,21 @@ def build_drd_graph(
         if not left_node_id or not right_node_id:
             continue
 
+        source, target, source_col, target_col = _resolve_drd_source_target(
+            rel=rel,
+            left_name=left_kyvos,
+            right_name=right_kyvos,
+        )
+
+        source_node_id = name_to_node_id[source]
+        target_node_id = name_to_node_id[target]
         rel_type = _normalize_rel_type(rel.relationship_type)
         relations.append(DrdRelation(
             relation_id=f"rel_{rel_idx}",
-            source_node_id=left_node_id,
-            target_node_id=right_node_id,
-            source_column=rel.left_column,
-            target_column=rel.right_column,
+            source_node_id=source_node_id,
+            target_node_id=target_node_id,
+            source_column=source_col,
+            target_column=target_col,
             relation_type=rel_type,
         ))
 
@@ -388,6 +403,41 @@ def compile_smodel_artifact(
                 if mapped:
                     h.source_dataset = mapped
 
+    # Defensive: drop measures/hierarchies whose source_dataset references a
+    # dataset that no longer exists in the model (e.g. Power BI measure-only
+    # tables with zero columns that were filtered out upstream).
+    _ds_names = {ds.name for ds in smodel.datasets}
+    _orphan_measures = [
+        m.name for m in smodel.measures
+        if m.source_dataset and m.source_dataset not in _ds_names
+    ]
+    _orphan_hierarchies = [
+        h.name for h in smodel.hierarchies
+        if h.source_dataset and h.source_dataset not in _ds_names
+    ]
+    _already_copied = bool(dataset_aliases)
+    if (_orphan_measures or _orphan_hierarchies) and not _already_copied:
+        smodel = smodel.model_copy(deep=True)
+        _already_copied = True
+    if _orphan_measures:
+        _log.warning(
+            "Dropping %d measures with orphan source_dataset: %s",
+            len(_orphan_measures), _orphan_measures,
+        )
+        smodel.measures = [
+            m for m in smodel.measures
+            if not m.source_dataset or m.source_dataset in _ds_names
+        ]
+    if _orphan_hierarchies:
+        _log.warning(
+            "Dropping %d hierarchies with orphan source_dataset: %s",
+            len(_orphan_hierarchies), _orphan_hierarchies,
+        )
+        smodel.hierarchies = [
+            h for h in smodel.hierarchies
+            if not h.source_dataset or h.source_dataset in _ds_names
+        ]
+
     contract_smodel = adapt_semantic_model(smodel)
 
     graph = build_drd_graph(
@@ -413,11 +463,31 @@ def compile_smodel_artifact(
         fmt=artifact_fmt,
     )
 
+def _resolve_drd_source_target(
+    *,
+    rel: SimpleRel,
+    left_name: str,
+    right_name: str,
+) -> tuple[str, str, str, str]:
+    """Return (source_name, target_name, source_column, target_column).
+
+    The semantic model already stores fact -> dimension relationships with
+    the correct direction (left is the many side, right is the one side for
+    many_to_one), regardless of the declared ``relationship_type``. Preserve
+    that direction in the DRD so the relationship list and join expression
+    read fact-first in the UI.
+    """
+    return left_name, right_name, rel.left_column, rel.right_column
+
 
 def _normalize_rel_type(rel_type: str | None) -> str:
-    value = (rel_type or "").strip().lower()
-    if value in {"many_to_many", "manytomany"}:
+    value = (rel_type or "").strip().lower().replace("_", "")
+    if value in {"manytomany"}:
         return "MANY_TO_MANY"
-    if value in {"one_to_one", "onetoone"}:
+    if value in {"onetoone"}:
         return "ONE_TO_ONE"
+    if value in {"onetomany"}:
+        return "ONE_TO_MANY"
+    if value in {"manytoone"}:
+        return "MANY_TO_ONE"
     return "ONE_TO_MANY"

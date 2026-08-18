@@ -19,7 +19,7 @@ SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
 def _extract_python_blocks(md_path: Path) -> list[str]:
     """Extract all ```python ... ``` code blocks from a markdown file."""
-    text = md_path.read_text()
+    text = md_path.read_text(encoding='utf-8')
     pattern = r"```python\n(.*?)```"
     return re.findall(pattern, text, re.DOTALL)
 
@@ -388,12 +388,12 @@ class TestDiscoverSmFromWarehouseSignatures:
 
     def test_uses_allow_web_research(self, skill_file):
         """Check allow_web_research in the full skill file (it's in JSON schema, not Python)."""
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         assert "allow_web_research" in text
 
     def test_uses_approval_gates(self, skill_file):
         """Check approval gates in the full skill file (they're in the workflow section)."""
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         assert "approval gate" in text.lower() or "Gate" in text
 
     def test_does_not_use_entity_id_property(self, skill_code):
@@ -405,7 +405,7 @@ class TestDiscoverSmFromWarehouseSignatures:
 
     def test_references_sm_design_principles(self, skill_file):
         """Check sm-design-principles reference in the full skill file (it's in the header)."""
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         assert "sm-design-principles" in text
 
 
@@ -469,11 +469,11 @@ class TestGenerateSmFromIntentSignatures:
         assert "create_engine" in skill_code
 
     def test_uses_allow_web_research(self, skill_file):
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         assert "allow_web_research" in text
 
     def test_uses_approval_gates(self, skill_file):
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         assert "approval gate" in text.lower() or "Gate" in text
 
     def test_does_not_use_entity_id_property(self, skill_code):
@@ -484,11 +484,11 @@ class TestGenerateSmFromIntentSignatures:
         assert "pg_port" not in skill_code
 
     def test_references_sm_design_principles(self, skill_file):
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         assert "sm-design-principles" in text
 
     def test_references_design_skills(self, skill_file):
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         assert "design-star-schema" in text
         assert "design-measures" in text
 
@@ -502,7 +502,7 @@ class TestNoCredentialsInInputs:
 
     @pytest.mark.parametrize("skill_file", _get_deployment_skill_files())
     def test_no_password_in_input_schema(self, skill_file):
-        text = skill_file.read_text()
+        text = skill_file.read_text(encoding='utf-8')
         # Find the Input Schema section
         input_section = re.search(
             r"## Input Schema\s*\n(.*?)(?=\n## |\Z)",

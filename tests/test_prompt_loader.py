@@ -120,7 +120,7 @@ class TestPromptConfigFiles:
     def test_system_prompts_are_valid_json(self):
         from kyvos_sm_skills.prompt_loader import _SYSTEM_PROMPTS_PATH
 
-        with open(_SYSTEM_PROMPTS_PATH) as f:
+        with open(_SYSTEM_PROMPTS_PATH, encoding="utf-8") as f:
             data = json.load(f)
         assert isinstance(data, dict)
         assert len(data) >= 4
@@ -128,7 +128,7 @@ class TestPromptConfigFiles:
     def test_user_prompts_are_valid_json(self):
         from kyvos_sm_skills.prompt_loader import _USER_PROMPTS_PATH
 
-        with open(_USER_PROMPTS_PATH) as f:
+        with open(_USER_PROMPTS_PATH, encoding="utf-8") as f:
             data = json.load(f)
         assert isinstance(data, dict)
         assert len(data) >= 10
