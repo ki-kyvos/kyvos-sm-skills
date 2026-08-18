@@ -11,10 +11,11 @@ https://docs.support.kyvosinsights.com/wiki/spaces/KD20265/pages/1102839809
 
 from __future__ import annotations
 
-import structlog
 import re
 import uuid
 from typing import Any
+
+import structlog
 
 from kyvos_sm_skills.models import TableSpec
 
@@ -70,7 +71,7 @@ class DatasetJsonGenerator:
                 },
                 "parameters": [],
                 "partitionDetails": {
-                    "metadataMode": "AUTO",
+                    "metadataMode": "SINGLE",
                     "columnName": "",
                     "tableName": "",
                     "tableRecordCount": "",

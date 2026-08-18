@@ -8,11 +8,12 @@ sent as a form-encoded ``json`` parameter.
 from __future__ import annotations
 
 import hashlib
-import structlog
 import re
 import time
 import xml.etree.ElementTree as ET
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -229,6 +230,40 @@ class SModelJsonGenerator:
                 aggregation_type=aggregation_type,
             )
         return _AGGREGATION_TYPE_TO_SUMMARYFUNCTION.get(agg_lower, "0")
+
+    def _resolve_physical_column_name(self, kyvos_ds_name: str, source_column: str) -> str:
+        """Resolve a MeasureSpec source_column to the physical Kyvos dataset column name.
+
+        The MeasureSpec may carry the Power BI display column name (e.g.
+        "Final Price Cents"), while the Kyvos dataset schema may use the same
+        display name, a snake_case physical name, or a name with a different
+        case.  We first try an exact (case-insensitive) match against the
+        dataset_columns we fetched from Kyvos; if that fails we also consult
+        any ``source_column`` metadata on the columns.  If nothing matches we
+        fall back to the original source_column.
+        """
+        if not source_column:
+            return source_column
+
+        col_candidates = self._cols_for(kyvos_ds_name)
+        if not col_candidates:
+            return source_column
+
+        src_lower = source_column.lower()
+
+        # 1) case-insensitive match on the column name
+        for col in col_candidates:
+            col_name = col.get("name") or ""
+            if col_name.lower() == src_lower:
+                return col_name
+
+        # 2) match on source_column metadata if the dataset loader provided it
+        for col in col_candidates:
+            col_src = col.get("source_column") or col.get("sourceColumn") or ""
+            if col_src.lower() == src_lower:
+                return col.get("name") or source_column
+
+        return source_column
 
     def _build_dimension(
         self,
@@ -509,8 +544,16 @@ class SModelJsonGenerator:
                         non_fk_cols = [c for c in fact_cols if not c.get("isForeignKey", False)]
                         # If no PK/FK metadata available, use name-based heuristics
                         if not pk_cols and not non_fk_cols:
-                            pk_cols = [c for c in fact_cols if c.get("name", "").lower().endswith("_key") or c.get("name", "").lower().endswith("_pk")]
-                            non_fk_cols = [c for c in fact_cols if not (c.get("name", "").lower().endswith("_key") or c.get("name", "").lower().endswith("_fk"))]
+                            pk_cols = [
+                                c for c in fact_cols
+                                if c.get("name", "").lower().endswith("_key")
+                                or c.get("name", "").lower().endswith("_pk")
+                            ]
+                            non_fk_cols = [
+                                c for c in fact_cols
+                                if not (c.get("name", "").lower().endswith("_key")
+                                        or c.get("name", "").lower().endswith("_fk"))
+                            ]
                         fallback_col = (pk_cols or non_fk_cols or fact_cols)[0]
                         effective_source_column = fallback_col.get("name", "")
                         logger.info(
@@ -547,6 +590,9 @@ class SModelJsonGenerator:
                     )
                 used_measure_names.add(measure_name.lower())
 
+                # Resolve dataField.content from the physical Kyvos dataset schema
+                physical_source_column = self._resolve_physical_column_name(kyvos_ds_name, effective_source_column)
+
                 measure_obj: dict[str, Any] = {
                     "id": measure_id,
                     "name": measure_name,
@@ -560,7 +606,7 @@ class SModelJsonGenerator:
                     "summaryFunction": summary_func,
                     "format": _format_obj(format_string or "#,##0.00"),
                     "materialize": "YES",
-                    "dataField": _data_field(kyvos_ds_name, effective_source_column, drd_node_id),
+                    "dataField": _data_field(kyvos_ds_name, physical_source_column, drd_node_id),
                 }
 
                 if is_calculated and expression:
@@ -569,7 +615,11 @@ class SModelJsonGenerator:
                         "content": expression,
                     }
                     measure_obj["summaryFunction"] = ""
+                    measure_obj["actualSummaryFunction"] = ""
                     measure_obj["dataField"] = _data_field("", "", "")
+                else:
+                    # Base measures need actualSummaryFunction to match summaryFunction
+                    measure_obj["actualSummaryFunction"] = summary_func
 
                 if agg_lower == "distinct_count":
                     measure_obj["isBoundaryDistCount"] = False

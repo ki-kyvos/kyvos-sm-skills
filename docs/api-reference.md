@@ -1,5 +1,7 @@
 # API Reference
 
+> **Deprecation notice:** The model and generator APIs documented below are retained for backward compatibility. New code should use the typed contracts in `kyvos_sdk.contracts.domain` and the pure compilers in `kyvos_sdk.compiler`. See `quickstart.md` for the recommended pattern.
+
 ## Models (`kyvos_sm_skills.models`)
 
 ### `ColumnSpec`

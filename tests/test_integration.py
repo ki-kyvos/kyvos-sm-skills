@@ -204,7 +204,7 @@ class TestFullPipeline:
             for fname in files:
                 if fname.endswith(".py"):
                     fpath = os.path.join(root, fname)
-                    with open(fpath) as f:
+                    with open(fpath, encoding="utf-8") as f:
                         content = f.read()
                     assert "from app." not in content, f"Found 'from app.' in {fpath}"
                     assert "import app." not in content, f"Found 'import app.' in {fpath}"

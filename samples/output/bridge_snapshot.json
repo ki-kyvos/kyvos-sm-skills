@@ -1,0 +1,919 @@
+{
+  "tables": [
+    {
+      "name": "dim_site",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "dimension",
+      "columns": [
+        {
+          "name": "site_id",
+          "data_type": "VARCHAR(255)",
+          "nullable": false,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Site ID",
+          "display_folder": ""
+        },
+        {
+          "name": "site_name",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Site Name",
+          "display_folder": ""
+        },
+        {
+          "name": "ulta_district",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Ulta District",
+          "display_folder": ""
+        },
+        {
+          "name": "ulta_district_name",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Ulta District Name",
+          "display_folder": ""
+        },
+        {
+          "name": "ulta_region",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Ulta Region",
+          "display_folder": ""
+        },
+        {
+          "name": "ulta_division",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Ulta Division",
+          "display_folder": ""
+        },
+        {
+          "name": "site_market_segment",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Site Market Segment",
+          "display_folder": ""
+        },
+        {
+          "name": "current_comp_flag",
+          "data_type": "CHAR(1)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Current Comp Flag",
+          "display_folder": ""
+        },
+        {
+          "name": "site_alt_name",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Site Alt Name",
+          "display_folder": ""
+        },
+        {
+          "name": "department_code",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "fdfb080ec5e4446e8c5e003d6e8bb2e2.bridge_department_code.department_code",
+          "description": "",
+          "column_samples": [],
+          "source_column": "Department Code",
+          "display_folder": ""
+        },
+        {
+          "name": "district",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "DISTRICT",
+          "display_folder": ""
+        },
+        {
+          "name": "store",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "STORE",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": null,
+      "is_hidden": false
+    },
+    {
+      "name": "dim_employee",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "dimension",
+      "columns": [
+        {
+          "name": "employee_id",
+          "data_type": "BIGINT",
+          "nullable": false,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Employee ID",
+          "display_folder": ""
+        },
+        {
+          "name": "employee_sk",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Employee SK",
+          "display_folder": ""
+        },
+        {
+          "name": "employee_name",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Employee Name",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": null,
+      "is_hidden": false
+    },
+    {
+      "name": "dim_time",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "dimension",
+      "columns": [
+        {
+          "name": "sale_hour",
+          "data_type": "BIGINT",
+          "nullable": false,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Sale Hour",
+          "display_folder": ""
+        },
+        {
+          "name": "sale_hour_am_pm",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Sale Hour AM PM",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": null,
+      "is_hidden": false
+    },
+    {
+      "name": "gel_tracker",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "fact",
+      "columns": [
+        {
+          "name": "business_day_date",
+          "data_type": "TIMESTAMP",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Business Day Date",
+          "display_folder": ""
+        },
+        {
+          "name": "site_id",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "fdfb080ec5e4446e8c5e003d6e8bb2e2.dim_site.site_id",
+          "description": "",
+          "column_samples": [],
+          "source_column": "Site ID",
+          "display_folder": ""
+        },
+        {
+          "name": "sale_hour",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "fdfb080ec5e4446e8c5e003d6e8bb2e2.dim_time.sale_hour",
+          "description": "",
+          "column_samples": [],
+          "source_column": "Sale Hour",
+          "display_folder": ""
+        },
+        {
+          "name": "employee_id",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "fdfb080ec5e4446e8c5e003d6e8bb2e2.dim_employee.employee_id",
+          "description": "",
+          "column_samples": [],
+          "source_column": "Employee ID",
+          "display_folder": ""
+        },
+        {
+          "name": "most_recent_transaction_time",
+          "data_type": "TIMESTAMP",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Most Recent Transaction Time",
+          "display_folder": ""
+        },
+        {
+          "name": "prorated_budget",
+          "data_type": "NUMERIC(18,4)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Prorated Budget",
+          "display_folder": ""
+        },
+        {
+          "name": "net_sales",
+          "data_type": "NUMERIC(18,4)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Net Sales",
+          "display_folder": ""
+        },
+        {
+          "name": "item_quantity",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Item Quantity",
+          "display_folder": ""
+        },
+        {
+          "name": "traffic_count",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Traffic Count",
+          "display_folder": ""
+        },
+        {
+          "name": "transaction_count",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Transaction Count",
+          "display_folder": ""
+        },
+        {
+          "name": "stretch_hourly_goal",
+          "data_type": "NUMERIC(18,4)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Stretch Hourly Goal",
+          "display_folder": ""
+        },
+        {
+          "name": "c_date",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "computed column",
+          "column_samples": [],
+          "source_column": null,
+          "display_folder": ""
+        },
+        {
+          "name": "composite_key_int",
+          "data_type": "BIGINT",
+          "nullable": false,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "COMPOSITE_KEY_Int",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": 100000,
+      "is_hidden": false
+    },
+    {
+      "name": "bridge_department_code",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "bridge",
+      "columns": [
+        {
+          "name": "department_code",
+          "data_type": "BIGINT",
+          "nullable": false,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Department_Code",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": null,
+      "is_hidden": false
+    },
+    {
+      "name": "fact_loyalty_member",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "fact",
+      "columns": [
+        {
+          "name": "loyalty_signups",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Loyalty SignUps",
+          "display_folder": ""
+        },
+        {
+          "name": "business_day_date",
+          "data_type": "TIMESTAMP",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Business Day Date",
+          "display_folder": ""
+        },
+        {
+          "name": "local_transaction_ts",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "LOCAL_TRANSACTION_TS",
+          "display_folder": ""
+        },
+        {
+          "name": "composite_key_int",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "fdfb080ec5e4446e8c5e003d6e8bb2e2.gel_tracker.composite_key_int",
+          "description": "",
+          "column_samples": [],
+          "source_column": "COMPOSITE_KEY_Int",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": 100000,
+      "is_hidden": false
+    },
+    {
+      "name": "agg_instant_credit_count",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "fact",
+      "columns": [
+        {
+          "name": "instant_credit_applications",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Instant Credit Applications",
+          "display_folder": ""
+        },
+        {
+          "name": "store_id",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Store id",
+          "display_folder": ""
+        },
+        {
+          "name": "business_day_date",
+          "data_type": "TIMESTAMP",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Business Day Date",
+          "display_folder": ""
+        },
+        {
+          "name": "composite_key_int",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "fdfb080ec5e4446e8c5e003d6e8bb2e2.gel_tracker.composite_key_int",
+          "description": "",
+          "column_samples": [],
+          "source_column": "COMPOSITE_KEY_Int",
+          "display_folder": ""
+        },
+        {
+          "name": "doordashflag",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "DoordashFlag",
+          "display_folder": ""
+        },
+        {
+          "name": "marketplaceflag",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "MarketplaceFlag",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": 100000,
+      "is_hidden": false
+    },
+    {
+      "name": "agg_prompted_credit_count",
+      "schema_name": "gel_flash_data_model",
+      "table_type": "fact",
+      "columns": [
+        {
+          "name": "prompted_credit_applications",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Prompted Credit Applications",
+          "display_folder": ""
+        },
+        {
+          "name": "store_id",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Store id",
+          "display_folder": ""
+        },
+        {
+          "name": "business_day_date",
+          "data_type": "TIMESTAMP",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "Business Day Date",
+          "display_folder": ""
+        },
+        {
+          "name": "composite_key_int",
+          "data_type": "BIGINT",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "fdfb080ec5e4446e8c5e003d6e8bb2e2.gel_tracker.composite_key_int",
+          "description": "",
+          "column_samples": [],
+          "source_column": "COMPOSITE_KEY_Int",
+          "display_folder": ""
+        },
+        {
+          "name": "doordashflag",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "DoordashFlag",
+          "display_folder": ""
+        },
+        {
+          "name": "marketplaceflag",
+          "data_type": "VARCHAR(255)",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "description": "",
+          "column_samples": [],
+          "source_column": "MarketplaceFlag",
+          "display_folder": ""
+        }
+      ],
+      "description": "",
+      "row_count_target": 100000,
+      "is_hidden": false
+    }
+  ],
+  "relationships": [
+    {
+      "left_dataset": "gel_tracker",
+      "left_column": "employee_id",
+      "right_dataset": "dim_employee",
+      "right_column": "employee_id",
+      "relationship_type": "many_to_one",
+      "semantic_role": "fact_dimension",
+      "active": true,
+      "description": ""
+    },
+    {
+      "left_dataset": "gel_tracker",
+      "left_column": "sale_hour",
+      "right_dataset": "dim_time",
+      "right_column": "sale_hour",
+      "relationship_type": "many_to_one",
+      "semantic_role": "fact_dimension",
+      "active": true,
+      "description": ""
+    },
+    {
+      "left_dataset": "gel_tracker",
+      "left_column": "site_id",
+      "right_dataset": "dim_site",
+      "right_column": "site_id",
+      "relationship_type": "many_to_one",
+      "semantic_role": "fact_dimension",
+      "active": true,
+      "description": ""
+    },
+    {
+      "left_dataset": "dim_site",
+      "left_column": "department_code",
+      "right_dataset": "bridge_department_code",
+      "right_column": "department_code",
+      "relationship_type": "many_to_one",
+      "semantic_role": "auto",
+      "active": true,
+      "description": ""
+    },
+    {
+      "left_dataset": "agg_instant_credit_count",
+      "left_column": "composite_key_int",
+      "right_dataset": "gel_tracker",
+      "right_column": "composite_key_int",
+      "relationship_type": "many_to_one",
+      "semantic_role": "auto",
+      "active": true,
+      "description": ""
+    },
+    {
+      "left_dataset": "agg_prompted_credit_count",
+      "left_column": "composite_key_int",
+      "right_dataset": "gel_tracker",
+      "right_column": "composite_key_int",
+      "relationship_type": "many_to_one",
+      "semantic_role": "auto",
+      "active": true,
+      "description": ""
+    },
+    {
+      "left_dataset": "fact_loyalty_member",
+      "left_column": "composite_key_int",
+      "right_dataset": "gel_tracker",
+      "right_column": "composite_key_int",
+      "relationship_type": "many_to_one",
+      "semantic_role": "auto",
+      "active": true,
+      "description": ""
+    }
+  ],
+  "measures": [
+    {
+      "name": "m_Net_Sales",
+      "expression": "IIF(\n        (\"TRUE\" = (([Measures].[Net Sales]) = 0)),\n        NULL,\n        ([Measures].[Net Sales])\n    )",
+      "format_string": "\\$#,0.00;(\\$#,0.00);\\$#,0.00",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "m_Prorated_Budget",
+      "expression": "",
+      "format_string": "\\$#,0.00;(\\$#,0.00);\\$#,0.00",
+      "description": "",
+      "is_calculated": false,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": "prorated_budget",
+      "is_hidden": false
+    },
+    {
+      "name": "m_Variance_to_Goal",
+      "expression": "([Measures].[m_Net_Sales] - [Measures].[m_Prorated_Budget])",
+      "format_string": "\\$#,0.00;(\\$#,0.00);\\$#,0.00",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "m_Pct_to_Goal",
+      "expression": "IIF(\n    [Measures].[m_Prorated_Budget] = 0,\n    NULL,\n    (IIF(\n        (\"TRUE\" = IsEmpty([Measures].[m_Net_Sales])),\n        0,\n        [Measures].[m_Net_Sales]\n    ) - [Measures].[m_Prorated_Budget]) / [Measures].[m_Prorated_Budget]\n)",
+      "format_string": "0.00%;-0.00%;0.00%",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "m_Traffic_Count",
+      "expression": "",
+      "format_string": "#,0",
+      "description": "",
+      "is_calculated": false,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": "traffic_count",
+      "is_hidden": false
+    },
+    {
+      "name": "m_Transaction_Count",
+      "expression": "",
+      "format_string": "#,0",
+      "description": "",
+      "is_calculated": false,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": "transaction_count",
+      "is_hidden": false
+    },
+    {
+      "name": "m_Traffic_Conversion",
+      "expression": "IIF(\n        (\"TRUE\" = ((IIF(\n        [Measures].[m_Traffic_Count] = 0,\n        NULL,\n        [Measures].[m_Transaction_Count] / [Measures].[m_Traffic_Count]\n    )) = 0)),\n        NULL,\n        (IIF(\n        [Measures].[m_Traffic_Count] = 0,\n        NULL,\n        [Measures].[m_Transaction_Count] / [Measures].[m_Traffic_Count]\n    ))\n    )",
+      "format_string": "#,0.00%;-#,0.00%;#,0.00%",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "m_Average_Ticket",
+      "expression": "IIF(\n    [Measures].[m_Transaction_Count] = 0,\n    NULL,\n    [Measures].[m_Net_Sales] / [Measures].[m_Transaction_Count]\n)",
+      "format_string": "\\$#,0.00;(\\$#,0.00);\\$#,0.00",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "m_Item_Quantity",
+      "expression": "",
+      "format_string": "#,0",
+      "description": "",
+      "is_calculated": false,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": "item_quantity",
+      "is_hidden": false
+    },
+    {
+      "name": "m_UPT",
+      "expression": "IIF(\n    [Measures].[m_Transaction_Count] = 0,\n    NULL,\n    [Measures].[m_Item_Quantity] / [Measures].[m_Transaction_Count]\n)",
+      "format_string": "",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "m_Designated_GEL",
+      "expression": "COUNT(\n    EXISTING [Dim Site].[STORE].[STORE].MEMBERS\n) = 1",
+      "format_string": "",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "m_Stretch_Hourly_Goal",
+      "expression": "",
+      "format_string": "\\$#,0.00;(\\$#,0.00);\\$#,0.00",
+      "description": "",
+      "is_calculated": false,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": "stretch_hourly_goal",
+      "is_hidden": false
+    },
+    {
+      "name": "Loyalty Member Signups",
+      "expression": "",
+      "format_string": "#,0",
+      "description": "",
+      "is_calculated": false,
+      "source_dataset": "fact_loyalty_member",
+      "aggregation_type": "sum",
+      "source_column": "loyalty_signups",
+      "is_hidden": false
+    },
+    {
+      "name": "Credit Card Count",
+      "expression": "(([Measures].[Instant Credit Applications] + [Measures].[Prompted Credit Applications])) * IIF(\n        (([Measures].[Instant Credit Applications] + [Measures].[Prompted Credit Applications])) = 0,\n        NULL,\n        (([Measures].[Instant Credit Applications] + [Measures].[Prompted Credit Applications])) / (([Measures].[Instant Credit Applications] + [Measures].[Prompted Credit Applications]))\n    )",
+      "format_string": "0",
+      "description": "",
+      "is_calculated": true,
+      "source_dataset": "agg_prompted_credit_count",
+      "aggregation_type": "sum",
+      "source_column": null,
+      "is_hidden": false
+    },
+    {
+      "name": "Instant Credit Applications",
+      "expression": "",
+      "format_string": "#,##0.00",
+      "description": "Auto-created base measure for instant_credit_applications on agg_instant_credit_count",
+      "is_calculated": false,
+      "source_dataset": "agg_instant_credit_count",
+      "aggregation_type": "sum",
+      "source_column": "instant_credit_applications",
+      "is_hidden": false
+    },
+    {
+      "name": "Net Sales",
+      "expression": "",
+      "format_string": "#,##0.00",
+      "description": "Auto-created base measure for net_sales on gel_tracker",
+      "is_calculated": false,
+      "source_dataset": "gel_tracker",
+      "aggregation_type": "sum",
+      "source_column": "net_sales",
+      "is_hidden": false
+    },
+    {
+      "name": "Prompted Credit Applications",
+      "expression": "",
+      "format_string": "#,##0.00",
+      "description": "Auto-created base measure for prompted_credit_applications on agg_prompted_credit_count",
+      "is_calculated": false,
+      "source_dataset": "agg_prompted_credit_count",
+      "aggregation_type": "sum",
+      "source_column": "prompted_credit_applications",
+      "is_hidden": false
+    }
+  ],
+  "dataset_aliases": {
+    "dim_site": "DimSite",
+    "dim_employee": "DimEmployee",
+    "dim_time": "DimTime",
+    "gel_tracker": "GelTracker",
+    "bridge_department_code": "BridgeDepartmentCode",
+    "fact_loyalty_member": "FactLoyaltyMember",
+    "agg_instant_credit_count": "AggInstantCreditCount",
+    "agg_prompted_credit_count": "AggPromptedCreditCount"
+  }
+}

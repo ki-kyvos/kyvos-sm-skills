@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import structlog
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
 from xml.etree import ElementTree as ET
+
+import structlog
 
 _logger = structlog.get_logger(__name__)
 
@@ -261,7 +263,9 @@ class DrdXmlGenerator:
         # Layout positions
         # ------------------------------------------------------------------
         layout_el = ET.SubElement(drdobj, "LAYOUT")
-        positions = self._build_node_positions(ordered_kyvos_names)
+        positions = self._build_node_positions(
+            ordered_kyvos_names, relationships, fact_datasets, semantic_to_kyvos
+        )
 
         for kyvos_name in ordered_kyvos_names:
             node_id = kyvos_name_to_node_id[kyvos_name]
@@ -334,39 +338,24 @@ class DrdXmlGenerator:
         """
         Keep Kyvos-friendly DRD types.
 
-        Your current working DRDs use ONE_TO_MANY.
         For now:
-          many_to_one / one_to_many / auto -> ONE_TO_MANY
+          many_to_one  -> MANY_TO_ONE
+          one_to_many  -> ONE_TO_MANY
           many_to_many -> MANY_TO_MANY
-          one_to_one -> ONE_TO_ONE
+          one_to_one   -> ONE_TO_ONE
         """
-        value = (rel_type or "").strip().lower()
+        value = (rel_type or "").strip().lower().replace("_", "")
 
-        if value in {"many_to_many", "manytomany"}:
+        if value in {"manytomany"}:
             return "MANY_TO_MANY"
-        if value in {"one_to_one", "onetone"}:
+        if value in {"onetoone", "onetone"}:
             return "ONE_TO_ONE"
+        if value in {"manytoone"}:
+            return "MANY_TO_ONE"
+        if value in {"onetomany"}:
+            return "ONE_TO_MANY"
 
         return "ONE_TO_MANY"
-
-    def _build_node_positions(self, ordered_kyvos_names: list[str]) -> dict[str, tuple[int, int]]:
-        """
-        Simple grid layout.
-        Good enough for DRD generation and multi-fact safe.
-        """
-        positions: dict[str, tuple[int, int]] = {}
-        base_left = 50
-        base_top = 50
-        x_gap = 260
-        y_gap = 220
-        cols = 3
-
-        for idx, kyvos_name in enumerate(ordered_kyvos_names):
-            col = idx % cols
-            row = idx // cols
-            positions[kyvos_name] = (base_left + col * x_gap, base_top + row * y_gap)
-
-        return positions
 
     def _orient_dim_relationships(
         self,
@@ -424,6 +413,70 @@ class DrdXmlGenerator:
                 oriented.append(rel)
 
         return oriented
+
+    def _build_node_positions(
+        self,
+        ordered_kyvos_names: list[str],
+        relationships: list[SimpleRel],
+        fact_datasets: set[str],
+        semantic_to_kyvos: dict[str, str],
+        *,
+        base_left: int = 50,
+        base_top: int = 50,
+        x_gap: int = 260,
+        y_gap: int = 220,
+    ) -> dict[str, tuple[int, int]]:
+        """Return ``{kyvos_name: (left, top)}`` using BFS depth from fact nodes.
+
+        Treats the graph as undirected so the visual layout is:
+            FACT (depth 0) → DIM (depth 1) → downstream DIM (depth 2) → ...
+        """
+        positions: dict[str, tuple[int, int]] = {}
+
+        if not fact_datasets:
+            cols = 3
+            for idx, kyvos_name in enumerate(ordered_kyvos_names):
+                col = idx % cols
+                row = idx // cols
+                positions[kyvos_name] = (base_left + col * x_gap, base_top + row * y_gap)
+            return positions
+
+        adj: dict[str, set[str]] = {name: set() for name in ordered_kyvos_names}
+        for rel in relationships:
+            left = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
+            right = semantic_to_kyvos.get(rel.right_dataset, rel.right_dataset)
+            if left in adj and right in adj:
+                adj[left].add(right)
+                adj[right].add(left)
+
+        fact_names = {n for n in fact_datasets if n in adj}
+        depth: dict[str, int] = {}
+        queue: deque[str] = deque(sorted(fact_names))
+        for fact_name in queue:
+            depth[fact_name] = 0
+
+        while queue:
+            current = queue.popleft()
+            for neighbor in adj[current]:
+                if neighbor not in depth:
+                    depth[neighbor] = depth[current] + 1
+                    queue.append(neighbor)
+
+        max_depth = max(depth.values()) if depth else -1
+
+        by_depth: dict[int, list[str]] = {}
+        for name in ordered_kyvos_names:
+            d = depth.get(name, max_depth + 1)
+            by_depth.setdefault(d, []).append(name)
+
+        for d, names in sorted(by_depth.items()):
+            for row, name in enumerate(sorted(names)):
+                left = base_left + d * x_gap
+                top = base_top + row * y_gap
+                positions[name] = (left, top)
+
+        return positions
+
 
     def _gen_id(self) -> str:
         import random
