@@ -339,6 +339,13 @@ def build_drd_graph(
                 left_name=left_kyvos,
                 right_name=right_kyvos,
             )
+            # Kyvos DRDs are known to work with ONE_TO_MANY for fact <-> dimension
+            # joins (source is the "many" side). Collapse MANY_TO_ONE into
+            # ONE_TO_MANY here so this common case matches that convention;
+            # the dim-to-dim snowflake case above already sets ONE_TO_MANY
+            # explicitly after swapping source/target.
+            if rel_type == "MANY_TO_ONE":
+                rel_type = "ONE_TO_MANY"
 
         source_node_id = name_to_node_id[source]
         target_node_id = name_to_node_id[target]

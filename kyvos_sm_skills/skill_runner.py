@@ -140,8 +140,13 @@ def _collect_and_cleanup_entities(
 ) -> bool:
     """Collect and optionally delete old entities matching the base_name prefixes.
 
-    Scans all RDATASET, DATASET_RELATIONSHIP, and SMODEL folders for entities
-    whose names start with any derived prefix.  Also matches folder names.
+    Scans all RDATASET, DATASET_RELATIONSHIP, and SMODEL folders whose names
+    start with any derived prefix, and collects every entity (dataset, DRD,
+    or semantic model) inside each matching folder. The folder match is the
+    containment boundary — entity names (e.g. dataset names mirroring
+    warehouse table names) are not required to also start with the prefix,
+    since folders are created per-flow and everything inside one belongs to
+    that flow.
 
     Safety features:
     - Protected folders (from KYVOS_PROTECTED_FOLDERS env var) are never deleted.
@@ -230,7 +235,13 @@ def _collect_and_cleanup_entities(
             # This avoids listing entities from unrelated folders (BFSI, Healthcare, etc.)
             if not _matches(folder_name):
                 continue
-            # Folder matches — collect entities inside it
+            # Folder matches — collect entities inside it. Entity names
+            # (e.g. dataset names mirroring warehouse table names) are not
+            # expected to carry the SM base_name prefix themselves, so the
+            # folder match (already hardened via _MIN_PREFIX_LEN, prefix
+            # collision checks, protected folders, and folder_suffix scoping)
+            # is the real containment boundary for "does this entity belong
+            # to this cleanup run".
             if ft == FolderType.RDATASET:
                 ds_list = insp.list_datasets_in_folder(folder_name)
                 if ds_list.succeeded and ds_list.entity_refs:
