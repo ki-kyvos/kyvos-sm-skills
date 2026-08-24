@@ -336,13 +336,9 @@ class DrdXmlGenerator:
 
     def _normalize_relationship_type(self, rel_type: str | None) -> str:
         """
-        Keep Kyvos-friendly DRD types.
-
-        For now:
-          many_to_one  -> MANY_TO_ONE
-          one_to_many  -> ONE_TO_MANY
-          many_to_many -> MANY_TO_MANY
-          one_to_one   -> ONE_TO_ONE
+        Kyvos DRD UI convention: arrow is drawn from the parent (one) side
+        toward the child (many) side, so a foreign-key ``many_to_one``
+        relationship is rendered as ``ONE_TO_MANY``.
         """
         value = (rel_type or "").strip().lower().replace("_", "")
 
@@ -350,9 +346,7 @@ class DrdXmlGenerator:
             return "MANY_TO_MANY"
         if value in {"onetoone", "onetone"}:
             return "ONE_TO_ONE"
-        if value in {"manytoone"}:
-            return "MANY_TO_ONE"
-        if value in {"onetomany"}:
+        if value in {"manytoone", "onetomany"}:
             return "ONE_TO_MANY"
 
         return "ONE_TO_MANY"
@@ -363,25 +357,13 @@ class DrdXmlGenerator:
         fact_datasets: set[str],
         semantic_to_kyvos: dict[str, str],
     ) -> list[SimpleRel]:
-        """Re-orient dim→dim relationships that point INTO a fact-adjacent dimension.
+        """Re-orient dim→dim relationships so the parent dimension is the source.
 
-        Detects: Fact → DimX ← DimY  (wrong: DimY points TO a fact-connected dim)
-        Fixes:   Fact → DimX → DimY  (correct: snowflake chain)
-
-        A dimension is "fact-adjacent" when at least one fact has it as the right side
-        of a relationship (i.e., a fact directly joins to it).
+        The semantic parser stores relationships as ``many_to_one`` with the
+        FK-holding (child) table on the left and the referenced (parent)
+        dimension on the right. In a snowflake this reads child -> parent, so
+        swap those relationships so the DRD arrow goes parent -> child.
         """
-        fact_adjacent_semantic: set[str] = set()
-        fact_adjacent_kyvos: set[str] = set()
-
-        for rel in relationships:
-            left_kyvos = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
-            if left_kyvos in fact_datasets:
-                fact_adjacent_semantic.add(rel.right_dataset)
-                fact_adjacent_kyvos.add(
-                    semantic_to_kyvos.get(rel.right_dataset, rel.right_dataset)
-                )
-
         oriented: list[SimpleRel] = []
         for rel in relationships:
             left_kyvos = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
@@ -390,23 +372,16 @@ class DrdXmlGenerator:
             is_dim_to_dim = (
                 left_kyvos not in fact_datasets and right_kyvos not in fact_datasets
             )
-            right_is_fact_adjacent = (
-                rel.right_dataset in fact_adjacent_semantic
-                or right_kyvos in fact_adjacent_kyvos
-            )
-            left_is_not_fact_adjacent = (
-                rel.left_dataset not in fact_adjacent_semantic
-                and left_kyvos not in fact_adjacent_kyvos
-            )
+            raw_type = (rel.relationship_type or "").strip().lower().replace("_", "")
 
-            if is_dim_to_dim and right_is_fact_adjacent and left_is_not_fact_adjacent:
+            if is_dim_to_dim and raw_type in {"manytoone"}:
                 oriented.append(
                     SimpleRel(
                         left_dataset=rel.right_dataset,
                         left_column=rel.right_column,
                         right_dataset=rel.left_dataset,
                         right_column=rel.left_column,
-                        relationship_type=rel.relationship_type,
+                        relationship_type="one_to_many",
                     )
                 )
             else:
@@ -417,9 +392,9 @@ class DrdXmlGenerator:
     def _build_node_positions(
         self,
         ordered_kyvos_names: list[str],
-        relationships: list[SimpleRel],
-        fact_datasets: set[str],
-        semantic_to_kyvos: dict[str, str],
+        relationships: list[SimpleRel] | None = None,
+        fact_datasets: set[str] | None = None,
+        semantic_to_kyvos: dict[str, str] | None = None,
         *,
         base_left: int = 50,
         base_top: int = 50,
@@ -432,6 +407,9 @@ class DrdXmlGenerator:
             FACT (depth 0) → DIM (depth 1) → downstream DIM (depth 2) → ...
         """
         positions: dict[str, tuple[int, int]] = {}
+        relationships = relationships or []
+        fact_datasets = fact_datasets or set()
+        semantic_to_kyvos = semantic_to_kyvos or {}
 
         if not fact_datasets:
             cols = 3

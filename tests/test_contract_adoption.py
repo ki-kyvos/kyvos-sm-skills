@@ -314,6 +314,96 @@ class TestBuildDrdGraph:
         )
         assert graph.drd_ref.id == "drd_explicit_123"
 
+    def test_prunes_redundant_snowflake_parent_relationships(self):
+        """A snowflake child dimension with multiple parents keeps only the
+        parent that is directly joined to the most facts."""
+        rels = [
+            SimpleRel(
+                left_dataset="fact_a",
+                left_column="date_key",
+                right_dataset="DimCalendar",
+                right_column="date_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_b",
+                left_column="date_key",
+                right_dataset="DimCalendar",
+                right_column="date_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_c",
+                left_column="site_key",
+                right_dataset="DimSiteRegion",
+                right_column="site_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimCustomer",
+                left_column="signup_date",
+                right_dataset="DimCalendar",
+                right_column="date_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimCustomer",
+                left_column="signup_store_id",
+                right_dataset="DimSiteRegion",
+                right_column="site_key",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {
+            "fact_a": "ds_f1",
+            "fact_b": "ds_f2",
+            "fact_c": "ds_f3",
+            "DimCalendar": "ds_dc",
+            "DimSiteRegion": "ds_sr",
+            "DimCustomer": "ds_cu",
+        }
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"fact_a", "fact_b", "fact_c"},
+        )
+        id_to_alias = {n.node_id: n.alias for n in graph.nodes}
+        rel_aliases = {
+            (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
+            for r in graph.relations
+        }
+        assert ("DimCalendar", "DimCustomer") in rel_aliases
+        assert ("DimSiteRegion", "DimCustomer") not in rel_aliases
+
+    def test_dim_to_dim_relationship_oriented_parent_to_child(self):
+        """Snowflake dim->dim relationships should point parent (one side) to child."""
+        rels = [
+            SimpleRel(
+                left_dataset="dim_customer",
+                left_column="signup_store_id",
+                right_dataset="dim_site",
+                right_column="site_relation_id",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {"dim_customer": "ds_001", "dim_site": "ds_002"}
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names=set(),
+        )
+        assert len(graph.relations) == 1
+        rel = graph.relations[0]
+        assert rel.source_node_id == "ds_002_2"
+        assert rel.target_node_id == "ds_001_1"
+        assert rel.relation_type == "ONE_TO_MANY"
+        assert rel.source_column == "site_relation_id"
+        assert rel.target_column == "signup_store_id"
+
 
 # ── DRD compiler adapter tests ─────────────────────────────────────────────
 

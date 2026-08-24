@@ -593,6 +593,25 @@ class SModelJsonGenerator:
                 # Resolve dataField.content from the physical Kyvos dataset schema
                 physical_source_column = self._resolve_physical_column_name(kyvos_ds_name, effective_source_column)
 
+                # Defensive fallback: if the resolved column doesn't exist, pick a
+                # real column so the measure doesn't reference a missing field.
+                cols = self._cols_for(kyvos_ds_name) or self._cols_for(ds_name)
+                if cols and not any(
+                    (c.get("name") or "").lower() == (physical_source_column or "").lower()
+                    for c in cols
+                ):
+                    if agg_lower in ("count", "distinct_count"):
+                        pk_cols = [c for c in cols if c.get("isPrimaryKey", False)]
+                        non_fk_cols = [c for c in cols if not c.get("isForeignKey", False)]
+                        fallback_col = (pk_cols or non_fk_cols or cols)[0]
+                        physical_source_column = fallback_col.get("name", physical_source_column)
+                        logger.warning(
+                            "smodel_json_datafield_fallback",
+                            measure=measure_name,
+                            fallback_column=physical_source_column,
+                            dataset=kyvos_ds_name,
+                        )
+
                 measure_obj: dict[str, Any] = {
                     "id": measure_id,
                     "name": measure_name,

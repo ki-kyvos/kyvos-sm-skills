@@ -332,22 +332,13 @@ class DrdJsonGenerator:
         fact_datasets: set[str],
         semantic_to_kyvos: dict[str, str],
     ) -> list[SimpleRel]:
-        """Re-orient dim→dim relationships that point INTO a fact-adjacent dimension.
+        """Re-orient dim→dim relationships so the parent dimension is the source.
 
-        Detects: Fact → DimX ← DimY  (wrong: DimY points TO a fact-connected dim)
-        Fixes:   Fact → DimX → DimY  (correct: snowflake chain)
+        The semantic parser stores relationships as ``many_to_one`` with the
+        FK-holding (child) table on the left and the referenced (parent)
+        dimension on the right. In a snowflake this reads child -> parent, so
+        swap those relationships so the DRD arrow goes parent -> child.
         """
-        fact_adjacent_semantic: set[str] = set()
-        fact_adjacent_kyvos: set[str] = set()
-
-        for rel in relationships:
-            left_kyvos = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
-            if left_kyvos in fact_datasets:
-                fact_adjacent_semantic.add(rel.right_dataset)
-                fact_adjacent_kyvos.add(
-                    semantic_to_kyvos.get(rel.right_dataset, rel.right_dataset)
-                )
-
         oriented: list[SimpleRel] = []
         for rel in relationships:
             left_kyvos = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
@@ -356,23 +347,16 @@ class DrdJsonGenerator:
             is_dim_to_dim = (
                 left_kyvos not in fact_datasets and right_kyvos not in fact_datasets
             )
-            right_is_fact_adjacent = (
-                rel.right_dataset in fact_adjacent_semantic
-                or right_kyvos in fact_adjacent_kyvos
-            )
-            left_is_not_fact_adjacent = (
-                rel.left_dataset not in fact_adjacent_semantic
-                and left_kyvos not in fact_adjacent_kyvos
-            )
+            rel_type = self._normalize_relationship_type(rel.relationship_type)
 
-            if is_dim_to_dim and right_is_fact_adjacent and left_is_not_fact_adjacent:
+            if is_dim_to_dim and rel_type == "MANY_TO_ONE":
                 oriented.append(
                     SimpleRel(
                         left_dataset=rel.right_dataset,
                         left_column=rel.right_column,
                         right_dataset=rel.left_dataset,
                         right_column=rel.left_column,
-                        relationship_type=rel.relationship_type,
+                        relationship_type="one_to_many",
                     )
                 )
             else:

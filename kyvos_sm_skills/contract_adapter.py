@@ -118,6 +118,93 @@ def compile_dataset_artifact(
     )
 
 
+def _resolve_alias(name: str, aliases: dict[str, str], aliases_ci: dict[str, str]) -> str:
+    return aliases.get(name) or aliases_ci.get(name.lower()) or name
+
+
+def _prune_snowflake_parents(
+    relationships: list[SimpleRel],
+    *,
+    aliases: dict[str, str],
+    aliases_ci: dict[str, str],
+    fact_set: set[str],
+    bridge_set: set[str],
+) -> list[SimpleRel]:
+    """Drop all but one parent relationship for snowflake child dimensions.
+
+    The semantic parser emits snowflake dimensions with the FK-holding child
+    table on the left and each referenced parent dimension on the right. In a
+    multi-fact Kyvos model a shared dimension must be reachable from every
+    measure group through the same join path, so a child dimension with more
+    than one parent would be invalid. For each such child we keep only the
+    parent that has the most direct fact connections and discard the others.
+    """
+    def resolve(name: str) -> str:
+        return _resolve_alias(name, aliases, aliases_ci)
+
+    def is_fact_or_bridge(name: str) -> bool:
+        n = resolve(name)
+        return n in fact_set or n in bridge_set
+
+    # Count direct fact-to-parent edges for every candidate parent dimension.
+    parent_fact_edges: dict[str, int] = {}
+    for rel in relationships:
+        left = resolve(rel.left_dataset)
+        right = resolve(rel.right_dataset)
+        left_fb = is_fact_or_bridge(left)
+        right_fb = is_fact_or_bridge(right)
+        if left_fb and not right_fb:
+            parent_fact_edges[right] = parent_fact_edges.get(right, 0) + 1
+        elif right_fb and not left_fb:
+            parent_fact_edges[left] = parent_fact_edges.get(left, 0) + 1
+
+    # Map each snowflake child dimension to the dim->dim relationships that
+    # connect it to a candidate parent.
+    child_to_parents: dict[str, list[tuple[int, str, SimpleRel]]] = {}
+    for idx, rel in enumerate(relationships):
+        left = resolve(rel.left_dataset)
+        right = resolve(rel.right_dataset)
+        if is_fact_or_bridge(left) or is_fact_or_bridge(right):
+            continue
+        rel_type = _normalize_rel_type(rel.relationship_type)
+        if rel_type == "MANY_TO_ONE":
+            child, parent = left, right
+        elif rel_type == "ONE_TO_MANY":
+            child, parent = right, left
+        else:
+            continue
+        child_to_parents.setdefault(child, []).append((idx, parent, rel))
+
+    # Drop redundant parent relationships. Skip children that are already
+    # directly joined to facts; those are conformed dimensions, not snowflake
+    # leaves, and we should not alter their graph connections.
+    to_drop: set[int] = set()
+    for child, candidates in child_to_parents.items():
+        if len(candidates) <= 1:
+            continue
+        # Count direct fact edges to the child itself.
+        child_fact_edges = sum(
+            1
+            for rel in relationships
+            if (
+                (is_fact_or_bridge(resolve(rel.left_dataset)) and resolve(rel.right_dataset) == child)
+                or (is_fact_or_bridge(resolve(rel.right_dataset)) and resolve(rel.left_dataset) == child)
+            )
+        )
+        if child_fact_edges:
+            continue
+        # Keep the parent that is directly joined to the most facts.
+        # Ties are broken deterministically by parent name.
+        ordered = sorted(
+            candidates,
+            key=lambda item: (-parent_fact_edges.get(item[1], 0), item[1]),
+        )
+        for drop_idx, _, _ in ordered[1:]:
+            to_drop.add(drop_idx)
+
+    return [rel for idx, rel in enumerate(relationships) if idx not in to_drop]
+
+
 def build_drd_graph(
     *,
     drd_name: str,
@@ -167,6 +254,14 @@ def build_drd_graph(
     id_map_ci: dict[str, str] = {k.lower(): v for k, v in dataset_name_to_id.items()}
     fact_set = fact_dataset_names or set()
     bridge_set = bridge_dataset_names or set()
+
+    relationships = _prune_snowflake_parents(
+        relationships,
+        aliases=aliases,
+        aliases_ci=aliases_ci,
+        fact_set=fact_set,
+        bridge_set=bridge_set,
+    )
 
     # Ensure drd_id is non-empty for EntityRef validation
     if not drd_id or not drd_id.strip():
@@ -221,15 +316,32 @@ def build_drd_graph(
         if not left_node_id or not right_node_id:
             continue
 
-        source, target, source_col, target_col = _resolve_drd_source_target(
-            rel=rel,
-            left_name=left_kyvos,
-            right_name=right_kyvos,
+        # For dimension-to-dimension relationships the semantic parser records the
+        # FK-holding table on the left and the referenced (parent) dimension on the
+        # right as a many-to-one relationship. In the DRD we want the parent (one side)
+        # to be the source so the arrow reads parent -> child in the snowflake.
+        rel_type = _normalize_rel_type(rel.relationship_type)
+        is_fact_or_bridge = lambda n: n in fact_set or n in bridge_set
+        is_dim_to_dim = (
+            not is_fact_or_bridge(left_kyvos) and not is_fact_or_bridge(right_kyvos)
         )
+        if is_dim_to_dim and rel_type == "MANY_TO_ONE":
+            source, target, source_col, target_col = (
+                right_kyvos,
+                left_kyvos,
+                rel.right_column,
+                rel.left_column,
+            )
+            rel_type = "ONE_TO_MANY"
+        else:
+            source, target, source_col, target_col = _resolve_drd_source_target(
+                rel=rel,
+                left_name=left_kyvos,
+                right_name=right_kyvos,
+            )
 
         source_node_id = name_to_node_id[source]
         target_node_id = name_to_node_id[target]
-        rel_type = _normalize_rel_type(rel.relationship_type)
         relations.append(DrdRelation(
             relation_id=f"rel_{rel_idx}",
             source_node_id=source_node_id,
