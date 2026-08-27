@@ -1716,7 +1716,7 @@ def run_deploy_from_pbit(
     print("  Step 2: Parse PBIT + derive names")
     print(f"{'─' * 70}")
 
-    from kyvos_xmla_parser.pbit_adapter import enrich_spec_from_pbit
+    from kyvos_pbit_parser.pbit_adapter import enrich_spec_from_pbit
 
     # Resolve JAR path for DAX→MDX conversion
     _jar = jar_path or _auto_discover_jar_path()

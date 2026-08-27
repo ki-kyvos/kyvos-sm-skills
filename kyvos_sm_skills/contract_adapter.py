@@ -316,12 +316,35 @@ def build_drd_graph(
         if not left_node_id or not right_node_id:
             continue
 
-        # For dimension-to-dimension relationships the semantic parser records the
-        # FK-holding table on the left and the referenced (parent) dimension on the
-        # right as a many-to-one relationship. In the DRD we want the parent (one side)
-        # to be the source so the arrow reads parent -> child in the snowflake.
+        # Kyvos DRD node1/node2 convention differs by join shape, but both
+        # shapes below are labeled "ONE_TO_MANY" -- in Kyvos this TYPE value
+        # is the canonical label for a resolved (non many-to-many, non
+        # one-to-one) join; it does not literally describe node1:node2
+        # cardinality. Direction/meaning instead comes from which table is
+        # node1 vs node2 in each shape:
+        #
+        #   * Fact/measure-dataset -> dimension (or bridge -> leaf dimension):
+        #     node1 = the fact (or bridge leaf child), node2 = the dimension.
+        #     Handled below by forcing the fact side to node1 regardless of
+        #     which side the semantic parser recorded as the FK ("many")
+        #     side -- Power BI cardinality metadata can legitimately record
+        #     a plain dimension as the FK-holding side of a relationship
+        #     into a fact table (e.g. a per-transaction attribute table with
+        #     a many_to_one FK into the transaction fact), but the DRD must
+        #     still put the fact first to match every other fact<->dimension
+        #     edge in the model.
+        #
+        #   * Dimension -> dimension (snowflake): the semantic parser records
+        #     the FK-holding child table on the left and the referenced
+        #     parent dimension on the right as many_to_one. Kyvos requires a
+        #     shared dimension to have one consistent parent path across all
+        #     measure datasets (see `_prune_snowflake_parents`), so here we
+        #     swap so node1 = parent (one side) and node2 = child (many
+        #     side), making the arrow read parent -> child in the snowflake.
         rel_type = _normalize_rel_type(rel.relationship_type)
         is_fact_or_bridge = lambda n: n in fact_set or n in bridge_set
+        left_is_fact = left_kyvos in fact_set
+        right_is_fact = right_kyvos in fact_set
         is_dim_to_dim = (
             not is_fact_or_bridge(left_kyvos) and not is_fact_or_bridge(right_kyvos)
         )
@@ -333,19 +356,35 @@ def build_drd_graph(
                 rel.left_column,
             )
             rel_type = "ONE_TO_MANY"
-        else:
-            source, target, source_col, target_col = _resolve_drd_source_target(
-                rel=rel,
-                left_name=left_kyvos,
-                right_name=right_kyvos,
+        elif right_is_fact and not left_is_fact and left_kyvos not in bridge_set:
+            # A plain dimension was recorded as the FK/left side of a
+            # relationship into a fact table. Swap so the fact is node1,
+            # matching every other fact<->dimension edge in the DRD.
+            source, target, source_col, target_col = (
+                right_kyvos,
+                left_kyvos,
+                rel.right_column,
+                rel.left_column,
             )
-            # Kyvos DRDs are known to work with ONE_TO_MANY for fact <-> dimension
-            # joins (source is the "many" side). Collapse MANY_TO_ONE into
-            # ONE_TO_MANY here so this common case matches that convention;
-            # the dim-to-dim snowflake case above already sets ONE_TO_MANY
-            # explicitly after swapping source/target.
             if rel_type == "MANY_TO_ONE":
                 rel_type = "ONE_TO_MANY"
+        else:
+            if rel_type == "MANY_TO_ONE":
+                # Parent (one side, usually the dimension) is on the right; make it
+                # the DRD source so the arrow reads parent -> child as ONE_TO_MANY.
+                source, target, source_col, target_col = (
+                    right_kyvos,
+                    left_kyvos,
+                    rel.right_column,
+                    rel.left_column,
+                )
+                rel_type = "ONE_TO_MANY"
+            else:
+                source, target, source_col, target_col = _resolve_drd_source_target(
+                    rel=rel,
+                    left_name=left_kyvos,
+                    right_name=right_kyvos,
+                )
 
         source_node_id = name_to_node_id[source]
         target_node_id = name_to_node_id[target]

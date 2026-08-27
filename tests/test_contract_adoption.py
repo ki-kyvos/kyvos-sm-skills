@@ -404,6 +404,66 @@ class TestBuildDrdGraph:
         assert rel.source_column == "site_relation_id"
         assert rel.target_column == "signup_store_id"
 
+    def test_dimension_recorded_as_fk_side_into_fact_still_puts_fact_first(self):
+        """A plain dimension can be recorded by the source parser as the FK
+        ("many") side of a relationship into a fact table (e.g. a
+        per-transaction attribute table with a many_to_one FK into the
+        transaction fact). The DRD must still put the fact as node1/source
+        to match every other fact<->dimension edge, regardless of which
+        side the raw relationship recorded as left/right."""
+        rels = [
+            SimpleRel(
+                left_dataset="dim_loyalty_customer",
+                left_column="composite_key_int",
+                right_dataset="gel_tracker",
+                right_column="composite_key_int",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {"dim_loyalty_customer": "ds_001", "gel_tracker": "ds_002"}
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"gel_tracker"},
+        )
+        assert len(graph.relations) == 1
+        rel = graph.relations[0]
+        assert rel.source_node_id == "ds_002_2"
+        assert rel.target_node_id == "ds_001_1"
+        assert rel.relation_type == "ONE_TO_MANY"
+        assert rel.source_column == "composite_key_int"
+        assert rel.target_column == "composite_key_int"
+
+    def test_fact_to_dim_many_to_one_orients_parent_to_child(self):
+        """A regular fact FK to a dimension must be oriented parent (one,
+        the dimension) -> child (many, the fact) as ONE_TO_MANY for Kyvos."""
+        rels = [
+            SimpleRel(
+                left_dataset="sales_reasons",
+                left_column="salesreasonkey",
+                right_dataset="sales_reason",
+                right_column="salesreasonkey",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {"sales_reasons": "ds_001", "sales_reason": "ds_002"}
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"sales_reasons"},
+        )
+        assert len(graph.relations) == 1
+        rel = graph.relations[0]
+        assert rel.source_node_id == "ds_002_1"
+        assert rel.target_node_id == "ds_001_2"
+        assert rel.relation_type == "ONE_TO_MANY"
+        assert rel.source_column == "salesreasonkey"
+        assert rel.target_column == "salesreasonkey"
+
 
 # ── DRD compiler adapter tests ─────────────────────────────────────────────
 

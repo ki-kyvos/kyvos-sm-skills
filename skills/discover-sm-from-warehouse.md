@@ -134,7 +134,7 @@ def build_spec_from_recommendation(sm_rec: dict, warehouse_tables: list[dict]) -
     Returns:
         DomainDemoSpec suitable for the deployment pipeline.
     """
-    from kyvos_xmla_parser.models import (
+    from kyvos_parser_common.models import (
         DomainDemoSpec, TableSpec, ColumnSpec,
         SemanticModelSpec, RelationshipSpec, MeasureSpec, HierarchySpec,
     )

@@ -69,7 +69,7 @@ config = KyvosConfig.from_env_file(env_file)
 PBIT files are binary — read as `rb`. The `enrich_spec_from_pbit()` function handles BIM extraction, XMLA parsing, and PBIT-specific metadata enrichment. Pass `skip_conversion=True` unless the user explicitly requests DAX→MDX conversion (which requires a Java JAR).
 
 ```python
-from kyvos_xmla_parser.pbit_adapter import enrich_spec_from_pbit
+from kyvos_pbit_parser.pbit_adapter import enrich_spec_from_pbit
 
 with open(pbit_file_path, "rb") as f:
     spec = enrich_spec_from_pbit(
