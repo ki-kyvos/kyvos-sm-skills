@@ -857,6 +857,30 @@ def _deploy_spec(
         )
 
     server_drd_id = drd_result.primary_entity_id
+
+    # Guard: Kyvos DRD JSON API sometimes returns the entity ID in a non-standard
+    # field (e.g. "drdId", nested "data.id", etc.) that the SDK parser misses.
+    # If the response parse yielded nothing, look up the freshly-created DRD by
+    # name from the folder — it will be there because apply_artifact succeeded.
+    if not server_drd_id:
+        print(
+            f"  WARNING: DRD creation response did not include entity ID — "
+            f"resolving '{drd_name}' via folder lookup..."
+        )
+        _drd_list = insp.list_drds_in_folder(drd_folder_label)
+        if _drd_list.succeeded and _drd_list.entity_refs:
+            for _ref in _drd_list.entity_refs:
+                if _ref.name == drd_name:
+                    server_drd_id = _ref.id
+                    print(f"  DRD ID resolved via folder lookup: {server_drd_id}")
+                    break
+        if not server_drd_id:
+            _available = [r.name for r in (_drd_list.entity_refs or [])]
+            raise RuntimeError(
+                f"DRD '{drd_name}' was created but its server ID could not be resolved. "
+                f"DRDs visible in folder '{drd_folder_label}': {_available}"
+            )
+
     created_entities.append({
         "entity_type": "DRD",
         "id": server_drd_id,
@@ -945,6 +969,8 @@ def _deploy_spec(
     # Validate semantic model — retry up to 8 times with 30s delay (large models may hit server capacity limits)
     _sm_max_retries = 8
     _sm_retry_delay = 30
+    _sm_validation_skipped = False
+    _sm_val_errs: list[str] = []
     for _attempt in range(1, _sm_max_retries + 1):
         sm_val_result = prov.validate_semantic_model(smodel_id, smodel_name, smodel_folder_label)
         if sm_val_result.succeeded:
@@ -954,28 +980,62 @@ def _deploy_spec(
         if _is_capacity_error and _attempt < _sm_max_retries:
             print(f"  SM validation pending (attempt {_attempt}/{_sm_max_retries}), retrying in {_sm_retry_delay}s...")
             time.sleep(_sm_retry_delay)
-        elif not _is_capacity_error:
-            # Real validation errors — don't retry, report immediately
-            errs = [d.message for d in sm_val_result.diagnostics if d.severity in (Severity.ERROR, Severity.WARNING)]
-            if not errs:
-                errs = [d.message for d in sm_val_result.diagnostics]
-            print(f"  SM validation FAILED with {len(errs)} error(s):")
-            for e in errs[:10]:
-                print(f"    - {e}")
-            if len(errs) > 10:
-                print(f"    ... and {len(errs) - 10} more")
-            raise RuntimeError(f"Semantic model validation failed with {len(errs)} error(s): {errs[:5]}")
-        elif _attempt < _sm_max_retries:
-            print(f"  SM validation pending (attempt {_attempt}/{_sm_max_retries}), retrying in {_sm_retry_delay}s...")
-            time.sleep(_sm_retry_delay)
-        else:
-            errs = [d.message for d in sm_val_result.diagnostics]
-            print("  WARNING: SM validation could not complete due to server capacity limits.")
-            print(f"  SM was created successfully (id={smodel_id}) but validation timed out.")
-            print("  The model can be validated manually from the Kyvos UI.")
-            break
+            continue
 
-    print(f"Semantic Model: {smodel_name} (id={smodel_id}) — validated")
+        _sm_val_errs = [d.message for d in sm_val_result.diagnostics if d.severity in (Severity.ERROR, Severity.WARNING)]
+        if not _sm_val_errs:
+            _sm_val_errs = [d.message for d in sm_val_result.diagnostics]
+
+        # Kyvos 2026.5+ validates semantic models via an AI/LLM service. If
+        # the server's AI connections (Azure OpenAI / AWS Bedrock) are
+        # misconfigured or deprecated, validation fails with AI_SETTINGS errors.
+        # When ALL returned errors are AI-related, the SM itself is structurally
+        # valid and was created successfully; allow the pipeline to continue.
+        _ai_error_patterns = [
+            "ai settings", "azureopenai", "aws-bedrock", "bedrock",
+            "reasoning.effort", "model version has reached the end of its life",
+            "llm", "analytical server could not perform semantic model validations",
+        ]
+        _all_ai_errors = all(
+            any(p in e.lower() for p in _ai_error_patterns)
+            for e in _sm_val_errs
+        )
+        _allow_ai_failure = os.environ.get("KYVOS_ALLOW_AI_VALIDATION_FAILURE", "").lower() in ("1", "true", "yes")
+        if _all_ai_errors:
+            print(f"  SM validation failed due to server-side AI/LLM configuration issues ({len(_sm_val_errs)} message(s)):")
+            for e in _sm_val_errs[:10]:
+                print(f"    - {e}")
+            if len(_sm_val_errs) > 10:
+                print(f"    ... and {len(_sm_val_errs) - 10} more")
+            if _allow_ai_failure:
+                print("  WARNING: Continuing because KYVOS_ALLOW_AI_VALIDATION_FAILURE=1 is set.")
+                print(f"  Semantic Model {smodel_name} (id={smodel_id}) was created but NOT validated.")
+                _sm_validation_skipped = True
+                break
+            raise RuntimeError(
+                "Semantic model validation failed due to Kyvos server AI/LLM misconfiguration. "
+                "Set KYVOS_ALLOW_AI_VALIDATION_FAILURE=1 to continue with an unvalidated model. "
+                f"Errors: {_sm_val_errs[:5]}"
+            )
+
+        # Real validation errors — don't retry, report immediately
+        print(f"  SM validation FAILED with {len(_sm_val_errs)} error(s):")
+        for e in _sm_val_errs[:10]:
+            print(f"    - {e}")
+        if len(_sm_val_errs) > 10:
+            print(f"    ... and {len(_sm_val_errs) - 10} more")
+        raise RuntimeError(f"Semantic model validation failed with {len(_sm_val_errs)} error(s): {_sm_val_errs[:5]}")
+    else:
+        _sm_val_errs = [d.message for d in sm_val_result.diagnostics]
+        print("  WARNING: SM validation could not complete due to server capacity limits.")
+        print(f"  SM was created successfully (id={smodel_id}) but validation timed out.")
+        print("  The model can be validated manually from the Kyvos UI.")
+        _sm_validation_skipped = True
+
+    if _sm_validation_skipped:
+        print(f"Semantic Model: {smodel_name} (id={smodel_id}) — created, validation skipped")
+    else:
+        print(f"Semantic Model: {smodel_name} (id={smodel_id}) — validated")
 
     # ═══════════════════════════════════════════════════════════════════════
     # Step 9: Report results
@@ -984,8 +1044,8 @@ def _deploy_spec(
     print("  Step 9: Report results")
     print(f"{'─' * 70}")
 
-    result = {
-        "success": True,
+    result: dict[str, Any] = {
+        "success": not _sm_validation_skipped,
         "spec_summary": {
             "tables": len(tables),
             "relationships": len(semantic_model.relationships),
@@ -997,16 +1057,25 @@ def _deploy_spec(
         "drd_name": drd_name,
         "drd_id": server_drd_id,
         "smodel_name": smodel_name,
+        "smodel_id": smodel_id,
+        "smodel_validation_skipped": _sm_validation_skipped,
         "created_entities": created_entities + [
             {"entity_type": "FOLDER", "id": folder_id,        "name": dataset_folder_label},
             {"entity_type": "FOLDER", "id": drd_folder_id,    "name": drd_folder_label},
             {"entity_type": "FOLDER", "id": smodel_folder_id, "name": smodel_folder_label},
             {"entity_type": "CONNECTION", "id": connection_id, "name": config.warehouse_connection_name},
         ],
-        "errors": [],
+        "errors": _sm_val_errs if _sm_validation_skipped else [],
         "warnings": [],
     }
-    print("\n✅ Deployment Successful")
+    if _sm_validation_skipped:
+        print("\n⚠️ Deployment completed with warnings")
+        print("   Semantic model was created but could not be validated.")
+        print("   Validation errors:")
+        for e in _sm_val_errs[:5]:
+            print(f"     - {e}")
+    else:
+        print("\n✅ Deployment Successful")
     print(f"   Timestamp     : {_ts}")
     print(f"   Tables        : {len(tables)}")
     print(f"   Datasets      : {len(dataset_name_to_id)}")
