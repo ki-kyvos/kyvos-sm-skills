@@ -40,3 +40,13 @@ kyvos_sm_skills/.DS_Store
 .env.discover
 samples/output/bridge_snapshot.json
 pytest_output.txt
+# ── Debug / pipeline artifacts ───────────────
+nul
+discovery_flow_logs_*.txt
+smodel_*.json
+drd_*.json
+dataset_*.json
+deployed_drd_*.xml
+sm_payload_debug.json
+bisect_*.py
+kyvos_smodel_payload_*.json

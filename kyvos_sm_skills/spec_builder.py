@@ -87,18 +87,28 @@ def build_spec_from_recommendation(
             f"Available warehouse tables: {list(wh_table_map.keys())}"
         )
 
-    # Build TableSpec objects for each recommended table
+    # Build TableSpec objects for each recommended table.
+    # If the LLM provided explicit table_classifications, use those to override
+    # the warehouse-inferred estimated_table_type.
     table_specs: list[TableSpec] = []
-    {t.lower() for t in rec_table_names}
+    llm_classifications: dict[str, str] = {
+        k.lower(): v.lower()
+        for k, v in sm_rec.get("table_classifications", {}).items()
+    }
 
     for table_name in rec_table_names:
         wt = wh_table_map[table_name.lower()]
         columns = _build_column_specs(wt)
-        table_type = _map_table_type(wt.get("estimated_table_type", "unknown"), wt)
+        # Prefer LLM classification over warehouse heuristic
+        if table_name.lower() in llm_classifications:
+            table_type = llm_classifications[table_name.lower()]
+        else:
+            table_type = _map_table_type(wt.get("estimated_table_type", "unknown"), wt)
 
         table_specs.append(TableSpec(
             name=wt["name"],
             schema_name=wt.get("schema", "public"),
+            database_name=wt.get("database"),
             table_type=table_type,
             columns=columns,
         ))
@@ -107,6 +117,14 @@ def build_spec_from_recommendation(
     relationships = _build_relationships(
         sm_rec.get("relationships", []),
         wh_table_map,
+        table_type_overrides=llm_classifications or None,
+    )
+
+    # Normalize bridge relationship directions. Kyvos connectivity expects
+    # fact -> bridge -> dimension. LLMs sometimes emit bridge -> fact.
+    relationships = _normalize_bridge_relationships(
+        relationships=relationships,
+        wh_table_map=wh_table_map,
     )
 
     # Auto-add any tables referenced in relationships but missing from table_specs
@@ -120,6 +138,7 @@ def build_spec_from_recommendation(
                 table_specs.append(TableSpec(
                     name=wt["name"],
                     schema_name=wt.get("schema", "public"),
+                    database_name=wt.get("database"),
                     table_type=table_type,
                     columns=columns,
                 ))
@@ -131,6 +150,11 @@ def build_spec_from_recommendation(
         wh_table_map,
         table_specs,
     )
+
+    # Ensure every fact table has at least one measure — fact tables with no
+    # measures are dropped by the connectivity sweep (they're not valid BFS
+    # starting points and are unreachable from other facts).
+    measures = _ensure_fact_measures(measures, table_specs)
 
     # Auto-add any tables referenced by measure source_dataset but missing from table_specs
     measures_to_drop: set[str] = set()
@@ -159,6 +183,7 @@ def build_spec_from_recommendation(
             table_specs.append(TableSpec(
                 name=wt["name"],
                 schema_name=wt.get("schema", "public"),
+                database_name=wt.get("database"),
                 table_type=table_type,
                 columns=columns,
             ))
@@ -192,7 +217,12 @@ def build_spec_from_recommendation(
         existing_table_names=_existing_table_names,
     )
 
-    _promote_bridge_tables(table_specs, relationships, measures)
+    _promote_bridge_tables(table_specs, relationships, measures, llm_classifications)
+
+    # Ensure every table has at least one PK column. Bridge tables often lack a
+    # single-column PK — mark their FK columns as composite primary key so the
+    # Kyvos DRD and review validation pass.
+    _ensure_pk_columns(table_specs, relationships)
 
     # Auto-detect missing relationships from warehouse FK metadata.
     # The LLM may include dimension tables in the model but forget to create
@@ -309,6 +339,75 @@ def build_spec_from_recommendation(
     )
 
 
+def merge_specs_for_review(
+    specs: list[tuple[dict[str, Any], DiscoveredSpec]],
+) -> DiscoveredSpec:
+    """Merge multiple per-SM DiscoveredSpecs into one for review display.
+
+    Each SM gets its own ``DiscoveredSpec`` for deployment, but the review UI
+    needs to show the union of all tables, relationships, measures, and
+    hierarchies across all recommended SMs.
+
+    Deduplication rules:
+    - Tables: deduped by name (case-insensitive). Fact > bridge > dimension wins
+      when the same table appears with different types.
+    - Relationships: deduped by (left, right) dataset pair.
+    - Measures/hierarchies: kept as-is; the ``associated_table`` /
+      ``source_dataset`` fields disambiguate same-named entries across SMs.
+
+    Args:
+        specs: List of ``(sm_rec, spec)`` tuples, one per recommended SM.
+
+    Returns:
+        A merged ``DiscoveredSpec`` for review display only — NOT used for
+        deployment (each SM deploys its own spec).
+    """
+    merged_tables: dict[str, TableSpec] = {}
+    merged_datasets: dict[str, DatasetSpec] = {}
+    merged_relationships: dict[tuple[str, str], RelationshipSpec] = {}
+    merged_measures: list[MeasureSpec] = []
+    merged_hierarchies: list[HierarchySpec] = []
+
+    _type_rank = {"fact": 0, "bridge": 1, "snowflake_dimension": 2, "dimension": 3, "unknown": 4}
+
+    for _sm_rec, spec in specs:
+        # Tables — dedup by name, prefer higher-priority type
+        for ts in spec.tables:
+            key = ts.name.lower()
+            existing = merged_tables.get(key)
+            if existing is None or _type_rank.get(ts.table_type, 4) < _type_rank.get(existing.table_type, 4):
+                merged_tables[key] = ts
+
+        # Datasets — dedup by name
+        for ds in spec.semantic_model.datasets:
+            merged_datasets.setdefault(ds.name, ds)
+
+        # Relationships — dedup by (left, right) pair
+        for rel in spec.semantic_model.relationships:
+            key = (rel.left_dataset.lower(), rel.right_dataset.lower())
+            merged_relationships.setdefault(key, rel)
+
+        # Measures and hierarchies — keep all (they're per-SM)
+        merged_measures.extend(spec.semantic_model.measures)
+        merged_hierarchies.extend(spec.semantic_model.hierarchies)
+
+    return DiscoveredSpec(
+        tables=list(merged_tables.values()),
+        semantic_model=SemanticModelSpec(
+            name=specs[0][1].semantic_model.name if specs else "MergedSM",
+            datasets=list(merged_datasets.values()),
+            relationships=list(merged_relationships.values()),
+            measures=merged_measures,
+            hierarchies=merged_hierarchies,
+        ),
+        metadata={
+            "merged_sms": len(specs),
+            "sm_names": [r.get("name", "unknown") for r, _ in specs],
+            "source": "multi_sm_merge",
+        },
+    )
+
+
 _BRIDGE_NAME_PATTERNS = (
     "reasons", "reason", "bridge", "junction", "xref", "crossref",
     "association", "assoc", "mapping", "linkage",
@@ -359,6 +458,11 @@ def _auto_include_bridge_tables(
         if wh_name in spec_table_names:
             continue
 
+        # Never auto-include a table already classified as fact — it belongs
+        # to a different SM, not to this one.
+        if wh_table.get("estimated_table_type") == "fact":
+            continue
+
         wt_columns = wh_table.get("columns", [])
         fk_cols = [c for c in wt_columns if c.get("is_fk")]
         non_fk_cols = [c for c in wt_columns if not c.get("is_fk") and not c.get("is_pk")]
@@ -404,6 +508,7 @@ def _auto_include_bridge_tables(
         table_specs.append(TableSpec(
             name=bridge_name,
             schema_name=wh_table.get("schema", "public"),
+            database_name=wh_table.get("database"),
             table_type="bridge",
             columns=bridge_columns,
         ))
@@ -420,6 +525,7 @@ def _auto_include_bridge_tables(
                     table_specs.append(TableSpec(
                         name=dim_wt.get("name", dim_name),
                         schema_name=dim_wt.get("schema", "public"),
+                        database_name=dim_wt.get("database"),
                         table_type="dimension",
                         columns=dim_columns,
                     ))
@@ -471,7 +577,14 @@ def _promote_bridge_tables(
     table_specs: list[TableSpec],
     relationships: list[RelationshipSpec],
     measures: list[MeasureSpec],
+    llm_classifications: dict[str, str] | None = None,
 ) -> None:
+    """Promote dimensions to bridge only when the LLM did not already decide.
+
+    Bridge tables must only be used for many-to-many relationships. This
+    function keeps the conservative composite-PK and name-pattern heuristics
+    as a fallback, but it NEVER overrides an explicit LLM classification.
+    """
     table_by_name = {table.name.lower(): table for table in table_specs}
     fact_names = {
         table.name.lower() for table in table_specs if table.table_type == "fact"
@@ -481,29 +594,22 @@ def _promote_bridge_tables(
         for measure in measures
         if measure.source_dataset
     }
+    llm_classified = set((llm_classifications or {}).keys())
     candidates_with_fact_input: set[str] = set()
-    candidates_with_output: set[str] = set()
 
     for relationship in relationships:
         left = relationship.left_dataset.lower()
         right = relationship.right_dataset.lower()
         if left in fact_names and right in table_by_name:
             candidates_with_fact_input.add(right)
-        if left in table_by_name and right in table_by_name and right not in fact_names:
-            candidates_with_output.add(left)
-
-    # Standard bridge detection: fact → bridge → dimension
-    for table_name in candidates_with_fact_input & candidates_with_output:
-        table = table_by_name[table_name]
-        if table.table_type == "dimension" and table_name not in measure_sources:
-            table.table_type = "bridge"
-            print(f"  Promoted bridge table '{table.name}' from fact-to-dimension path")
 
     # Composite PK detection: a table with 2+ PK columns where a fact relationship
     # only uses one PK column is a bridge table (e.g., SalesReasons has a composite
     # PK of salesordernumber + salesorderlinenumber + salesreasonkey, but the fact
     # table only joins on salesordernumber).
     for table_name in candidates_with_fact_input:
+        if table_name in llm_classified:
+            continue
         table = table_by_name.get(table_name)
         if table is None or table.table_type != "dimension":
             continue
@@ -518,6 +624,8 @@ def _promote_bridge_tables(
     # Name-based heuristic: tables with common bridge/junction name patterns
     # that have incoming fact relationships and no measures.
     for table_name in candidates_with_fact_input:
+        if table_name in llm_classified:
+            continue
         table = table_by_name.get(table_name)
         if table is None or table.table_type != "dimension":
             continue
@@ -526,6 +634,170 @@ def _promote_bridge_tables(
         if _is_bridge_by_name(table.name):
             table.table_type = "bridge"
             print(f"  Promoted bridge table '{table.name}' from name pattern heuristic")
+
+
+def _ensure_fact_measures(
+    measures: list[MeasureSpec],
+    table_specs: list[TableSpec],
+) -> list[MeasureSpec]:
+    """Ensure every fact table has at least one measure.
+
+    Fact tables with no measures are unreachable by the connectivity sweep
+    (they're not valid BFS starting points and are unreachable FROM other
+    facts). This function adds a ``count(*)`` measure for each such table.
+    """
+    measure_sources = {
+        m.source_dataset.lower() for m in measures if m.source_dataset
+    }
+    for ts in table_specs:
+        if ts.table_type != "fact":
+            continue
+        if ts.name.lower() in measure_sources:
+            continue
+        # Find the PK column for a count measure (or first numeric column)
+        pk_col = next(
+            (c.name for c in ts.columns if c.is_primary_key), None
+        )
+        if not pk_col:
+            # Fall back to first non-FK column
+            pk_col = next(
+                (c.name for c in ts.columns if not c.is_foreign_key), None
+            )
+        if not pk_col and ts.columns:
+            pk_col = ts.columns[0].name
+        if not pk_col:
+            continue
+        measure_name = f"{ts.name.replace('_', ' ').title()} Count"
+        measures.append(MeasureSpec(
+            name=measure_name,
+            expression=pk_col,
+            source_dataset=ts.name,
+            aggregation_type="count",
+            source_column=pk_col,
+            is_calculated=False,
+        ))
+        print(
+            f"  Auto-created count measure '{measure_name}' for fact table "
+            f"'{ts.name}' (no measures assigned by LLM)"
+        )
+    return measures
+
+
+def _ensure_pk_columns(
+    table_specs: list[TableSpec],
+    relationships: list[RelationshipSpec],
+) -> None:
+    """Ensure every table has at least one column marked as primary key.
+
+    Bridge/junction tables often lack a single-column PK in the warehouse.
+    For such tables, mark all columns that participate in relationships as
+    ``is_primary_key=True`` — they form the composite key.
+    """
+    for ts in table_specs:
+        if any(c.is_primary_key for c in ts.columns):
+            continue  # Already has a PK
+        # Collect column names used in relationships for this table
+        join_cols: set[str] = set()
+        for rel in relationships:
+            if rel.left_dataset.lower() == ts.name.lower():
+                join_cols.add(rel.left_column.lower())
+            if rel.right_dataset.lower() == ts.name.lower():
+                join_cols.add(rel.right_column.lower())
+        marked = 0
+        for col in ts.columns:
+            if col.name.lower() in join_cols:
+                col.is_primary_key = True
+                col.nullable = False  # PK columns must be non-nullable
+                marked += 1
+        if marked:
+            print(
+                f"  Auto-assigned composite PK for '{ts.name}': "
+                f"{sorted(join_cols)}"
+            )
+        elif ts.columns:
+            # Fallback: mark the first column as PK so DRD validation passes.
+            ts.columns[0].is_primary_key = True
+            ts.columns[0].nullable = False
+            print(
+                f"  Auto-assigned PK for '{ts.name}': "
+                f"'{ts.columns[0].name}' (no relationship columns found)"
+            )
+
+
+def _normalize_bridge_relationships(
+    relationships: list[RelationshipSpec],
+    wh_table_map: dict[str, dict[str, Any]],
+) -> list[RelationshipSpec]:
+    """Ensure bridge tables sit between facts and dimensions in directed edges.
+
+    Kyvos connectivity and validation require every dimension to be reachable
+    from a fact table with measures. For bridge/junction tables the expected
+    direction is ``fact -> bridge -> dimension``. LLMs sometimes emit the
+    opposite ``bridge -> fact`` edge, which leaves the bridge and its dimension
+    disconnected from the measure group and causes SM validation errors such as
+    *"Dimension ... is invalid because it does not have valid relation with any
+    measure"*.
+
+    The function flips relationships so that a bridge table is always:
+    - on the RIGHT side of a relationship coming from a fact table
+    - on the LEFT side of a relationship going to a dimension table
+    """
+    # Type lookup: prefer already-built table specs if passed, else warehouse metadata.
+    def _type_of(name: str) -> str:
+        wt = wh_table_map.get(name.lower())
+        if wt is None:
+            return ""
+        et = wt.get("estimated_table_type", "").lower()
+        if et in {"fact", "dimension", "bridge"}:
+            return et
+        # Name-based bridge fallback
+        if _is_bridge_by_name(name):
+            return "bridge"
+        return ""
+
+    normalized: list[RelationshipSpec] = []
+    for rel in relationships:
+        left_type = _type_of(rel.left_dataset)
+        right_type = _type_of(rel.right_dataset)
+
+        left_is_bridge = left_type == "bridge"
+        right_is_bridge = right_type == "bridge"
+        left_is_fact = left_type == "fact"
+        right_is_fact = right_type == "fact"
+        left_is_dim = left_type == "dimension"
+        right_is_dim = right_type == "dimension"
+
+        flip = False
+        if right_is_bridge and left_is_fact:
+            # fact -> bridge: correct
+            pass
+        elif left_is_bridge and right_is_fact:
+            # bridge -> fact: flip to fact -> bridge
+            flip = True
+        elif left_is_bridge and right_is_dim:
+            # bridge -> dimension: correct
+            pass
+        elif right_is_bridge and left_is_dim:
+            # dimension -> bridge: flip to bridge -> dimension
+            flip = True
+
+        if flip:
+            print(
+                f"  Normalized bridge relationship: flipped "
+                f"{rel.left_dataset}.{rel.left_column} -> {rel.right_dataset}.{rel.right_column} "
+                f"to {rel.right_dataset}.{rel.right_column} -> {rel.left_dataset}.{rel.left_column}"
+            )
+            normalized.append(RelationshipSpec(
+                left_dataset=rel.right_dataset,
+                left_column=rel.right_column,
+                right_dataset=rel.left_dataset,
+                right_column=rel.left_column,
+                relationship_type=rel.relationship_type,
+            ))
+        else:
+            normalized.append(rel)
+
+    return normalized
 
 
 def _connectivity_sweep(
@@ -578,15 +850,16 @@ def _connectivity_sweep(
     if not fact_table_names_with_measures:
         fact_table_names_with_measures = fact_table_names
 
-    # Build directed graph (left → right)
+    # Build directed graph (left → right).
+    # In a snowflake schema dimensions reference other dimensions, so once a
+    # dimension is reached from a fact we must continue traversing through it.
     directed_graph: dict[str, set[str]] = {ts.name.lower(): set() for ts in table_specs}
     for rel in relationships:
         left = rel.left_dataset.lower()
         right = rel.right_dataset.lower()
         if left not in directed_graph or right not in directed_graph:
             continue
-        if follow_all_edges or table_type_map.get(left) in {"fact", "bridge", "unknown", ""}:
-            directed_graph[left].add(right)
+        directed_graph[left].add(right)
 
     # Directed BFS from fact tables that have measures
     connected: set[str] = set()
@@ -632,6 +905,9 @@ def _connectivity_sweep(
         for disc in sorted(disconnected):
             disc_wt = wh_table_map.get(disc)
             if not disc_wt:
+                continue
+            # Fact→fact guard: never reconnect a fact table to another fact table.
+            if table_type_map.get(disc) == "fact":
                 continue
             disc_cols = disc_wt.get("columns", [])
             for fwm in sorted(fact_with_measures):
@@ -949,6 +1225,9 @@ def _auto_detect_missing_relationships(
             # table. Connecting two dimensions creates edges that cause cube
             # build failures (ENTITY_ID null errors).
             disc_is_dim = not _is_fact_or_bridge(disc_table)
+            # Fact-to-fact guard: a fact table must not be auto-connected to
+            # another fact table.
+            disc_is_fact = table_type_map.get(disc_table) == "fact"
 
             connected_to_this = False
 
@@ -976,6 +1255,9 @@ def _auto_detect_missing_relationships(
                 # Dim→dim guard: if the disconnected table is a dimension,
                 # only connect it to a fact or bridge table.
                 if disc_is_dim and not _is_fact_or_bridge(ref_table_lower):
+                    continue
+                # Fact→fact guard: never auto-connect two fact tables.
+                if disc_is_fact and table_type_map.get(ref_table_lower) == "fact":
                     continue
                 # Skip if there's already a relationship between these tables
                 if (ref_table_lower, disc_table) in existing_table_pairs:
@@ -1047,6 +1329,9 @@ def _auto_detect_missing_relationships(
                 # Dim→dim guard: if the disconnected table is a dimension,
                 # only connect it from a fact or bridge table.
                 if disc_is_dim and not _is_fact_or_bridge(conn_table):
+                    continue
+                # Fact→fact guard: never auto-connect two fact tables.
+                if disc_is_fact and table_type_map.get(conn_table) == "fact":
                     continue
                 # Skip if there's already a relationship between these tables
                 if (conn_table, disc_table) in existing_table_pairs:
@@ -1146,6 +1431,9 @@ def _auto_detect_missing_relationships(
                     # only connect it from a fact or bridge table.
                     if disc_is_dim and not _is_fact_or_bridge(conn_table):
                         continue
+                    # Fact→fact guard: never auto-connect two fact tables.
+                    if disc_is_fact and table_type_map.get(conn_table) == "fact":
+                        continue
                     # Skip if there's already a relationship between these tables
                     if (conn_table, disc_table) in existing_table_pairs:
                         continue
@@ -1228,6 +1516,9 @@ def _auto_detect_missing_relationships(
                     # Dim→dim guard: if the disconnected table is a dimension,
                     # only connect it from a fact or bridge table.
                     if disc_is_dim and not _is_fact_or_bridge(conn_table):
+                        continue
+                    # Fact→fact guard: never auto-connect two fact tables.
+                    if disc_is_fact and table_type_map.get(conn_table) == "fact":
                         continue
                     # Skip if there's already a relationship between these tables
                     if (conn_table, disc_table) in existing_table_pairs:
@@ -1380,10 +1671,20 @@ def _map_table_type(estimated_type: str, wt: dict[str, Any] | None = None) -> st
 def _build_relationships(
     rels: list[dict[str, Any]],
     wh_table_map: dict[str, dict[str, Any]],
+    table_type_overrides: dict[str, str] | None = None,
 ) -> list[RelationshipSpec]:
     """Convert relationship dicts to RelationshipSpec objects.
 
     Validates that referenced tables and columns exist in the warehouse schema.
+    Rejects fact-to-fact joins.
+
+    Args:
+        rels: Relationship dicts from the LLM recommendation.
+        wh_table_map: Warehouse table lookup (lowercase name -> table dict).
+        table_type_overrides: Optional dict mapping lowercase table name to
+            table type (from LLM table_classifications). When provided, these
+            take precedence over warehouse estimated_table_type for the
+            fact-to-fact check.
     """
     relationships = []
     for rel in rels:
@@ -1442,6 +1743,24 @@ def _build_relationships(
         # Parent-child relationships (e.g., employee.parentemployeekey -> employee.employeekey)
         # should be modeled as hierarchies in the semantic model, not as DRD relationships.
         if from_table.lower() == to_table.lower():
+            continue
+
+        # Skip fact-to-fact relationships — Kyvos does not allow direct joins
+        # between fact tables. They must connect through shared dimensions.
+        def _get_table_type(name: str) -> str:
+            if table_type_overrides and name.lower() in table_type_overrides:
+                return table_type_overrides[name.lower()]
+            wt = wh_table_map.get(name.lower())
+            return wt.get("estimated_table_type", "unknown") if wt else "unknown"
+
+        from_type = _get_table_type(from_table)
+        to_type = _get_table_type(to_table)
+        if from_type == "fact" and to_type == "fact":
+            print(
+                f"  WARNING: Skipping fact-to-fact relationship: "
+                f"{from_table}.{from_column} -> {to_table}.{to_column}. "
+                f"Fact tables must connect through shared dimensions, not directly."
+            )
             continue
 
         # Normalize to actual warehouse table names (case-insensitive)
@@ -1644,6 +1963,31 @@ def _build_measures(
     return result
 
 
+def _hierarchy_type_family(data_type: str) -> str:
+    """Map a column data type to a broad family.
+
+    Used for parent-child hierarchy validation (both columns must share the
+    same type family).  Mixed types across standard-hierarchy levels are
+    allowed in Kyvos and are not checked here.
+    """
+    base = data_type.upper().split("(")[0].strip()
+    string_types = {"VARCHAR", "CHAR", "TEXT", "NVARCHAR", "NCHAR", "STRING"}
+    integer_types = {"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "LONG", "SHORT"}
+    numeric_types = {"NUMERIC", "DECIMAL", "FLOAT", "DOUBLE", "REAL", "NUMBER"}
+    date_types = {"DATE", "TIMESTAMP", "TIMESTAMPTZ", "TIME", "DATETIME"}
+    if base in string_types:
+        return "string"
+    if base in integer_types:
+        return "integer"
+    if base in numeric_types:
+        return "numeric"
+    if base in date_types:
+        return "date"
+    if base in {"BOOLEAN", "BOOL"}:
+        return "boolean"
+    return base
+
+
 def _build_hierarchies(
     hierarchies: list[dict[str, Any]],
     wh_table_map: dict[str, dict[str, Any]],
@@ -1661,6 +2005,7 @@ def _build_hierarchies(
         levels = h.get("levels", [])
         source_dataset = h.get("source_dataset", "")
         is_parent_child = h.get("is_parent_child", False)
+        has_alternate_path = h.get("has_alternate_path", False)
         parent_column = h.get("parent_column")
         child_column = h.get("child_column")
 
@@ -1719,10 +2064,14 @@ def _build_hierarchies(
                 if c["name"].lower() == child_column.lower():
                     child_column = c["name"]
                     child_dt = c.get("data_type", c.get("type", "")).upper()
-            if parent_dt and child_dt and parent_dt != child_dt:
+            if (
+                parent_dt
+                and child_dt
+                and _hierarchy_type_family(parent_dt) != _hierarchy_type_family(child_dt)
+            ):
                 print(
                     f"  Hierarchy '{name}': parent_column '{parent_column}' (type {parent_dt}) "
-                    f"and child_column '{child_column}' (type {child_dt}) have different data types. "
+                    f"and child_column '{child_column}' (type {child_dt}) have different data-type families. "
                     f"Kyvos requires both columns to have the same data type. Skipping this hierarchy."
                 )
                 continue
@@ -1755,6 +2104,15 @@ def _build_hierarchies(
                 print(
                     f"  Hierarchy '{name}': no valid levels found on table '{actual_source}'. "
                     f"Skipping this hierarchy."
+                )
+                continue
+
+            # Standard hierarchies (not parent-child, not alternate-path) are
+            # meaningless with only a single level.
+            if not is_parent_child and not has_alternate_path and len(validated_levels) < 2:
+                print(
+                    f"  Hierarchy '{name}': standard hierarchy has only {len(validated_levels)} level(s) "
+                    f"({validated_levels}). Skipping — a standard hierarchy requires at least 2 levels."
                 )
                 continue
 
@@ -1791,7 +2149,6 @@ def _build_hierarchies(
         non_leaf_data_member_caption = h.get("non_leaf_data_member_caption", "self")
         display_column = h.get("display_column")
         pc_level_naming_pattern = h.get("pc_level_naming_pattern", "Level_*")
-        has_alternate_path = h.get("has_alternate_path", False)
         custom_rollup_weight_column = h.get("custom_rollup_weight_column")
 
         # Validate display_column if specified

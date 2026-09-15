@@ -131,6 +131,67 @@ def cmd_discover(args: argparse.Namespace) -> int:
     """Run the discover-sm-from-warehouse skill flow directly."""
     from kyvos_sm_skills.skill_runner import run_discover_sm_from_warehouse
 
+    return run_discover_sm_from_warehouse(
+        env_file=args.env_file,
+        sm_design_path=args.sm_design,
+        user_intent=args.user_intent,
+        domain=args.domain,
+        allow_web_research=not args.no_web_research,
+        auto_approve=args.auto_approve,
+        schema_filter=args.schema,
+        max_tables=args.max_tables,
+        payload_format=args.payload_format,
+        dry_run=args.dry_run,
+        cleanup_dry_run=args.cleanup_dry_run,
+        perform_cleanup=not args.cleanup_dry_run,
+        sm_folder_suffix=args.sm_folder_suffix,
+    )
+
+
+def cmd_discover_kyvos(args: argparse.Namespace) -> int:
+    """Discover a semantic model by reading metadata from Kyvos APIs."""
+    from kyvos_sdk.config import KyvosConfig
+    from kyvos_sm_skills.skill_runner import run_discover_sm_from_warehouse
+
+    from kyvos_sm_skills.kyvos_api_inspector import inspect_schema_from_kyvos
+
+    config = KyvosConfig.from_env_file(args.env_file)
+
+    print(f"\n{'─' * 70}")
+    print("  Discover from Kyvos — collect metadata")
+    print(f"{'─' * 70}")
+    print(f"  Connection: {args.connection_name}")
+    print(f"  Database:   {args.database_name}")
+    print(f"  Schema:     {args.schema_name}")
+
+    schema_summary = inspect_schema_from_kyvos(
+        config=config,
+        connection_name=args.connection_name,
+        database_name=args.database_name,
+        schema_name=args.schema_name,
+        max_tables=args.max_tables,
+        llm_provider=args.llm_provider,
+    )
+
+    print(f"  Tables discovered: {schema_summary['table_count']}")
+    print(f"  Relationships: {len(schema_summary['relationships'])}")
+
+    return run_discover_sm_from_warehouse(
+        env_file=args.env_file,
+        user_intent=args.user_intent,
+        domain=args.domain,
+        allow_web_research=not args.no_web_research,
+        auto_approve=args.auto_approve,
+        max_tables=args.max_tables,
+        payload_format=args.payload_format,
+        dry_run=args.dry_run,
+        cleanup_dry_run=args.cleanup_dry_run,
+        perform_cleanup=not args.cleanup_dry_run,
+        sm_folder_suffix=args.sm_folder_suffix,
+        schema_summary=schema_summary,
+        kyvos_connection_name=args.connection_name,
+    )
+
     # Cleanup is the default behavior — old entities are deleted before deploying.
     # --cleanup-dry-run overrides to list-only mode.
     # --cleanup is kept for explicitness but is the default.
@@ -255,6 +316,35 @@ def main() -> int:
         help="Path to save the generated intent (default: intent_<domain>.txt)",
     )
 
+    # discover-kyvos
+    dk = sub.add_parser(
+        "discover-kyvos",
+        help="Discover a semantic model by reading metadata from Kyvos APIs",
+    )
+    dk.add_argument("--env-file", default=".env", help="Path to .env file (default: .env)")
+    dk.add_argument("--connection-name", required=True, help="Kyvos connection name")
+    dk.add_argument("--database-name", required=True, help="Database inside the Kyvos connection")
+    dk.add_argument("--schema-name", required=True, help="Schema inside the database")
+    dk.add_argument("--user-intent", default=None, help="Natural language analytics intent (triggers LLM mode)")
+    dk.add_argument("--domain", default=None, help="Domain hint (e.g., credit_risk)")
+    dk.add_argument("--no-web-research", action="store_true", help="Disable web research in LLM mode")
+    dk.add_argument("--auto-approve", action="store_true", help="Skip interactive approval gate (for CI/CD)")
+    dk.add_argument("--max-tables", type=int, default=500, help="Max tables to inspect (default: 500)")
+    dk.add_argument("--payload-format", default=None, choices=["json", "xml"], help="Override payload format")
+    dk.add_argument("--dry-run", action="store_true", help="Inspect + build spec only, no API calls")
+    dk.add_argument(
+        "--cleanup-dry-run", action="store_true",
+        help="List old entities that would be deleted, without actually deleting them (cleanup is default)",
+    )
+    dk.add_argument(
+        "--sm-folder-suffix", default="",
+        help="Suffix for SM folder name to avoid conflicts when deploying multiple SMs to the same schema",
+    )
+    dk.add_argument(
+        "--llm-provider", default=None,
+        help="LLM provider for metadata inference (default: LLM_PROVIDER env var or anthropic)",
+    )
+
     # cleanup
     cln = sub.add_parser("cleanup", help="Clean up old entities from Kyvos matching the base name")
     cln.add_argument("--env-file", default=".env", help="Path to .env file (default: .env)")
@@ -277,6 +367,8 @@ def main() -> int:
         return cmd_deploy(args)
     elif args.command == "discover":
         return cmd_discover(args)
+    elif args.command == "discover-kyvos":
+        return cmd_discover_kyvos(args)
     elif args.command == "cleanup":
         return cmd_cleanup(args)
     else:

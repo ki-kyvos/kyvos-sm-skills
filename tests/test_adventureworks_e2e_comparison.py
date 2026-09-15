@@ -55,6 +55,9 @@ _AW_TABLES = [
             {"name": "productkey", "data_type": "INTEGER", "is_pk": True, "is_fk": False, "references": ""},
             {"name": "productsubcategorykey", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "productcategorykey", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "productname", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "productsubcategoryname", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "productcategoryname", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
         ],
     },
     {
@@ -79,6 +82,7 @@ _AW_TABLES = [
             {"name": "englishmonthname", "data_type": "VARCHAR(20)", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "calendarquarter", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "calendaryear", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "fulldatealternatekey", "data_type": "DATE", "is_pk": False, "is_fk": False, "references": ""},
         ],
     },
     {
@@ -143,9 +147,9 @@ _AW_SM_DESIGN = {
                 {"name": "Freight", "source_dataset": "factinternetsales", "aggregation_type": "sum"},
             ],
             "hierarchies": [
-                {"name": "ProductCategory", "levels": ["productkey", "productsubcategorykey", "productcategorykey"], "source_dataset": "dimproduct"},
-                {"name": "CalendarDate", "levels": ["datekey", "weeknumberofyear", "englishmonthname", "calendarquarter", "calendaryear"], "source_dataset": "dimdate"},
-                {"name": "SalesTerritory", "levels": ["salesterritorykey", "salesterritoryregion", "salesterritorycountry", "salesterritorygroup"], "source_dataset": "dimsalesterritory"},
+                {"name": "ProductCategory", "levels": ["productcategoryname", "productsubcategoryname", "productname"], "source_dataset": "dimproduct"},
+                {"name": "CalendarDate", "levels": ["calendaryear", "calendarquarter", "englishmonthname", "fulldatealternatekey"], "source_dataset": "dimdate"},
+                {"name": "SalesTerritory", "levels": ["salesterritorygroup", "salesterritorycountry", "salesterritoryregion"], "source_dataset": "dimsalesterritory"},
             ],
         }
     ],
@@ -195,9 +199,9 @@ _AW_SM_DESIGN_WITH_KPIS = {
                 },
             ],
             "hierarchies": [
-                {"name": "ProductCategory", "levels": ["productkey", "productsubcategorykey", "productcategorykey"], "source_dataset": "dimproduct"},
-                {"name": "CalendarDate", "levels": ["datekey", "weeknumberofyear", "englishmonthname", "calendarquarter", "calendaryear"], "source_dataset": "dimdate"},
-                {"name": "SalesTerritory", "levels": ["salesterritorykey", "salesterritoryregion", "salesterritorycountry", "salesterritorygroup"], "source_dataset": "dimsalesterritory"},
+                {"name": "ProductCategory", "levels": ["productcategoryname", "productsubcategoryname", "productname"], "source_dataset": "dimproduct"},
+                {"name": "CalendarDate", "levels": ["calendaryear", "calendarquarter", "englishmonthname", "fulldatealternatekey"], "source_dataset": "dimdate"},
+                {"name": "SalesTerritory", "levels": ["salesterritorygroup", "salesterritorycountry", "salesterritoryregion"], "source_dataset": "dimsalesterritory"},
             ],
         }
     ],
@@ -227,8 +231,8 @@ sales territory dimensions.
 - dimsalesterritory: Sales territory with group/country/region hierarchy
 
 ## Hierarchy Requirements
-- ProductCategory: productkey → productsubcategorykey → productcategorykey
-- CalendarDate: datekey → weeknumberofyear → englishmonthname → calendarquarter → calendaryear
+- ProductCategory: productname → productsubcategoryname → productcategoryname
+- CalendarDate: fulldatealternatekey → englishmonthname → calendarquarter → calendaryear
 - SalesTerritory: salesterritorykey → salesterritoryregion → salesterritorycountry → salesterritorygroup
 
 ## KPI Requirements
@@ -312,7 +316,7 @@ def _compile_sm_json(smodel, dataset_name_to_id: dict[str, str], dataset_columns
         dataset_columns=dataset_columns,
         fmt=ArtifactFormat.JSON,
     )
-    return json.loads(art.payload)
+    return json.loads(art.payload)["iro"]
 
 
 def _build_spec_and_compile(sm_design: dict, tmp_path):

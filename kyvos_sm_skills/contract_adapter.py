@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections import deque
 from typing import Any
 
 _log = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def compile_dataset_artifact(
     folder_id: str = "",
     folder_name: str = "Demo Automation",
     fmt: str = "xml",
+    db_type: str = "POSTGRES",
 ) -> Any:
     """Compile a dataset into a ``CompiledArtifact`` via SDK compiler.
 
@@ -90,6 +92,7 @@ def compile_dataset_artifact(
         folder_id: Optional folder ID.
         folder_name: Folder name for dataset category.
         fmt: "xml" or "json".
+        db_type: Database/connection type for the dataset (e.g. "POSTGRES", "DATABRICKSSQL").
 
     Returns:
         ``kyvos_sdk.contracts.artifacts.CompiledArtifact``.
@@ -115,6 +118,7 @@ def compile_dataset_artifact(
         folder_id=folder_id,
         folder_name=folder_name,
         fmt=artifact_fmt,
+        db_type=db_type,
     )
 
 
@@ -301,6 +305,27 @@ def build_drd_graph(
             node_type=node_type,
         ))
 
+    # BFS depth of each node from the nearest fact node (undirected). Used
+    # to order snowflake dim->dim edges so the dim closer to a fact sits on
+    # node1 — the relation list then reads fact -> dim -> dim.
+    _adj: dict[str, set[str]] = {}
+    for rel in relationships:
+        _l = aliases.get(rel.left_dataset) or aliases_ci.get(rel.left_dataset.lower()) or rel.left_dataset
+        _r = aliases.get(rel.right_dataset) or aliases_ci.get(rel.right_dataset.lower()) or rel.right_dataset
+        if _l in name_to_node_id and _r in name_to_node_id:
+            _adj.setdefault(_l, set()).add(_r)
+            _adj.setdefault(_r, set()).add(_l)
+    _depth: dict[str, int] = {}
+    _queue: deque[str] = deque(sorted(n for n in _adj if n in fact_set))
+    for _n in _queue:
+        _depth[_n] = 0
+    while _queue:
+        _cur = _queue.popleft()
+        for _nb in _adj.get(_cur, ()):
+            if _nb not in _depth:
+                _depth[_nb] = _depth[_cur] + 1
+                _queue.append(_nb)
+
     # Build relations
     # Source/target and the join columns are preserved exactly as they are
     # declared in the semantic model.  The relationship type is normalized to
@@ -316,46 +341,33 @@ def build_drd_graph(
         if not left_node_id or not right_node_id:
             continue
 
-        # Kyvos DRD node1/node2 convention differs by join shape, but both
-        # shapes below are labeled "ONE_TO_MANY" -- in Kyvos this TYPE value
-        # is the canonical label for a resolved (non many-to-many, non
-        # one-to-one) join; it does not literally describe node1:node2
-        # cardinality. Direction/meaning instead comes from which table is
-        # node1 vs node2 in each shape:
+        # Kyvos DRD convention (verified against a real Kyvos DRD export):
+        #   node1 / sourceId = the FK-holding "many" side (fact or child
+        #     dimension) — displayed on the LEFT.
+        #   node2 = the referenced "one" side (dimension or parent
+        #     dimension) — displayed on the RIGHT.
+        #   TYPE = "ONE_TO_MANY" for every resolved FK join (it is a fixed
+        #     label, not a literal node1:node2 cardinality); MANY_TO_MANY is
+        #     used only for genuine M:M edges (fact -> bridge).
         #
-        #   * Fact/measure-dataset -> dimension (or bridge -> leaf dimension):
-        #     node1 = the fact (or bridge leaf child), node2 = the dimension.
-        #     Handled below by forcing the fact side to node1 regardless of
-        #     which side the semantic parser recorded as the FK ("many")
-        #     side -- Power BI cardinality metadata can legitimately record
-        #     a plain dimension as the FK-holding side of a relationship
-        #     into a fact table (e.g. a per-transaction attribute table with
-        #     a many_to_one FK into the transaction fact), but the DRD must
-        #     still put the fact first to match every other fact<->dimension
-        #     edge in the model.
-        #
-        #   * Dimension -> dimension (snowflake): the semantic parser records
-        #     the FK-holding child table on the left and the referenced
-        #     parent dimension on the right as many_to_one. Kyvos requires a
-        #     shared dimension to have one consistent parent path across all
-        #     measure datasets (see `_prune_snowflake_parents`), so here we
-        #     swap so node1 = parent (one side) and node2 = child (many
-        #     side), making the arrow read parent -> child in the snowflake.
+        # This makes the relationship list read fact -> dim and, in a
+        # snowflake, fact -> dim -> dim (child dim left, parent dim right).
         rel_type = _normalize_rel_type(rel.relationship_type)
-        is_fact_or_bridge = lambda n: n in fact_set or n in bridge_set
-        left_is_fact = left_kyvos in fact_set
         right_is_fact = right_kyvos in fact_set
-        is_dim_to_dim = (
-            not is_fact_or_bridge(left_kyvos) and not is_fact_or_bridge(right_kyvos)
-        )
-        if is_dim_to_dim and rel_type == "MANY_TO_ONE":
+        left_is_fact = left_kyvos in fact_set
+        if rel_type == "MANY_TO_MANY":
+            # Keep declared order for the genuine M:M edge (fact -> bridge).
+            # A bridge -> dimension edge is a regular FK join in Kyvos even
+            # if the LLM declared it many_to_many: the many side (bridge)
+            # stays on node1 and the label becomes ONE_TO_MANY.
+            if left_kyvos in bridge_set and right_kyvos not in fact_set and right_kyvos not in bridge_set:
+                rel_type = "ONE_TO_MANY"
             source, target, source_col, target_col = (
-                right_kyvos,
                 left_kyvos,
-                rel.right_column,
+                right_kyvos,
                 rel.left_column,
+                rel.right_column,
             )
-            rel_type = "ONE_TO_MANY"
         elif right_is_fact and not left_is_fact and left_kyvos not in bridge_set:
             # A plain dimension was recorded as the FK/left side of a
             # relationship into a fact table. Swap so the fact is node1,
@@ -366,25 +378,40 @@ def build_drd_graph(
                 rel.right_column,
                 rel.left_column,
             )
-            if rel_type == "MANY_TO_ONE":
-                rel_type = "ONE_TO_MANY"
+            rel_type = "ONE_TO_MANY"
+        elif rel_type == "ONE_TO_MANY":
+            # Declared one->many: the many side is on the right — put it
+            # on node1 so the edge reads many-side -> one-side.
+            source, target, source_col, target_col = (
+                right_kyvos,
+                left_kyvos,
+                rel.right_column,
+                rel.left_column,
+            )
+            rel_type = "ONE_TO_MANY"
+        elif rel_type == "ONE_TO_ONE":
+            source, target, source_col, target_col = (
+                left_kyvos,
+                right_kyvos,
+                rel.left_column,
+                rel.right_column,
+            )
         else:
-            if rel_type == "MANY_TO_ONE":
-                # Parent (one side, usually the dimension) is on the right; make it
-                # the DRD source so the arrow reads parent -> child as ONE_TO_MANY.
-                source, target, source_col, target_col = (
-                    right_kyvos,
-                    left_kyvos,
-                    rel.right_column,
-                    rel.left_column,
-                )
-                rel_type = "ONE_TO_MANY"
-            else:
-                source, target, source_col, target_col = _resolve_drd_source_target(
-                    rel=rel,
-                    left_name=left_kyvos,
-                    right_name=right_kyvos,
-                )
+            # MANY_TO_ONE (or unspecified): the declared left side is the
+            # FK/many side — keep it on node1.
+            source, target, source_col, target_col = _resolve_drd_source_target(
+                rel=rel,
+                left_name=left_kyvos,
+                right_name=right_kyvos,
+            )
+            rel_type = "ONE_TO_MANY"
+
+        # For resolved ONE_TO_MANY edges, keep the endpoint closer to a fact
+        # on node1. Facts (depth 0) and bridges (depth 1) always stay first;
+        # for snowflake dim -> dim edges this puts the fact-adjacent dim on
+        # the left so the chain reads fact -> dim -> dim.
+        if rel_type == "ONE_TO_MANY" and _depth.get(target, 1 << 30) < _depth.get(source, 1 << 30):
+            source, target, source_col, target_col = target, source, target_col, source_col
 
         source_node_id = name_to_node_id[source]
         target_node_id = name_to_node_id[target]

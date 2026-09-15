@@ -374,11 +374,15 @@ class TestBuildDrdGraph:
             (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
             for r in graph.relations
         }
+        # DimCalendar is directly joined to facts (depth 1) so it is
+        # node1; DimCustomer is the deeper snowflake dim on node2.
         assert ("DimCalendar", "DimCustomer") in rel_aliases
         assert ("DimSiteRegion", "DimCustomer") not in rel_aliases
 
-    def test_dim_to_dim_relationship_oriented_parent_to_child(self):
-        """Snowflake dim->dim relationships should point parent (one side) to child."""
+    def test_dim_to_dim_relationship_oriented_child_to_parent(self):
+        """Snowflake dim->dim relationships put the FK-holding child on
+        node1/source and the referenced parent on node2 — matching the
+        real Kyvos DRD convention (fact -> dim -> dim)."""
         rels = [
             SimpleRel(
                 left_dataset="dim_customer",
@@ -398,11 +402,11 @@ class TestBuildDrdGraph:
         )
         assert len(graph.relations) == 1
         rel = graph.relations[0]
-        assert rel.source_node_id == "ds_002_2"
-        assert rel.target_node_id == "ds_001_1"
+        assert rel.source_node_id == "ds_001_1"
+        assert rel.target_node_id == "ds_002_2"
         assert rel.relation_type == "ONE_TO_MANY"
-        assert rel.source_column == "site_relation_id"
-        assert rel.target_column == "signup_store_id"
+        assert rel.source_column == "signup_store_id"
+        assert rel.target_column == "site_relation_id"
 
     def test_dimension_recorded_as_fk_side_into_fact_still_puts_fact_first(self):
         """A plain dimension can be recorded by the source parser as the FK
@@ -436,9 +440,10 @@ class TestBuildDrdGraph:
         assert rel.source_column == "composite_key_int"
         assert rel.target_column == "composite_key_int"
 
-    def test_fact_to_dim_many_to_one_orients_parent_to_child(self):
-        """A regular fact FK to a dimension must be oriented parent (one,
-        the dimension) -> child (many, the fact) as ONE_TO_MANY for Kyvos."""
+    def test_fact_to_dim_many_to_one_orients_fact_to_dim(self):
+        """A regular fact FK to a dimension puts the fact (many/FK side)
+        on node1/source and the dimension on node2 as ONE_TO_MANY — the
+        real Kyvos DRD convention."""
         rels = [
             SimpleRel(
                 left_dataset="sales_reasons",
@@ -458,8 +463,8 @@ class TestBuildDrdGraph:
         )
         assert len(graph.relations) == 1
         rel = graph.relations[0]
-        assert rel.source_node_id == "ds_002_1"
-        assert rel.target_node_id == "ds_001_2"
+        assert rel.source_node_id == "ds_001_2"
+        assert rel.target_node_id == "ds_002_1"
         assert rel.relation_type == "ONE_TO_MANY"
         assert rel.source_column == "salesreasonkey"
         assert rel.target_column == "salesreasonkey"
@@ -604,7 +609,7 @@ class TestCompileSmodelArtifact:
 
         import json
         payload = json.loads(artifact.payload)
-        measures = payload.get("specific", {}).get("smObject", {}).get("measures", {}).get("measure", [])
+        measures = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("measures", {}).get("measure", [])
         assert len(measures) > 0
         assert measures[0]["name"] == "TotalAmount"
         # In Simplified JSON format, dataset reference is in dataField.queryName
@@ -652,13 +657,14 @@ class TestCompileSmodelArtifact:
 
         import json
         payload = json.loads(artifact.payload)
-        dimensions = payload.get("specific", {}).get("smObject", {}).get("dimensions", [])
+        dimensions = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("dimensions", [])
         assert len(dimensions) > 0
         assert dimensions[0]["name"] == "DimCustomer"
-        # In Simplified JSON format, dataset reference is in dataSources[0].id
+        # In Simplified JSON format, dataset reference is in dataSources[0].id.
+        # The id is a DRD node id of the form "{dataset_id}_{idx}".
         data_sources = dimensions[0].get("dataSources", [])
         assert len(data_sources) > 0
-        assert data_sources[0]["id"] == "ds_002"
+        assert data_sources[0]["id"].startswith("ds_002")
 
 
 # ── Backward compatibility tests ───────────────────────────────────────────

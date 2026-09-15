@@ -19,10 +19,12 @@ import os
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 try:
     from kyvos_sdk.contracts.common import Severity
+    from kyvos_sdk.contracts.results import OperationStatus
 except ImportError:
     from enum import Enum
 
@@ -30,6 +32,13 @@ except ImportError:
         ERROR = "error"
         WARNING = "warning"
         INFO = "info"
+
+    class OperationStatus(str, Enum):
+        SUCCEEDED = "succeeded"
+        FAILED = "failed"
+        TIMED_OUT = "timed_out"
+
+from kyvos_sm_skills.spec_builder import DiscoveredSpec
 
 _MIN_PREFIX_LEN = 8
 
@@ -379,6 +388,47 @@ def cleanup_entities(
     return 0
 
 
+def _extract_kyvos_connection_db_type(conn_details: dict[str, Any]) -> str:
+    """Extract the provider/db type from a Kyvos connection details response."""
+    try:
+        for conn in conn_details.get("RESPONSE", {}).get("CONNECTION", []):
+            for prop in conn.get("configuration", {}).get("property", []):
+                if prop.get("name") == "kyvos.connection.provider":
+                    return prop.get("value") or "POSTGRES"
+    except Exception:
+        pass
+    return "POSTGRES"
+
+
+def _dump_payload(
+    dump_dir: str,
+    entity_name: str,
+    entity_type: str,
+    payload: str,
+    fmt: str,
+) -> None:
+    """Write a compiled artifact payload to disk for debugging.
+
+    Payloads are saved before they are sent to Kyvos so server-side errors
+    (e.g. 'An error occurred while processing JSON data') can be inspected.
+    """
+    try:
+        out_dir = Path(dump_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = re.sub(r"[^\w\-]+", "_", entity_name).strip("_") or "unnamed"
+        ext = "json" if fmt.lower() == "json" else "xml"
+        out_path = out_dir / f"{entity_type}_{safe_name}.{ext}"
+        counter = 0
+        while out_path.exists():
+            counter += 1
+            out_path = out_dir / f"{entity_type}_{safe_name}_{counter}.{ext}"
+        out_path.write_text(payload, encoding="utf-8")
+        print(f"  Dumped {entity_type} payload to {out_path}")
+    except OSError:
+        # Dump is best-effort; don't fail deployment if writing fails.
+        pass
+
+
 def _deploy_spec(
     *,
     tables: list[Any],
@@ -391,6 +441,8 @@ def _deploy_spec(
     perform_cleanup: bool = True,
     auto_approve: bool = False,
     sm_folder_suffix: str = "",
+    kyvos_connection_name: str | None = None,
+    payload_dump_dir: str | None = None,
 ) -> dict[str, Any]:
     """Shared deployment pipeline — steps 3-9 of the XMLA skill flow.
 
@@ -424,7 +476,13 @@ def _deploy_spec(
     if config.payload_format.lower() == "json":
         os.environ["KYVOS_DISABLE_JSON_FALLBACK"] = "1"
 
+    from kyvos_sm_skills.pipeline_tracer import get_tracer
+    tracer = get_tracer()
+
     svc = KyvosService(config=config)
+    if tracer:
+        svc.api_trace_hook = tracer.api_call
+        tracer.step("Deployment", f"Initializing Kyvos client for base_name={base_name}")
     svc.initialize()
     prov = ProvisioningClient(svc)
     insp = InspectionClient(svc)
@@ -572,43 +630,63 @@ def _deploy_spec(
     print(f"\n{'─' * 70}")
     print("  Step 5: Create connection")
     print(f"{'─' * 70}")
+    if tracer:
+        tracer.step("Create Connection", f"kyvos_connection_name={kyvos_connection_name or 'new warehouse connection'}")
 
-    from kyvos_sdk.warehouse_registry import build_jdbc_url, get_warehouse_profile
+    if kyvos_connection_name:
+        # Use an existing Kyvos connection (e.g. PSdatabricks) for metadata discovery flow.
+        # Skip creating a new warehouse connection.
+        connection_name = kyvos_connection_name
+        connection_id = None
+        # Verify it exists in Kyvos so we fail fast with a clear message.
+        raw_conn = svc.get_connection(connection_name)
+        if raw_conn is None:
+            raise RuntimeError(
+                f"Kyvos connection '{connection_name}' was not found. "
+                f"Please create it in the Kyvos portal first."
+            )
+        kyvos_db_type = _extract_kyvos_connection_db_type(raw_conn)
+        print(f"Using existing Kyvos connection: {connection_name} (type={kyvos_db_type})")
+    else:
+        from kyvos_sdk.warehouse_registry import build_jdbc_url, get_warehouse_profile
 
-    jdbc_url = config.warehouse_jdbc_url or build_jdbc_url(
-        config.warehouse_type,
-        config.warehouse_host,
-        config.warehouse_port,
-        config.warehouse_database,
-        **config.warehouse_extra_params,
-    )
-    driver = config.warehouse_driver or get_warehouse_profile(config.warehouse_type).driver_class
-    db_version = config.warehouse_db_version or get_warehouse_profile(config.warehouse_type).db_version_default
-
-    conn_result = prov.create_connection(
-        name=config.warehouse_connection_name,
-        host=config.warehouse_host,
-        port=config.warehouse_port,
-        database=config.warehouse_database,
-        username=config.warehouse_username,
-        password=config.warehouse_password,
-        db_type=config.warehouse_type,
-        db_version=db_version,
-        use_json=(config.payload_format == "json"),
-        use_existing_if_found=True,
-        jdbc_url_override=jdbc_url,
-        driver_override=driver,
-    )
-    if not conn_result.succeeded:
-        raise RuntimeError(
-            f"Connection creation failed: {[d.message for d in conn_result.diagnostics]}"
+        jdbc_url = config.warehouse_jdbc_url or build_jdbc_url(
+            config.warehouse_type,
+            config.warehouse_host,
+            config.warehouse_port,
+            config.warehouse_database,
+            **config.warehouse_extra_params,
         )
-    connection_id = conn_result.primary_entity_id
-    print(f"Connection: {config.warehouse_connection_name} (id={connection_id})")
+        driver = config.warehouse_driver or get_warehouse_profile(config.warehouse_type).driver_class
+        db_version = config.warehouse_db_version or get_warehouse_profile(config.warehouse_type).db_version_default
+
+        conn_result = prov.create_connection(
+            name=config.warehouse_connection_name,
+            host=config.warehouse_host,
+            port=config.warehouse_port,
+            database=config.warehouse_database,
+            username=config.warehouse_username,
+            password=config.warehouse_password,
+            db_type=config.warehouse_type,
+            db_version=db_version,
+            use_json=(config.payload_format == "json"),
+            use_existing_if_found=True,
+            jdbc_url_override=jdbc_url,
+            driver_override=driver,
+        )
+        if not conn_result.succeeded:
+            raise RuntimeError(
+                f"Connection creation failed: {[d.message for d in conn_result.diagnostics]}"
+            )
+        connection_id = conn_result.primary_entity_id
+        print(f"Connection: {config.warehouse_connection_name} (id={connection_id})")
+        kyvos_db_type = config.warehouse_type
 
     # ═══════════════════════════════════════════════════════════════════════
     # Step 6: Create datasets
     # ═══════════════════════════════════════════════════════════════════════
+    if tracer:
+        tracer.step("Create Datasets", f"{len(tables)} tables")
     print(f"\n{'─' * 70}")
     print("  Step 6: Create datasets")
     print(f"{'─' * 70}")
@@ -625,11 +703,14 @@ def _deploy_spec(
 
         ds_artifact = compile_dataset_artifact(
             table,
-            connection_name=config.warehouse_connection_name,
+            connection_name=connection_name,
             folder_id=folder_id,
             folder_name=dataset_folder_label,
             fmt=config.payload_format,
+            db_type=kyvos_db_type,
         )
+        if payload_dump_dir:
+            _dump_payload(payload_dump_dir, table.name, "dataset", ds_artifact.payload, config.payload_format)
         ds_result = prov.apply_artifact(ds_artifact)
 
         if not ds_result.succeeded:
@@ -682,11 +763,25 @@ def _deploy_spec(
     for ds_info in created_entities:
         if ds_info["entity_type"] != "DATASET":
             continue
-        prov.refresh_dataset_columns(ds_info["id"])
+        refresh_result = prov.refresh_dataset_columns(ds_info["id"])
+        if refresh_result.status == OperationStatus.TIMED_OUT:
+            print(
+                f"  WARNING: Column refresh timed out for {ds_info['name']} "
+                f"(id={ds_info['id']}) — continuing with spec columns."
+            )
+        elif not refresh_result.succeeded:
+            errs = [d.message for d in refresh_result.diagnostics if d.severity == Severity.ERROR]
+            print(f"  WARNING: Column refresh failed for {ds_info['name']}: {errs}")
+
         val_result = prov.validate_dataset(
             ds_info["id"], ds_info["name"], dataset_folder_label
         )
-        if not val_result.succeeded:
+        if val_result.status == OperationStatus.TIMED_OUT:
+            print(
+                f"  WARNING: Dataset validation timed out for {ds_info['name']} "
+                f"(id={ds_info['id']}) — continuing. Kyvos may still be processing the dataset."
+            )
+        elif not val_result.succeeded:
             errs = [d.message for d in val_result.diagnostics if d.severity == Severity.ERROR]
             validation_errors.append(f"{ds_info['name']}: {errs}")
 
@@ -787,6 +882,8 @@ def _deploy_spec(
             print(f"    - {r}")
 
     print(f"  Valid relationships: {len(validated_rels)} / {len(semantic_model.relationships)}")
+    if tracer:
+        tracer.step("Build DRD + Semantic Model", f"Validated {len(validated_rels)} relationships")
 
     fact_dataset_names = set()
     bridge_dataset_names = set()
@@ -849,6 +946,8 @@ def _deploy_spec(
         bridge_dataset_names=bridge_dataset_names,
         fmt=config.payload_format,
     )
+    if payload_dump_dir:
+        _dump_payload(payload_dump_dir, drd_name, "drd", drd_artifact.payload, config.payload_format)
 
     drd_result = prov.apply_artifact(drd_artifact)
     if not drd_result.succeeded:
@@ -933,7 +1032,7 @@ def _deploy_spec(
         drd_id=server_drd_id,
         folder_id=smodel_folder_id,
         folder_name=smodel_folder_label,
-        connection_name=config.warehouse_connection_name,
+        connection_name=connection_name,
         dataset_name_to_id=dataset_name_to_id,
         relationships=validated_rels,
         dataset_aliases=dataset_aliases,
@@ -942,6 +1041,11 @@ def _deploy_spec(
         dataset_columns=dataset_cols,
         fmt=config.payload_format,
     )
+
+    # Dump compiled payloads before sending to Kyvos — critical for diagnosing
+    # server-side 400/JSON processing errors.
+    if payload_dump_dir:
+        _dump_payload(payload_dump_dir, smodel_name, "smodel", sm_artifact.payload, config.payload_format)
 
     no_measures_diag = [d for d in sm_artifact.diagnostics if d.code == "NO_MEASURES_PLACED"]
     if no_measures_diag:
@@ -995,12 +1099,16 @@ def _deploy_spec(
             "ai settings", "azureopenai", "aws-bedrock", "bedrock",
             "reasoning.effort", "model version has reached the end of its life",
             "llm", "analytical server could not perform semantic model validations",
+            "too many aggregates", "aggregation strategy",
         ]
         _all_ai_errors = all(
             any(p in e.lower() for p in _ai_error_patterns)
             for e in _sm_val_errs
         )
-        _allow_ai_failure = os.environ.get("KYVOS_ALLOW_AI_VALIDATION_FAILURE", "").lower() in ("1", "true", "yes")
+        _allow_ai_failure = (
+            config.allow_ai_validation_failure
+            or os.environ.get("KYVOS_ALLOW_AI_VALIDATION_FAILURE", "").lower() in ("1", "true", "yes")
+        )
         if _all_ai_errors:
             print(f"  SM validation failed due to server-side AI/LLM configuration issues ({len(_sm_val_errs)} message(s)):")
             for e in _sm_val_errs[:10]:
@@ -1084,6 +1192,9 @@ def _deploy_spec(
     print(f"   Connection    : {config.warehouse_connection_name}")
     print(f"   DRD           : {drd_name} (id={server_drd_id})")
     print(f"   Semantic Model: {smodel_name}")
+
+    if tracer:
+        tracer.json_dump("Deployment result", result)
 
     return result
 
@@ -1181,7 +1292,7 @@ def run_deploy_from_xmla(
     return 0
 
 
-def run_discover_sm_from_warehouse(
+def prepare_discovered_spec(
     *,
     env_file: str,
     sm_design_path: str | None = None,
@@ -1190,46 +1301,19 @@ def run_discover_sm_from_warehouse(
     domain: str | None = None,
     allow_web_research: bool = True,
     sm_hints: dict | None = None,
-    auto_approve: bool = False,
     schema_filter: str | None = None,
     max_tables: int = 500,
     payload_format: str | None = None,
-    dry_run: bool = False,
-    cleanup_dry_run: bool = False,
-    perform_cleanup: bool = False,
-    sm_folder_suffix: str = "",
-) -> int:
-    """Run the discover-sm-from-warehouse skill flow.
+    schema_summary: dict[str, Any] | None = None,
+    trace_path: str | None = None,
+) -> tuple[Any, Any, str, str, dict[str, Any], dict[str, Any]]:
+    """Prepare a DiscoveredSpec without deploying it.
 
-    Supports two modes:
-    1. Pre-approved JSON mode: sm_design_path or sm_design provided directly.
-    2. LLM mode: user_intent provided, uses Anthropic API to generate SM design.
-
-    Inspects the warehouse schema, obtains/validates the SM design, builds a
-    deployment spec, and deploys to Kyvos.
-
-    Args:
-        env_file: Path to the .env config file.
-        sm_design_path: Path to a pre-approved SM design JSON file (mode 1).
-        sm_design: Inline SM design dict (mode 1, alternative to sm_design_path).
-        user_intent: Natural language analytics intent (mode 2, triggers LLM).
-        domain: Optional domain hint for LLM (e.g. "adventure_works").
-        allow_web_research: If False, LLM uses built-in knowledge only.
-        sm_hints: Optional dict with max_sms, preferred_schema_type, etc.
-        auto_approve: If True, skip interactive approval gate (for CI/CD).
-        schema_filter: Warehouse schema to inspect (default per warehouse type).
-        max_tables: Inspection cap (raises if exceeded).
-        payload_format: Override payload format ("json" or "xml").
-        dry_run: If True, inspect + build spec only, no API calls.
+    Runs steps 1-4 of ``run_discover_sm_from_warehouse``: load config,
+    inspect schema, obtain/validate SM design, and build the deployment spec.
 
     Returns:
-        0 on success, 1 on failure.
-
-    Raises:
-        ValueError: If neither sm_design_path/sm_design nor user_intent is
-                    provided, or if the SM design references tables not found
-                    in the warehouse.
-        FileNotFoundError: If sm_design_path doesn't exist.
+        Tuple of (discovered_spec, config, base_name, _safe_base, schema_summary, sm_design_dict).
     """
     # ═══════════════════════════════════════════════════════════════════════
     # Step 1: Load config
@@ -1254,20 +1338,30 @@ def run_discover_sm_from_warehouse(
     print("  Step 2: Inspect warehouse schema")
     print(f"{'─' * 70}")
 
-    from kyvos_sdk.warehouse_inspector import inspect_schema
+    if schema_summary is None:
+        from kyvos_sdk.warehouse_inspector import inspect_schema
 
-    schema_summary = inspect_schema(config, schema_filter=schema_filter, max_tables=max_tables)
+        schema_summary = inspect_schema(config, schema_filter=schema_filter, max_tables=max_tables)
+    else:
+        print("  Using provided schema_summary (skipping SQLAlchemy inspection).")
 
     print(f"  Schema: {schema_summary['schema']}")
     print(f"  Tables discovered: {schema_summary['table_count']}")
     print(f"  Relationships: {len(schema_summary['relationships'])}")
 
-    patterns = schema_summary["detected_patterns"]
-    if patterns["potential_star_schemas"]:
+    patterns = schema_summary.get("detected_patterns", {})
+    rec_pattern = patterns.get("recommended_pattern")
+    if rec_pattern:
+        print(f"  Recommended pattern: {rec_pattern}")
+        rationale = patterns.get("pattern_rationale", "")
+        if rationale:
+            print(f"  Pattern rationale: {rationale}")
+    # Also print legacy potential_* counts if present
+    if patterns.get("potential_star_schemas"):
         print(f"  Potential star schemas: {len(patterns['potential_star_schemas'])}")
-    if patterns["potential_snowflake_schemas"]:
+    if patterns.get("potential_snowflake_schemas"):
         print(f"  Potential snowflake schemas: {len(patterns['potential_snowflake_schemas'])}")
-    if patterns["potential_multifact_schemas"]:
+    if patterns.get("potential_multifact_schemas"):
         print(f"  Potential multifact schemas: {len(patterns['potential_multifact_schemas'])}")
 
     # Print table summary
@@ -1298,7 +1392,6 @@ def run_discover_sm_from_warehouse(
 
         from kyvos_sm_skills.llm_designer import (
             design_sm_from_schema,
-            format_recommendation_for_review,
             validate_sm_recommendation,
         )
 
@@ -1309,6 +1402,7 @@ def run_discover_sm_from_warehouse(
             allow_web_research=allow_web_research,
             sm_hints=sm_hints,
             llm_provider=_provider,
+            trace_path=trace_path,
         )
 
         print("  LLM design complete")
@@ -1324,67 +1418,201 @@ def run_discover_sm_from_warehouse(
                 f"LLM-generated SM design has {len(validation_errors)} validation error(s) "
                 f"against the inspected warehouse schema."
             )
-
-        # Approval gate
-        if not auto_approve and not dry_run:
-            review_text = format_recommendation_for_review(sm_design_dict)
-            print(review_text)
-            response = _safe_input("\n  Approve this SM design? (y/n): ")
-            if response != "y":
-                print("  SM design rejected by user. Exiting.")
-                return 1
-            print("  SM design approved.")
-        elif dry_run:
-            review_text = format_recommendation_for_review(sm_design_dict)
-            print(review_text)
     else:
         raise ValueError(
             "Either sm_design_path, sm_design, or user_intent must be provided."
         )
 
-    # Extract the first SM recommendation (the flow supports multiple, but we deploy one at a time)
+    # Build a DiscoveredSpec for EVERY recommended SM (not just the first).
     recommended_sms = sm_design_dict.get("recommended_sms", [])
     if not recommended_sms:
         raise ValueError("SM design JSON must contain at least one SM in 'recommended_sms'.")
 
-    sm_rec = recommended_sms[0]
-    print(f"  SM name: {sm_rec.get('name', 'unknown')}")
-    print(f"  Schema type: {sm_rec.get('schema_type', 'unknown')}")
-    print(f"  Tables: {len(sm_rec.get('tables', []))}")
-    print(f"  Relationships: {len(sm_rec.get('relationships', []))}")
-    print(f"  Measures: {len(sm_rec.get('measures', []))}")
-    print(f"  Hierarchies: {len(sm_rec.get('hierarchies', []))}")
+    from kyvos_sm_skills.pipeline_tracer import get_tracer
+    from kyvos_sm_skills.spec_builder import build_spec_from_recommendation, merge_specs_for_review
+
+    tracer = get_tracer()
 
     # ═══════════════════════════════════════════════════════════════════════
-    # Step 4: Build spec from recommendation
+    # Step 4: Build spec(s) from recommendation
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
     print("  Step 4: Build spec from recommendation")
     print(f"{'─' * 70}")
 
-    from kyvos_sm_skills.spec_builder import build_spec_from_recommendation
+    sm_specs: list[tuple[dict[str, Any], Any]] = []
+    for i, sm_rec in enumerate(recommended_sms):
+        sm_name = sm_rec.get("name", "unknown")
+        print(f"\n  SM {i + 1}/{len(recommended_sms)}: {sm_name}")
+        print(f"    Schema type: {sm_rec.get('schema_type', 'unknown')}")
+        print(f"    Tables: {len(sm_rec.get('tables', []))}")
+        print(f"    Relationships: {len(sm_rec.get('relationships', []))}")
+        print(f"    Measures: {len(sm_rec.get('measures', []))}")
+        print(f"    Hierarchies: {len(sm_rec.get('hierarchies', []))}")
 
-    discovered_spec = build_spec_from_recommendation(
-        sm_rec=sm_rec,
-        warehouse_tables=schema_summary["tables"],
-    )
+        if tracer:
+            tracer.step(
+                f"Spec Builder: SM {i + 1}",
+                f"SM '{sm_name}' — {len(sm_rec.get('tables', []))} tables",
+            )
 
-    print(f"  Built spec: {len(discovered_spec.tables)} tables, "
-          f"{len(discovered_spec.semantic_model.relationships)} relationships, "
-          f"{len(discovered_spec.semantic_model.measures)} measures, "
-          f"{len(discovered_spec.semantic_model.hierarchies)} hierarchies")
+        spec = build_spec_from_recommendation(
+            sm_rec=sm_rec,
+            warehouse_tables=schema_summary["tables"],
+        )
+        sm_specs.append((sm_rec, spec))
 
-    base_name = sm_rec.get("name", "DiscoveredSM").replace("_", " ").title()
-    # Derive a deterministic folder base name from the warehouse schema name.
-    # This ensures folders are stable and reusable across runs, regardless of
-    # the LLM-generated SM name (which changes each run).
-    # The LLM-generated name is still used for the SM entity name (with timestamp).
+        print(f"    Built: {len(spec.tables)} tables, "
+              f"{len(spec.semantic_model.relationships)} rels, "
+              f"{len(spec.semantic_model.measures)} measures, "
+              f"{len(spec.semantic_model.hierarchies)} hierarchies")
+
+        if tracer:
+            tracer.note(
+                f"SM {i + 1} spec: {sm_name}",
+                f"Tables: {[t.name for t in spec.tables]}\n"
+                f"Relationships: {len(spec.semantic_model.relationships)}\n"
+                f"Measures: {len(spec.semantic_model.measures)}\n"
+                f"Hierarchies: {len(spec.semantic_model.hierarchies)}",
+            )
+
+    # Merge all specs into one for review display (all tables visible).
+    discovered_spec = merge_specs_for_review(sm_specs)
+
+    total_tables = len(discovered_spec.tables)
+    total_rels = len(discovered_spec.semantic_model.relationships)
+    total_measures = len(discovered_spec.semantic_model.measures)
+    total_hierarchies = len(discovered_spec.semantic_model.hierarchies)
+    print(f"\n  Merged review spec: {total_tables} tables, {total_rels} rels, "
+          f"{total_measures} measures, {total_hierarchies} hierarchies "
+          f"(across {len(sm_specs)} SMs)")
+
+    if tracer:
+        tracer.note(
+            "Merged review spec",
+            f"Total tables: {[t.name for t in discovered_spec.tables]}\n"
+            f"Total relationships: {total_rels}\n"
+            f"Total measures: {total_measures}\n"
+            f"Total hierarchies: {total_hierarchies}\n"
+            f"SMs: {[r.get('name') for r, _ in sm_specs]}",
+        )
+
+    # Use the first SM's name for the base_name (folder naming).
+    first_sm_name = recommended_sms[0].get("name", "DiscoveredSM")
+    base_name = first_sm_name.replace("_", " ").title()
     _schema_name = schema_summary.get("schema", "") or config.warehouse_database or "DiscoveredSM"
     _safe_base = re.sub(r"[^A-Za-z0-9~@#^_-]", "", _schema_name.replace(" ", "_").replace(".", ""))
     if not _safe_base:
         _safe_base = "DiscoveredSM"
 
-    # If cleanup-dry-run is requested, scan and report before any dry-run exit
+    # Store per-SM specs in the design dict for the resume/deploy path.
+    sm_design_dict["_sm_specs"] = [
+        {"sm_rec": sm_rec, "spec": discovered_spec_to_dict(spec)}
+        for sm_rec, spec in sm_specs
+    ]
+
+    return discovered_spec, config, base_name, _safe_base, schema_summary, sm_design_dict
+
+
+def run_discover_sm_from_warehouse(
+    *,
+    env_file: str,
+    sm_design_path: str | None = None,
+    sm_design: dict | None = None,
+    user_intent: str | None = None,
+    domain: str | None = None,
+    allow_web_research: bool = True,
+    sm_hints: dict | None = None,
+    auto_approve: bool = False,
+    schema_filter: str | None = None,
+    max_tables: int = 500,
+    payload_format: str | None = None,
+    dry_run: bool = False,
+    cleanup_dry_run: bool = False,
+    perform_cleanup: bool = False,
+    sm_folder_suffix: str = "",
+    schema_summary: dict[str, Any] | None = None,
+    kyvos_connection_name: str | None = None,
+) -> int:
+    """Run the discover-sm-from-warehouse skill flow.
+
+    Supports two modes:
+    1. Pre-approved JSON mode: sm_design_path or sm_design provided directly.
+    2. LLM mode: user_intent provided, uses Anthropic API to generate SM design.
+
+    Inspects the warehouse schema (or accepts a pre-built schema_summary),
+    obtains/validates the SM design, builds a deployment spec, and deploys to
+    Kyvos.
+
+    Args:
+        env_file: Path to the .env config file.
+        sm_design_path: Path to a pre-approved SM design JSON file (mode 1).
+        sm_design: Inline SM design dict (mode 1, alternative to sm_design_path).
+        user_intent: Natural language analytics intent (mode 2, triggers LLM).
+        domain: Optional domain hint for LLM (e.g. "adventure_works").
+        allow_web_research: If False, LLM uses built-in knowledge only.
+        sm_hints: Optional dict with max_sms, preferred_schema_type, etc.
+        auto_approve: If True, skip interactive approval gate (for CI/CD).
+        schema_filter: Warehouse schema to inspect (default per warehouse type).
+        max_tables: Inspection cap (raises if exceeded).
+        payload_format: Override payload format ("json" or "xml").
+        dry_run: If True, inspect + build spec only, no API calls.
+        schema_summary: Optional pre-built schema summary (skips SQLAlchemy
+            inspection). Used by the Kyvos metadata discovery flow.
+        kyvos_connection_name: Optional Kyvos connection name to use for the
+            deployed datasets/DRD/SM. When provided, the pipeline skips creating
+            a new warehouse connection and uses the existing one.
+
+    Returns:
+        0 on success, 1 on failure.
+
+    Raises:
+        ValueError: If neither sm_design_path/sm_design nor user_intent is
+                    provided, or if the SM design references tables not found
+                    in the warehouse.
+        FileNotFoundError: If sm_design_path doesn't exist.
+    """
+    discovered_spec, config, base_name, _safe_base, schema_summary, sm_design_dict = prepare_discovered_spec(
+        env_file=env_file,
+        sm_design_path=sm_design_path,
+        sm_design=sm_design,
+        user_intent=user_intent,
+        domain=domain,
+        allow_web_research=allow_web_research,
+        sm_hints=sm_hints,
+        schema_filter=schema_filter,
+        max_tables=max_tables,
+        payload_format=payload_format,
+        schema_summary=schema_summary,
+    )
+
+    # Approval gate for CLI / non-HITL usage
+    if user_intent and not auto_approve and not dry_run:
+        from kyvos_sm_skills.llm_designer import format_recommendation_for_review
+
+        review_text = format_recommendation_for_review(sm_design_dict)
+        print(review_text)
+        response = _safe_input("\n  Approve this SM design? (y/n): ")
+        if response != "y":
+            print("  SM design rejected by user. Exiting.")
+            return 1
+        print("  SM design approved.")
+    elif dry_run:
+        from kyvos_sm_skills.llm_designer import format_recommendation_for_review
+
+        review_text = format_recommendation_for_review(sm_design_dict)
+        print(review_text)
+        print(f"\n✅ Dry run complete — inspected {schema_summary['table_count']} tables, "
+              f"built spec with {len(discovered_spec.tables)} tables, "
+              f"{len(discovered_spec.semantic_model.relationships)} relationships, "
+              f"{len(discovered_spec.semantic_model.measures)} measures")
+        print(f"\n   Base name: {base_name}")
+        print(f"   Folder base: {_safe_base}")
+        print(f"   Schema type: {discovered_spec.metadata.get('schema_type', 'unknown')}")
+        print(f"   Rationale: {discovered_spec.metadata.get('rationale', '')}")
+        return 0
+
+    # If cleanup-dry-run is requested, scan and report before deploying
     if cleanup_dry_run:
         print(f"\n{'─' * 70}")
         print(f"  Cleanup Dry Run (base_name={_safe_base})")
@@ -1403,17 +1631,6 @@ def run_discover_sm_from_warehouse(
             dry_run=True,
         )
 
-    if dry_run:
-        print(f"\n✅ Dry run complete — inspected {schema_summary['table_count']} tables, "
-              f"built spec with {len(discovered_spec.tables)} tables, "
-              f"{len(discovered_spec.semantic_model.relationships)} relationships, "
-              f"{len(discovered_spec.semantic_model.measures)} measures")
-        print(f"\n   Base name: {base_name}")
-        print(f"   Folder base: {_safe_base}")
-        print(f"   Schema type: {discovered_spec.metadata.get('schema_type', 'unknown')}")
-        print(f"   Rationale: {discovered_spec.metadata.get('rationale', '')}")
-        return 0
-
     # ═══════════════════════════════════════════════════════════════════════
     # Steps 5-11: Deploy via shared pipeline
     # ═══════════════════════════════════════════════════════════════════════
@@ -1427,10 +1644,69 @@ def run_discover_sm_from_warehouse(
         perform_cleanup=perform_cleanup,
         auto_approve=auto_approve,
         sm_folder_suffix=sm_folder_suffix,
+        kyvos_connection_name=kyvos_connection_name,
     )
     print("\n   Discovery source: warehouse schema inspection")
     print(f"   Schema type: {discovered_spec.metadata.get('schema_type', 'unknown')}")
     return 0
+
+
+def discovered_spec_to_dict(spec: DiscoveredSpec) -> dict[str, Any]:
+    """Serialize a DiscoveredSpec to a plain dict for JSON storage / review.
+
+    Pydantic model fields are dumped recursively so the result can be stored
+    in ReviewStore and consumed by the frontend review page.
+    """
+    return {
+        "tables": [t.model_dump() for t in spec.tables],
+        "semantic_model": spec.semantic_model.model_dump(),
+        "metadata": spec.metadata,
+    }
+
+
+def dict_to_discovered_spec(spec_dict: dict[str, Any]) -> DiscoveredSpec:
+    """Rehydrate a DiscoveredSpec from a dict produced by ``discovered_spec_to_dict``."""
+    from kyvos_sdk.models import SemanticModelSpec, TableSpec
+
+    tables = [TableSpec(**t) for t in spec_dict.get("tables", [])]
+    semantic_model = SemanticModelSpec(**spec_dict.get("semantic_model", {"name": "DiscoveredSM"}))
+    return DiscoveredSpec(
+        tables=tables,
+        semantic_model=semantic_model,
+        metadata=spec_dict.get("metadata", {}),
+    )
+
+
+def deploy_prepared_spec(
+    discovered_spec: DiscoveredSpec,
+    config: Any,
+    base_name: str,
+    *,
+    kyvos_connection_name: str | None = None,
+    cleanup_dry_run: bool = False,
+    perform_cleanup: bool = False,
+    auto_approve: bool = True,
+    sm_folder_suffix: str = "",
+    payload_dump_dir: str | None = None,
+) -> dict[str, Any]:
+    """Deploy a previously prepared DiscoveredSpec to Kyvos.
+
+    This is used by the HITL discovery flow to resume deployment after the
+    user approves the generated semantic-model design.
+    """
+    return _deploy_spec(
+        tables=discovered_spec.tables,
+        semantic_model=discovered_spec.semantic_model,
+        metadata=discovered_spec.metadata,
+        base_name=base_name,
+        config=config,
+        cleanup_dry_run=cleanup_dry_run,
+        perform_cleanup=perform_cleanup,
+        auto_approve=auto_approve,
+        sm_folder_suffix=sm_folder_suffix,
+        kyvos_connection_name=kyvos_connection_name,
+        payload_dump_dir=payload_dump_dir,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -305,7 +305,7 @@ class TestGap7MeasureRemappingAndFactDetection:
         )
 
         payload = json.loads(artifact.payload)
-        measures = payload.get("specific", {}).get("smObject", {}).get("measures", {}).get("measure", [])
+        measures = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("measures", {}).get("measure", [])
         assert len(measures) > 0, "No measures placed — remapping or fact detection failed"
         assert measures[0]["name"] == "TotalAmount"
         # In Simplified JSON format, dataset reference is in dataField.queryName
@@ -355,13 +355,14 @@ class TestGap7MeasureRemappingAndFactDetection:
         )
 
         payload = json.loads(artifact.payload)
-        dimensions = payload.get("specific", {}).get("smObject", {}).get("dimensions", [])
+        dimensions = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("dimensions", [])
         assert len(dimensions) > 0, "No dimensions placed — hierarchy remapping failed"
         assert dimensions[0]["name"] == "DimCustomer"
-        # In Simplified JSON format, dataset reference is in dataSources[0].id
+        # In Simplified JSON format, dataset reference is in dataSources[0].id.
+        # The id is a DRD node id of the form "{dataset_id}_{idx}".
         data_sources = dimensions[0].get("dataSources", [])
         assert len(data_sources) > 0
-        assert data_sources[0]["id"] == "ds_002"
+        assert data_sources[0]["id"].startswith("ds_002")
 
     def test_no_measures_without_fact_dataset_names(self):
         """Without fact_dataset_names, compiler should report NO_MEASURES_PLACED."""
