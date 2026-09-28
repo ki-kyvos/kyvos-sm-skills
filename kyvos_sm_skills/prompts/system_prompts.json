@@ -332,6 +332,8 @@
       "     industry codes). Do NOT copy real proprietary data verbatim.",
       "",
       "7. HIERARCHIES",
+      "   Create hierarchies ONLY for genuine business drill-down paths – a dimension with no",
+      "   natural rollup gets NO hierarchy; its columns are exposed as attributes automatically.",
       "   Normal multi-level hierarchies (type D below) MUST always be generated whenever a",
       "   dimension has a natural level progression – do NOT wait for explicit mention.",
       "   Advanced hierarchy types (A/B/C) are additive: a dimension CAN have BOTH a normal",

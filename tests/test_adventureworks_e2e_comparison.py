@@ -377,7 +377,16 @@ def _validate_hierarchy_fields(sm_json: dict):
 def _validate_level_fields(sm_json: dict):
     for dim in sm_json["specific"]["smObject"]["dimensions"]:
         for h in dim["hierarchies"]:
+            # First level must be the mandatory ALL level (fixed export shape,
+            # no bound column — the conformity fields below apply to data levels).
+            assert h["levels"], f"Hierarchy '{h['name']}' has no levels"
+            all_lvl = h["levels"][0]
+            assert all_lvl["name"] == "Hierarchy.ALL", \
+                f"Hierarchy '{h['name']}' first level is '{all_lvl['name']}', expected 'Hierarchy.ALL'"
+            assert all_lvl["isAll"] is True
             for lvl in h["levels"]:
+                if lvl.get("isAll"):
+                    continue
                 assert "dateDataType" in lvl, f"Level '{lvl['name']}' missing dateDataType"
                 assert "dateFormat" in lvl, f"Level '{lvl['name']}' missing dateFormat"
                 assert "format" in lvl, f"Level '{lvl['name']}' missing format"
@@ -476,7 +485,9 @@ class TestFlowAIntentFile:
         """Flow A with calculated KPIs should compile with MDX expressions."""
         spec, sm_json = _build_spec_and_compile(_AW_SM_DESIGN_WITH_KPIS, tmp_path)
         measures = sm_json["specific"]["smObject"]["measures"]["measure"]
-        calc_measures = [m for m in measures if "expression" in m]
+        # All measures now carry an expression object; calculated measures are
+        # the ones with non-empty expression.content (type is STANDARD).
+        calc_measures = [m for m in measures if m.get("expression", {}).get("content")]
         assert len(calc_measures) == 2  # GrossMargin, MarginPct
         _validate_mdx_expressions(sm_json)
 
@@ -484,7 +495,8 @@ class TestFlowAIntentFile:
         """Calculated measures should have empty summaryFunction and actualSummaryFunction."""
         _, sm_json = _build_spec_and_compile(_AW_SM_DESIGN_WITH_KPIS, tmp_path)
         measures = sm_json["specific"]["smObject"]["measures"]["measure"]
-        calc = [m for m in measures if "expression" in m]
+        calc = [m for m in measures if m.get("expression", {}).get("content")]
+        assert len(calc) == 2
         for m in calc:
             assert m["summaryFunction"] == ""
             assert m["actualSummaryFunction"] == ""

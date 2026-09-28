@@ -108,66 +108,40 @@ def _build_user_message(
     return "\n".join(parts)
 
 
-def _extract_json_from_response(text: str) -> dict[str, Any]:
-    """Extract JSON from an LLM response that may contain markdown code fences.
+def _parse_candidate(raw: str) -> dict[str, Any] | None:
+    """Try to parse *raw* as a top-level JSON object using the repair pipeline.
 
-    Handles common LLM JSON issues:
-    - Markdown code fences (```json ... ``` or ``` ... ```)
-    - Trailing commas (common LLM mistake)
-    - Truncated responses (attempts to close braces)
-    - Multiple code fence blocks
+    Stages: direct parse → trailing-comma removal → control-char/escape
+    sanitization → truncated-brace close → trim-to-last-closing-brace.
 
-    Raises:
-        ValueError: If the parsed JSON is not a top-level object (dict).
+    Returns the parsed dict, or ``None`` when no stage yields a JSON object.
     """
     import re as _re
 
-    json_str = None
-
-    # Try to find JSON in code fences first
-    if "```json" in text:
-        start = text.index("```json") + 7
-        # Find the matching closing fence
-        end_idx = text.find("```", start)
-        if end_idx != -1:
-            json_str = text[start:end_idx].strip()
-        else:
-            # No closing fence — take everything after ```json
-            json_str = text[start:].strip()
-    elif "```" in text:
-        start = text.index("```") + 3
-        end_idx = text.find("```", start)
-        if end_idx != -1:
-            json_str = text[start:end_idx].strip()
-        else:
-            json_str = text[start:].strip()
-    else:
-        # Try parsing the whole text as JSON
-        json_str = text.strip()
-
-    def _parse_object(raw: str) -> dict[str, Any] | None:
-        """Parse *raw* and return it only if it is a JSON object."""
+    def _parse_object(s: str) -> dict[str, Any] | None:
+        """Parse *s* and return it only if it is a JSON object."""
         try:
-            parsed = json.loads(raw)
+            parsed = json.loads(s)
         except json.JSONDecodeError:
             return None
         if not isinstance(parsed, dict):
             return None
         return parsed
 
-    # Attempt 1: direct parse
-    parsed = _parse_object(json_str)
+    # Stage 1: direct parse
+    parsed = _parse_object(raw)
     if parsed is not None:
         return parsed
 
-    # Attempt 2: remove trailing commas (common LLM mistake)
+    # Stage 2: remove trailing commas (common LLM mistake)
     # Trailing commas in objects: ,} or ,\s*}
     # Trailing commas in arrays: ,] or ,\s*]
-    cleaned = _re.sub(r",\s*([}\]])", r"\1", json_str)
+    cleaned = _re.sub(r",\s*([}\]])", r"\1", raw)
     parsed = _parse_object(cleaned)
     if parsed is not None:
         return parsed
 
+    # Stage 3: sanitize stray control characters / invalid escapes in strings
     sanitized_chars: list[str] = []
     in_string = False
     escaped = False
@@ -191,7 +165,7 @@ def _extract_json_from_response(text: str) -> dict[str, Any]:
     if parsed is not None:
         return parsed
 
-    # Attempt 3: try to fix truncated JSON by closing open braces/brackets
+    # Stage 4: try to fix truncated JSON by closing open braces/brackets
     _open_braces = sanitized.count("{") - sanitized.count("}")
     _open_brackets = sanitized.count("[") - sanitized.count("]")
     if _open_braces > 0 or _open_brackets > 0:
@@ -209,7 +183,7 @@ def _extract_json_from_response(text: str) -> dict[str, Any]:
         if parsed is not None:
             return parsed
 
-    # Attempt 4: find the last valid JSON object by trimming from the end.
+    # Stage 5: find the last valid JSON object by trimming from the end.
     # Instead of trying every position (O(n²)), only try positions of closing braces.
     brace_positions = [i for i, ch in enumerate(cleaned) if ch == "}"]
     for trim_pos in reversed(brace_positions[-20:]):
@@ -219,15 +193,73 @@ def _extract_json_from_response(text: str) -> dict[str, Any]:
         if parsed is not None:
             return parsed
 
-    # All attempts failed — raise with diagnostic info
-    raise json.JSONDecodeError(
-        f"Failed to parse a top-level JSON object after cleanup attempts. "
-        f"(Arrays/lists are not accepted — the response must be a JSON object with a 'recommended_sms' key.) "
-        f"First 200 chars: {json_str[:200]}... "
-        f"Last 200 chars: ...{json_str[-200:]}",
-        json_str,
-        0,
-    )
+    return None
+
+
+def _extract_json_from_response(text: str) -> dict[str, Any]:
+    """Extract JSON from an LLM response that may contain markdown code fences.
+
+    Handles common LLM JSON issues:
+    - Markdown code fences (```json ... ``` or ``` ... ```)
+    - Trailing commas (common LLM mistake)
+    - Truncated responses (attempts to close braces)
+    - Multiple code fence blocks
+
+    When several fenced blocks are present, every block is parsed through the
+    repair pipeline and the best candidate is selected: prefer the first block
+    with a non-empty ``recommended_sms`` list, else the first containing any
+    of ``tables``/``relationships``/``identified_domain``, else the largest
+    parsed object.
+
+    Raises:
+        ValueError: If the parsed JSON is not a top-level object (dict).
+    """
+    import re as _re
+
+    # Collect every fenced block (```json ... ``` or ``` ... ```).
+    fence_re = _re.compile(r"```(?:json)?\s*(.*?)```", _re.DOTALL)
+    matches = list(fence_re.finditer(text))
+    candidates: list[str] = [m.group(1).strip() for m in matches]
+
+    # A trailing fence that was never closed — take everything after it.
+    rest = text[matches[-1].end():] if matches else text
+    unclosed = rest.find("```")
+    if unclosed != -1:
+        tail_body = _re.sub(r"^```(?:json)?\s*", "", rest[unclosed:]).strip()
+        if tail_body:
+            candidates.append(tail_body)
+
+    # No fences at all — try parsing the whole text as JSON.
+    if not candidates:
+        candidates = [text.strip()]
+
+    parsed_candidates: list[dict[str, Any]] = []
+    for candidate in candidates:
+        parsed = _parse_candidate(candidate)
+        if parsed is not None:
+            parsed_candidates.append(parsed)
+
+    if not parsed_candidates:
+        json_str = candidates[0]
+        raise json.JSONDecodeError(
+            f"Failed to parse a top-level JSON object after cleanup attempts. "
+            f"(Arrays/lists are not accepted — the response must be a JSON object with a 'recommended_sms' key.) "
+            f"First 200 chars: {json_str[:200]}... "
+            f"Last 200 chars: ...{json_str[-200:]}",
+            json_str,
+            0,
+        )
+
+    # Prefer the block that carries the actual SM recommendation — the LLM
+    # sometimes emits smaller helper objects (glossaries, notes) in earlier
+    # fenced blocks before the real one.
+    for parsed in parsed_candidates:
+        if isinstance(parsed.get("recommended_sms"), list) and parsed["recommended_sms"]:
+            return parsed
+    for parsed in parsed_candidates:
+        if any(k in parsed for k in ("tables", "relationships", "identified_domain")):
+            return parsed
+    return max(parsed_candidates, key=lambda d: len(json.dumps(d, default=str)))
 
 
 # Transient errors that justify an automatic retry.
@@ -767,6 +799,8 @@ def repair_sm_hierarchies(
     table_col_type_map: dict[str, dict[str, str]] = {}
     # actual casing: {table_lower: {col_lower: col_actual_name}}
     table_col_actual_name: dict[str, dict[str, str]] = {}
+    # foreign-key columns per table: {table_lower: {col_lower}}
+    table_col_fk: dict[str, set[str]] = {}
     for t in schema_summary.get("tables", []):
         tname = t["name"].lower()
         cols_list = t.get("columns", [])
@@ -776,10 +810,30 @@ def repair_sm_hierarchies(
             for c in cols_list
         }
         table_col_actual_name[tname] = {c["name"].lower(): c["name"] for c in cols_list}
+        table_col_fk[tname] = {c["name"].lower() for c in cols_list if c.get("is_fk")}
 
     for sm in rec.get("recommended_sms", []):
         sm_tables_lower = {t.lower() for t in sm.get("tables", [])}
         repaired_hierarchies: list[dict[str, Any]] = []
+
+        # Hierarchies referenced by calculated measures ([table].[hier]) are
+        # exempt from the <2-level drop below — Kyvos accepts single-level
+        # hierarchies and dropping a referenced one would break the measure.
+        referenced_hiers: set[tuple[str, str]] = set()
+        for m in sm.get("measures", []):
+            if not m.get("is_calculated"):
+                continue
+            expr = m.get("expression", "")
+            if not isinstance(expr, str):
+                continue
+            for _ref in re.finditer(
+                r"\[\s*([^\]]+?)\s*\]\s*\.\s*\[\s*([^\]]+?)\s*\]",
+                expr,
+                re.IGNORECASE,
+            ):
+                referenced_hiers.add(
+                    (_ref.group(1).strip().lower(), _ref.group(2).strip().lower())
+                )
 
         for h in sm.get("hierarchies", []):
             h_name = h.get("name", "?")
@@ -819,10 +873,17 @@ def repair_sm_hierarchies(
                     repaired_hierarchies.append(h)
                     continue
 
-            # ── Repair 2: drop levels not in the source table ──────────
+            # ── Repair 2: drop levels not in the source table / FK levels ──
+            fk_cols = table_col_fk.get(source_lower, set())
             valid_levels: list[str] = []
             for lv in levels:
                 if lv.lower() in cols:
+                    if lv.lower() in fk_cols:
+                        repairs.append(
+                            f"Hierarchy '{h_name}': removed level '{lv}' "
+                            f"(foreign-key column, not a drill-down level)"
+                        )
+                        continue
                     valid_levels.append(lv)
                 else:
                     found_in = None
@@ -837,8 +898,20 @@ def repair_sm_hierarchies(
                     )
 
             # ── Repair 3: drop standard hierarchy with < 2 levels ──────
-            # Parent-child and alternate-path hierarchies are exempt.
+            # Parent-child and alternate-path hierarchies are exempt, and so
+            # are hierarchies referenced by a calculated measure — Kyvos
+            # accepts single-level hierarchies, and dropping a referenced one
+            # would break that measure. Hierarchies with 0 valid levels are
+            # still dropped.
             if not has_alt and len(valid_levels) < 2:
+                if valid_levels and (source_lower, h_name.lower()) in referenced_hiers:
+                    h["levels"] = valid_levels
+                    repaired_hierarchies.append(h)
+                    repairs.append(
+                        f"Hierarchy '{h_name}': kept with 1 level because it is "
+                        f"referenced by a calculated measure"
+                    )
+                    continue
                 repairs.append(
                     f"Hierarchy '{h_name}': dropped entirely "
                     f"(only {len(valid_levels)} valid level(s) remain; "
@@ -1041,11 +1114,18 @@ def validate_sm_recommendation(
         # Build a set of valid [dim].[hier].[level] paths from the SM design.
         valid_dim_hier_levels: set[tuple[str, str, str]] = set()
         valid_dim_hiers: set[tuple[str, str]] = set()
-        valid_dims: set[str] = set(sm_table_set)
+        # Fact/bridge tables are not dimensions in Kyvos — exclude them so
+        # MDX references to them are checked consistently below.
+        valid_dims: set[str] = {
+            t for t in sm_table_set
+            if table_type_map.get(t) not in ("fact", "bridge")
+        }
         for h in sm.get("hierarchies", []):
             h_name = h.get("name", "").strip()
             source = h.get("source_dataset", "").strip()
             if not h_name or not source:
+                continue
+            if table_type_map.get(source.lower()) in ("fact", "bridge"):
                 continue
             valid_dim_hiers.add((source.lower(), h_name.lower()))
             valid_dims.add(source.lower())
@@ -1061,6 +1141,7 @@ def validate_sm_recommendation(
             r"\[\s*([^\]]+?)\s*\]\s*\.\s*\[\s*([^\]]+?)\s*\](?:\s*\.\s*\[\s*([^\]]+?)\s*\])?",
             re.IGNORECASE,
         )
+        seen: set[str] = set()
         for measure in sm.get("measures", []):
             if not measure.get("is_calculated"):
                 continue
@@ -1072,20 +1153,41 @@ def validate_sm_recommendation(
                 # Skip measure references (already validated above)
                 if part1.lower() == "measures":
                     continue
+                # Fact/bridge tables are not dimensions — a [fact].[x] MDX
+                # reference can never resolve, so name the real problem.
+                if table_type_map.get(part1.lower()) in ("fact", "bridge"):
+                    msg = (
+                        f"SM '{sm_name}': calculated measure '{measure.get('name', '?')}' "
+                        f"references '[{part1}]' which is a fact/bridge table. "
+                        f"Fact columns are not dimension attributes in Kyvos and cannot be used "
+                        f"in MDX member/hierarchy references (e.g. FILTER/MEMBERS/CurrentMember). "
+                        f"Rewrite the measure using only dimension-table hierarchies, "
+                        f"or drop this calculated measure."
+                    )
+                    if msg not in seen:
+                        seen.add(msg)
+                        errors.append(msg)
+                    continue
                 if part3:
                     if (part1.lower(), part2.lower(), part3.lower()) not in valid_dim_hier_levels:
-                        errors.append(
+                        msg = (
                             f"SM '{sm_name}': calculated measure '{measure.get('name', '?')}' "
                             f"references unknown level/member '{part3}' in hierarchy '{part2}' of dimension '{part1}'. "
                             f"Use actual column/level names that exist in the SM design."
                         )
+                        if msg not in seen:
+                            seen.add(msg)
+                            errors.append(msg)
                 else:
                     if (part1.lower(), part2.lower()) not in valid_dim_hiers:
-                        errors.append(
+                        msg = (
                             f"SM '{sm_name}': calculated measure '{measure.get('name', '?')}' "
                             f"references unknown hierarchy '{part2}' on dimension '{part1}'. "
                             f"Use hierarchy names defined in the SM design."
                         )
+                        if msg not in seen:
+                            seen.add(msg)
+                            errors.append(msg)
 
         # Every fact table must have at least one measure — fact tables with no
         # measures get dropped by the connectivity sweep (they are not valid
@@ -1110,11 +1212,36 @@ def validate_sm_recommendation(
         # - all levels in a standard hierarchy share the same data-type family
         # - parent-child hierarchies have parent/child columns that share the same data-type family
         table_col_type_map: dict[str, dict[str, str]] = {}
+        table_col_flags: dict[str, dict[str, tuple[bool, bool]]] = {}
         for t in schema_summary.get("tables", []):
             table_col_type_map[t["name"].lower()] = {
                 c["name"].lower(): c.get("data_type", "")
                 for c in t.get("columns", [])
             }
+            table_col_flags[t["name"].lower()] = {
+                c["name"].lower(): (bool(c.get("is_pk")), bool(c.get("is_fk")))
+                for c in t.get("columns", [])
+            }
+
+        # Hierarchies referenced by calculated measures ([table].[hier]) are
+        # exempt from the "at least 2 levels" rule — repair_sm_hierarchies
+        # keeps them because Kyvos accepts single-level hierarchies and
+        # dropping one would break the referencing measure.
+        referenced_hiers: set[tuple[str, str]] = set()
+        for measure in sm.get("measures", []):
+            if not measure.get("is_calculated"):
+                continue
+            expr = measure.get("expression", "")
+            if not isinstance(expr, str):
+                continue
+            for _ref in re.finditer(
+                r"\[\s*([^\]]+?)\s*\]\s*\.\s*\[\s*([^\]]+?)\s*\]",
+                expr,
+                re.IGNORECASE,
+            ):
+                referenced_hiers.add(
+                    (_ref.group(1).strip().lower(), _ref.group(2).strip().lower())
+                )
 
         for h in sm.get("hierarchies", []):
             h_name = h.get("name", "?")
@@ -1132,7 +1259,17 @@ def validate_sm_recommendation(
             if not source:
                 continue
 
+            if table_type_map.get(source.lower()) in ("fact", "bridge"):
+                errors.append(
+                    f"SM '{sm_name}': hierarchy '{h_name}' is defined on fact/bridge table '{source}'. "
+                    f"Fact and bridge tables are not dimensions in Kyvos and cannot carry hierarchies; "
+                    f"define hierarchies only on dimension tables. "
+                    f"If this attribute is needed for slicing, it must live in a dimension table."
+                )
+                continue
+
             col_types = table_col_type_map.get(source.lower(), {})
+            col_flags = table_col_flags.get(source.lower(), {})
             has_alt = h.get("has_alternate_path", False)
             if not is_pc:
                 levels = h.get("levels", [])
@@ -1143,10 +1280,35 @@ def validate_sm_recommendation(
                             f"SM '{sm_name}': hierarchy '{h_name}' level '{level}' not in table '{source}'"
                         )
                     else:
+                        _lv_is_pk, lv_is_fk = col_flags.get(level.lower(), (False, False))
+                        if lv_is_fk:
+                            errors.append(
+                                f"SM '{sm_name}': hierarchy '{h_name}' uses foreign-key column "
+                                f"'{level}' as a level. Foreign keys reference other tables and are "
+                                f"not business drill-down levels; remove it (it will be exposed "
+                                f"as an attribute automatically)."
+                            )
+                            continue
                         existing_levels.append(level)
 
-                # Standard hierarchies need at least 2 levels.
-                if not has_alt and len(existing_levels) < 2 and not errors:
+                # A primary key / leaf identifier may only be the last (leaf)
+                # level — placing it above other levels is not a drill-down.
+                for i, level in enumerate(existing_levels):
+                    lv_is_pk, _lv_is_fk = col_flags.get(level.lower(), (False, False))
+                    if lv_is_pk and i != len(existing_levels) - 1:
+                        errors.append(
+                            f"SM '{sm_name}': hierarchy '{h_name}' places primary-key column "
+                            f"'{level}' above other levels. A key may only be the last (leaf) level."
+                        )
+
+                # Standard hierarchies need at least 2 levels — unless the
+                # hierarchy is referenced by a calculated measure (Kyvos
+                # accepts single-level hierarchies; repair keeps those).
+                _kept_for_measure = (
+                    len(existing_levels) >= 1
+                    and (source.lower(), h_name.lower()) in referenced_hiers
+                )
+                if not has_alt and len(existing_levels) < 2 and not _kept_for_measure and not errors:
                     errors.append(
                         f"SM '{sm_name}': hierarchy '{h_name}' has only {len(existing_levels)} level(s). "
                         f"Standard hierarchies must have at least 2 levels."

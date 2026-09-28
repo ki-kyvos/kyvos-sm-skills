@@ -444,7 +444,7 @@ def _deploy_spec(
     kyvos_connection_name: str | None = None,
     payload_dump_dir: str | None = None,
 ) -> dict[str, Any]:
-    """Shared deployment pipeline — steps 3-9 of the XMLA skill flow.
+    """Shared deployment pipeline — steps 3-10 of the XMLA skill flow.
 
     Args:
         tables: List of TableSpec-like objects (from XMLA parser or spec_builder).
@@ -510,6 +510,7 @@ def _deploy_spec(
     dataset_folder_label = f"{base_name}{_folder_suffix}"
     drd_folder_label     = f"{base_name}_DRD{_folder_suffix}"
     smodel_folder_label  = f"{base_name}_SModel{_folder_suffix}"
+    space_folder_label   = f"{base_name}_Space{_folder_suffix}"
 
     # --- Helper: find existing folder by name ---
     def _find_existing_folder(folder_type, folder_name):
@@ -549,12 +550,13 @@ def _deploy_spec(
     # naming conventions (e.g., "AdventureWorks" prefix from older runs).
     # By default (perform_cleanup=True), old entities are deleted to avoid
     # global measure name conflicts on the Kyvos server.
-    _stable_folder_names = {dataset_folder_label, drd_folder_label, smodel_folder_label}
+    _stable_folder_names = {dataset_folder_label, drd_folder_label, smodel_folder_label, space_folder_label}
     if sm_folder_suffix:
         # Protect the base (non-suffixed) folders so cleanup never touches other flows' entities
         _stable_folder_names.add(f"{base_name}")
         _stable_folder_names.add(f"{base_name}_DRD")
         _stable_folder_names.add(f"{base_name}_SModel")
+        _stable_folder_names.add(f"{base_name}_Space")
     _sm_prefixes = _derive_cleanup_prefixes(semantic_model.name.replace("_", " ").title())
     _did_cleanup = _collect_and_cleanup_entities(
         insp=insp,
@@ -679,7 +681,8 @@ def _deploy_spec(
                 f"Connection creation failed: {[d.message for d in conn_result.diagnostics]}"
             )
         connection_id = conn_result.primary_entity_id
-        print(f"Connection: {config.warehouse_connection_name} (id={connection_id})")
+        connection_name = config.warehouse_connection_name
+        print(f"Connection: {connection_name} (id={connection_id})")
         kyvos_db_type = config.warehouse_type
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -1070,14 +1073,73 @@ def _deploy_spec(
         "name": smodel_name,
     })
 
-    # Validate semantic model — retry up to 8 times with 30s delay (large models may hit server capacity limits)
+    # ═══════════════════════════════════════════════════════════════════════
+    # Step 9: Create AI space (before validation so it exists even if validation fails)
+    # ═══════════════════════════════════════════════════════════════════════
+    print(f"\n{'─' * 70}")
+    print("  Step 9: Create AI space")
+    print(f"{'─' * 70}")
+    if tracer:
+        tracer.step("Create AI Space", f"space_name={smodel_name}_Space")
+
+    # --- AI space folder: find or create ---
+    # Done here (not in the upfront folder block) so a failing SM never
+    # leaves an orphan SPACE folder. No entity cleanup — the Kyvos API does
+    # not support deleting AI spaces.
+    existing_space_folder_id = _find_existing_folder(FolderType.SPACE, space_folder_label)
+    if existing_space_folder_id:
+        space_folder_id = existing_space_folder_id
+        print(f"AI space folder: {space_folder_label} (id={space_folder_id}) — reusing existing")
+    else:
+        space_folder_result = prov.create_folder(space_folder_label, FolderType.SPACE)
+        if not space_folder_result.succeeded:
+            raise RuntimeError(
+                f"AI space folder creation failed: {[d.message for d in space_folder_result.diagnostics]}"
+            )
+        space_folder_id = space_folder_result.primary_entity_id
+        print(f"AI space folder: {space_folder_label} (id={space_folder_id}) — created")
+
+    ai_space_name = f"{smodel_name}_Space"
+    space_result = prov.create_ai_space(
+        space_name=ai_space_name,
+        folder_id=space_folder_id,
+        folder_name=space_folder_label,
+        semantic_models=[{
+            "id": smodel_id,
+            "name": smodel_name,
+            "folder_id": smodel_folder_id,
+            "folder_name": smodel_folder_label,
+        }],
+        description=f"AI Space for semantic model {smodel_name}",
+    )
+    if not space_result.succeeded:
+        raise RuntimeError(
+            f"AI space creation failed: {[d.message for d in space_result.diagnostics]}"
+        )
+    ai_space_id = space_result.primary_entity_id or ""
+    for _space_diag in space_result.diagnostics:
+        if _space_diag.severity == Severity.WARNING:
+            print(f"  WARNING: {_space_diag.message}")
+    print(f"AI Space: {ai_space_name} (id={ai_space_id}) — created")
+
+    created_entities.append({
+        "entity_type": "AI_SPACE",
+        "id": ai_space_id,
+        "name": ai_space_name,
+    })
+
+    # Validate semantic model — retry up to 8 times with 30s delay (large
+    # models may hit server capacity limits). Validation failure is NOT
+    # fatal: the model, AI space and all artifacts were already created.
     _sm_max_retries = 8
     _sm_retry_delay = 30
-    _sm_validation_skipped = False
+    _sm_validated = False
     _sm_val_errs: list[str] = []
+    _sm_val_kind = ""
     for _attempt in range(1, _sm_max_retries + 1):
         sm_val_result = prov.validate_semantic_model(smodel_id, smodel_name, smodel_folder_label)
         if sm_val_result.succeeded:
+            _sm_validated = True
             break
         # Check if this is a transient server capacity error (500) — keep retrying
         _is_capacity_error = any("capacity" in d.message.lower() for d in sm_val_result.diagnostics)
@@ -1094,7 +1156,7 @@ def _deploy_spec(
         # the server's AI connections (Azure OpenAI / AWS Bedrock) are
         # misconfigured or deprecated, validation fails with AI_SETTINGS errors.
         # When ALL returned errors are AI-related, the SM itself is structurally
-        # valid and was created successfully; allow the pipeline to continue.
+        # valid and was created successfully; warn and continue.
         _ai_error_patterns = [
             "ai settings", "azureopenai", "aws-bedrock", "bedrock",
             "reasoning.effort", "model version has reached the end of its life",
@@ -1105,55 +1167,49 @@ def _deploy_spec(
             any(p in e.lower() for p in _ai_error_patterns)
             for e in _sm_val_errs
         )
-        _allow_ai_failure = (
-            config.allow_ai_validation_failure
-            or os.environ.get("KYVOS_ALLOW_AI_VALIDATION_FAILURE", "").lower() in ("1", "true", "yes")
-        )
         if _all_ai_errors:
-            print(f"  SM validation failed due to server-side AI/LLM configuration issues ({len(_sm_val_errs)} message(s)):")
-            for e in _sm_val_errs[:10]:
-                print(f"    - {e}")
-            if len(_sm_val_errs) > 10:
-                print(f"    ... and {len(_sm_val_errs) - 10} more")
-            if _allow_ai_failure:
-                print("  WARNING: Continuing because KYVOS_ALLOW_AI_VALIDATION_FAILURE=1 is set.")
-                print(f"  Semantic Model {smodel_name} (id={smodel_id}) was created but NOT validated.")
-                _sm_validation_skipped = True
-                break
-            raise RuntimeError(
-                "Semantic model validation failed due to Kyvos server AI/LLM misconfiguration. "
-                "Set KYVOS_ALLOW_AI_VALIDATION_FAILURE=1 to continue with an unvalidated model. "
-                f"Errors: {_sm_val_errs[:5]}"
-            )
-
-        # Real validation errors — don't retry, report immediately
-        print(f"  SM validation FAILED with {len(_sm_val_errs)} error(s):")
+            _sm_val_kind = "ai_config"
+            print("  WARNING: Kyvos could not validate the semantic model "
+                  "(server-side AI/LLM configuration issue). Model, AI space and "
+                  "all artifacts were created successfully.")
+        else:
+            _sm_val_kind = "model"
+            print(f"  WARNING: Semantic model validation reported {len(_sm_val_errs)} error(s). "
+                  f"The model, AI space and all artifacts were created on the server; "
+                  f"review the validation messages in the Kyvos UI.")
         for e in _sm_val_errs[:10]:
             print(f"    - {e}")
         if len(_sm_val_errs) > 10:
             print(f"    ... and {len(_sm_val_errs) - 10} more")
-        raise RuntimeError(f"Semantic model validation failed with {len(_sm_val_errs)} error(s): {_sm_val_errs[:5]}")
+        break
     else:
+        _sm_val_kind = "capacity_timeout"
         _sm_val_errs = [d.message for d in sm_val_result.diagnostics]
         print("  WARNING: SM validation could not complete due to server capacity limits.")
         print(f"  SM was created successfully (id={smodel_id}) but validation timed out.")
         print("  The model can be validated manually from the Kyvos UI.")
-        _sm_validation_skipped = True
 
-    if _sm_validation_skipped:
-        print(f"Semantic Model: {smodel_name} (id={smodel_id}) — created, validation skipped")
-    else:
+    if _sm_validated:
         print(f"Semantic Model: {smodel_name} (id={smodel_id}) — validated")
+    else:
+        print(f"Semantic Model: {smodel_name} (id={smodel_id}) — created, not validated")
 
     # ═══════════════════════════════════════════════════════════════════════
-    # Step 9: Report results
+    # Step 10: Report results
     # ═══════════════════════════════════════════════════════════════════════
     print(f"\n{'─' * 70}")
-    print("  Step 9: Report results")
+    print("  Step 10: Report results")
     print(f"{'─' * 70}")
 
+    _val_warnings = [f"Semantic model validation: {e}" for e in _sm_val_errs]
+    if not _sm_validated and not _val_warnings:
+        _val_warnings = [
+            "Semantic model validation: could not complete — "
+            "the model was created but not validated."
+        ]
+
     result: dict[str, Any] = {
-        "success": not _sm_validation_skipped,
+        "success": True,
         "spec_summary": {
             "tables": len(tables),
             "relationships": len(semantic_model.relationships),
@@ -1166,17 +1222,23 @@ def _deploy_spec(
         "drd_id": server_drd_id,
         "smodel_name": smodel_name,
         "smodel_id": smodel_id,
-        "smodel_validation_skipped": _sm_validation_skipped,
+        "smodel_validation_skipped": not _sm_validated,
+        "smodel_validated": _sm_validated,
+        "smodel_validation_kind": _sm_val_kind or None,
+        "smodel_validation_errors": _sm_val_errs,
+        "ai_space_name": ai_space_name,
+        "ai_space_id": ai_space_id,
         "created_entities": created_entities + [
             {"entity_type": "FOLDER", "id": folder_id,        "name": dataset_folder_label},
             {"entity_type": "FOLDER", "id": drd_folder_id,    "name": drd_folder_label},
             {"entity_type": "FOLDER", "id": smodel_folder_id, "name": smodel_folder_label},
+            {"entity_type": "FOLDER", "id": space_folder_id,  "name": space_folder_label},
             {"entity_type": "CONNECTION", "id": connection_id, "name": config.warehouse_connection_name},
         ],
-        "errors": _sm_val_errs if _sm_validation_skipped else [],
-        "warnings": [],
+        "errors": [],
+        "warnings": _val_warnings if not _sm_validated else [],
     }
-    if _sm_validation_skipped:
+    if not _sm_validated:
         print("\n⚠️ Deployment completed with warnings")
         print("   Semantic model was created but could not be validated.")
         print("   Validation errors:")
@@ -1192,6 +1254,7 @@ def _deploy_spec(
     print(f"   Connection    : {config.warehouse_connection_name}")
     print(f"   DRD           : {drd_name} (id={server_drd_id})")
     print(f"   Semantic Model: {smodel_name}")
+    print(f"   AI Space      : {ai_space_name}")
 
     if tracer:
         tracer.json_dump("Deployment result", result)

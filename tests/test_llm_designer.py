@@ -123,6 +123,31 @@ class TestExtractJson:
         result = _extract_json_from_response(text)
         assert result["summary"] == "line one\nline two at C:\\warehouse"
 
+    def test_multiple_fences_prefers_recommended_sms(self):
+        """A small helper object fenced before the real recommendation must not win."""
+        glossary = {
+            "fact_loan_portfolio": "fact table of loans",
+            "dim_date": "calendar dimension",
+        }
+        text = (
+            "Column glossary:\n```json\n" + json.dumps(glossary) + "\n```\n"
+            "And the recommendation:\n```json\n" + json.dumps(_LLM_RESPONSE) + "\n```\n"
+        )
+        result = _extract_json_from_response(text)
+        assert "recommended_sms" in result
+        assert result["identified_domain"] == "retail_ecommerce"
+
+    def test_multiple_fences_without_recommendation_returns_largest(self):
+        """With no recommended_sms-bearing block, the largest parsed object wins."""
+        small = {"a": 1}
+        large = {"b": list(range(50)), "c": "x" * 100}
+        text = (
+            "```json\n" + json.dumps(small) + "\n```\n"
+            "some prose\n```\n" + json.dumps(large) + "\n```\n"
+        )
+        result = _extract_json_from_response(text)
+        assert result == large
+
 
 # ── Test _build_user_message ───────────────────────────────────────────────
 
@@ -830,3 +855,268 @@ class TestValidateFactTableMeasures:
         }
         errors = validate_sm_recommendation(rec, schema)
         assert not any("has no measures" in e for e in errors)
+
+
+# ── Test validator — fact/bridge hierarchies and MDX refs ──────────────────
+
+_FACT_HIER_SCHEMA = {
+    "tables": [
+        {
+            "name": "fact_loan",
+            "estimated_table_type": "fact",
+            "columns": [
+                {"name": "loan_id", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                {"name": "dpd_bucket", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                {"name": "amount", "data_type": "NUMERIC(15,2)", "is_pk": False, "is_fk": False},
+            ],
+        },
+        {
+            "name": "dim_region",
+            "estimated_table_type": "dimension",
+            "columns": [
+                {"name": "region_key", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                {"name": "region_name", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+            ],
+        },
+    ],
+}
+
+
+class TestValidateFactBridgeHierarchy:
+    def test_hierarchy_on_fact_table_flagged(self):
+        """A hierarchy whose source_dataset is a fact table must be rejected."""
+        rec = {
+            "recommended_sms": [{
+                "name": "LoanSM",
+                "tables": ["fact_loan", "dim_region"],
+                "relationships": [],
+                "measures": [
+                    {"name": "TotalAmount", "source_dataset": "fact_loan", "aggregation_type": "sum"},
+                ],
+                "hierarchies": [
+                    {"name": "DPD Bucket", "levels": ["dpd_bucket"], "source_dataset": "fact_loan"},
+                ],
+            }],
+        }
+        errors = validate_sm_recommendation(rec, _FACT_HIER_SCHEMA)
+        assert any("is defined on fact/bridge table" in e for e in errors)
+
+    def test_calc_measure_fact_reference_flagged_once(self):
+        """[fact].[x] refs in a calc measure get the fact-specific error, deduped."""
+        rec = {
+            "recommended_sms": [{
+                "name": "LoanSM",
+                "tables": ["fact_loan", "dim_region"],
+                "relationships": [],
+                "measures": [
+                    {"name": "TotalAmount", "source_dataset": "fact_loan", "aggregation_type": "sum"},
+                    {
+                        "name": "BadCalc",
+                        "is_calculated": True,
+                        "expression": (
+                            "COUNT(FILTER([fact_loan].[dpd_bucket].Members, "
+                            "[fact_loan].[dpd_bucket].CurrentMember))"
+                        ),
+                    },
+                ],
+                "hierarchies": [],
+            }],
+        }
+        errors = validate_sm_recommendation(rec, _FACT_HIER_SCHEMA)
+        fact_errors = [e for e in errors if "which is a fact/bridge table" in e]
+        assert len(fact_errors) == 1
+        assert "BadCalc" in fact_errors[0]
+
+    def test_calc_measure_dim_reference_still_validated(self):
+        """Unknown hierarchy on a real dimension still produces the generic error."""
+        rec = {
+            "recommended_sms": [{
+                "name": "LoanSM",
+                "tables": ["fact_loan", "dim_region"],
+                "relationships": [],
+                "measures": [
+                    {"name": "TotalAmount", "source_dataset": "fact_loan", "aggregation_type": "sum"},
+                    {
+                        "name": "BadCalc",
+                        "is_calculated": True,
+                        "expression": "[dim_region].[nonexistent_hier].Members",
+                    },
+                ],
+                "hierarchies": [],
+            }],
+        }
+        errors = validate_sm_recommendation(rec, _FACT_HIER_SCHEMA)
+        assert any("unknown hierarchy 'nonexistent_hier'" in e for e in errors)
+
+
+# ── Test repair/validator — referenced single-level hierarchy exemption ─────
+
+
+class TestReferencedSingleLevelHierarchy:
+    def test_referenced_single_level_hierarchy_kept(self):
+        """A 1-level dim hierarchy referenced by a calc measure is kept."""
+        rec = {
+            "recommended_sms": [{
+                "name": "TestSM",
+                "tables": ["dim_product"],
+                "measures": [{
+                    "name": "Calc",
+                    "is_calculated": True,
+                    "expression": "[dim_product].[Lone].Members",
+                }],
+                "hierarchies": [{
+                    "name": "Lone",
+                    "levels": ["product_name"],
+                    "source_dataset": "dim_product",
+                }],
+            }],
+        }
+        repairs = repair_sm_hierarchies(rec, _REPAIR_SCHEMA)
+        hiers = rec["recommended_sms"][0]["hierarchies"]
+        assert len(hiers) == 1
+        assert hiers[0]["levels"] == ["product_name"]
+        assert any("kept with 1 level" in r for r in repairs)
+
+    def test_unreferenced_single_level_hierarchy_dropped(self):
+        """The same hierarchy with no measure reference is dropped as before."""
+        rec = {
+            "recommended_sms": [{
+                "name": "TestSM",
+                "tables": ["dim_product"],
+                "measures": [{
+                    "name": "Calc",
+                    "is_calculated": True,
+                    "expression": "[dim_product].[Other].Members",
+                }],
+                "hierarchies": [{
+                    "name": "Lone",
+                    "levels": ["product_name"],
+                    "source_dataset": "dim_product",
+                }],
+            }],
+        }
+        repairs = repair_sm_hierarchies(rec, _REPAIR_SCHEMA)
+        assert len(rec["recommended_sms"][0]["hierarchies"]) == 0
+        assert any("dropped entirely" in r for r in repairs)
+
+    def test_validator_accepts_referenced_single_level_hierarchy(self):
+        """The validator must not re-flag a single-level hierarchy that repair kept."""
+        schema = {
+            "tables": [
+                {
+                    "name": "fact_sales",
+                    "estimated_table_type": "fact",
+                    "columns": [
+                        {"name": "amount", "data_type": "NUMERIC", "is_pk": False, "is_fk": False},
+                    ],
+                },
+                {
+                    "name": "dim_region",
+                    "estimated_table_type": "dimension",
+                    "columns": [
+                        {"name": "region_name", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                    ],
+                },
+            ],
+        }
+        rec = {
+            "recommended_sms": [{
+                "name": "SM1",
+                "tables": ["fact_sales", "dim_region"],
+                "relationships": [],
+                "measures": [
+                    {"name": "Total", "source_dataset": "fact_sales", "aggregation_type": "sum"},
+                    {
+                        "name": "Calc",
+                        "is_calculated": True,
+                        "expression": "[dim_region].[Region].Members",
+                    },
+                ],
+                "hierarchies": [
+                    {"name": "Region", "levels": ["region_name"], "source_dataset": "dim_region"},
+                ],
+            }],
+        }
+        errors = validate_sm_recommendation(rec, schema)
+        assert not any("at least 2 levels" in e for e in errors)
+        assert errors == []
+
+
+# ── Test validator/repair — key-column level flags ─────────────────────────
+
+_FLAG_SCHEMA = {
+    "tables": [
+        {
+            "name": "fact_loan",
+            "estimated_table_type": "fact",
+            "columns": [
+                {"name": "loan_id", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                {"name": "amount", "data_type": "NUMERIC(15,2)", "is_pk": False, "is_fk": False},
+            ],
+        },
+        {
+            "name": "dim_account",
+            "estimated_table_type": "dimension",
+            "columns": [
+                {"name": "account_key", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                {"name": "customer_key", "data_type": "INTEGER", "is_pk": False, "is_fk": True},
+                {"name": "account_type", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                {"name": "account_status", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+            ],
+        },
+    ],
+}
+
+
+def _flag_rec(levels: list[str]) -> dict:
+    return {
+        "recommended_sms": [{
+            "name": "SM1",
+            "tables": ["fact_loan", "dim_account"],
+            "relationships": [],
+            "measures": [
+                {"name": "Total", "source_dataset": "fact_loan", "aggregation_type": "sum"},
+            ],
+            "hierarchies": [
+                {"name": "Acct", "levels": levels, "source_dataset": "dim_account"},
+            ],
+        }],
+    }
+
+
+class TestHierarchyLevelFlags:
+    def test_fk_level_flagged(self):
+        """A foreign-key column used as a hierarchy level is rejected."""
+        errors = validate_sm_recommendation(
+            _flag_rec(["customer_key", "account_type"]), _FLAG_SCHEMA
+        )
+        assert any("foreign-key column" in e for e in errors)
+
+    def test_pk_at_leaf_ok(self):
+        """A primary key as the last (leaf) level is allowed."""
+        errors = validate_sm_recommendation(
+            _flag_rec(["account_type", "account_key"]), _FLAG_SCHEMA
+        )
+        assert errors == []
+
+    def test_pk_above_other_levels_flagged(self):
+        """A primary key above another level is rejected."""
+        errors = validate_sm_recommendation(
+            _flag_rec(["account_key", "account_type"]), _FLAG_SCHEMA
+        )
+        assert any("may only be the last (leaf) level" in e for e in errors)
+
+    def test_unflagged_columns_unaffected(self):
+        """Ordinary business columns produce no flag-related errors."""
+        errors = validate_sm_recommendation(
+            _flag_rec(["account_type", "account_status"]), _FLAG_SCHEMA
+        )
+        assert errors == []
+
+    def test_repair_drops_fk_level(self):
+        """Repair removes an FK level; reduced to 1 level it is then dropped."""
+        rec = _flag_rec(["customer_key", "account_type"])
+        repairs = repair_sm_hierarchies(rec, _FLAG_SCHEMA)
+        assert any("foreign-key column" in r for r in repairs)
+        assert rec["recommended_sms"][0]["hierarchies"] == []
+        assert any("dropped entirely" in r for r in repairs)

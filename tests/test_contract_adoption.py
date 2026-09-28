@@ -379,6 +379,278 @@ class TestBuildDrdGraph:
         assert ("DimCalendar", "DimCustomer") in rel_aliases
         assert ("DimSiteRegion", "DimCustomer") not in rel_aliases
 
+    def test_prunes_shared_outrigger_children(self):
+        """A shared outrigger (DimGeography joined from DimCustomer,
+        DimReseller and DimSalesTerritory) is ambiguous in Kyvos — keep
+        exactly one child join, alphabetically first on ties."""
+        rels = [
+            SimpleRel(
+                left_dataset="fact_sales", left_column="cust_key",
+                right_dataset="DimCustomer", right_column="cust_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="reseller_key",
+                right_dataset="DimReseller", right_column="reseller_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="terr_key",
+                right_dataset="DimSalesTerritory", right_column="terr_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimCustomer", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimReseller", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimSalesTerritory", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {
+            "fact_sales": "ds_f",
+            "DimCustomer": "ds_cu",
+            "DimReseller": "ds_re",
+            "DimSalesTerritory": "ds_st",
+            "DimGeography": "ds_geo",
+        }
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"fact_sales"},
+        )
+        id_to_alias = {n.node_id: n.alias for n in graph.nodes}
+        rel_aliases = {
+            (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
+            for r in graph.relations
+        }
+        # Exactly one dim->dim join into DimGeography survives — DimCustomer
+        # (all children tie at 1 fact edge; alphabetical tie-break).
+        geo_edges = {r for r in rel_aliases if "DimGeography" in r}
+        assert geo_edges == {("DimCustomer", "DimGeography")}
+        assert len(graph.relations) == 4
+
+    def test_shared_outrigger_keeps_child_with_most_fact_edges(self):
+        """Tie-break by fact-edge count: DimReseller joined to 2 facts beats
+        DimCustomer joined to 1."""
+        rels = [
+            SimpleRel(
+                left_dataset="fact_a", left_column="cust_key",
+                right_dataset="DimCustomer", right_column="cust_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_a", left_column="reseller_key",
+                right_dataset="DimReseller", right_column="reseller_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_b", left_column="reseller_key",
+                right_dataset="DimReseller", right_column="reseller_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimCustomer", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimReseller", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {
+            "fact_a": "ds_fa",
+            "fact_b": "ds_fb",
+            "DimCustomer": "ds_cu",
+            "DimReseller": "ds_re",
+            "DimGeography": "ds_geo",
+        }
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"fact_a", "fact_b"},
+        )
+        id_to_alias = {n.node_id: n.alias for n in graph.nodes}
+        rel_aliases = {
+            (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
+            for r in graph.relations
+        }
+        geo_edges = {r for r in rel_aliases if "DimGeography" in r}
+        assert geo_edges == {("DimReseller", "DimGeography")}
+        assert len(graph.relations) == 4
+
+    def test_shared_outrigger_conformed_parent_untouched(self):
+        """If the shared parent is itself joined to a fact it is a conformed
+        dimension — all child joins are kept."""
+        rels = [
+            SimpleRel(
+                left_dataset="fact_sales", left_column="cust_key",
+                right_dataset="DimCustomer", right_column="cust_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="reseller_key",
+                right_dataset="DimReseller", right_column="reseller_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="terr_key",
+                right_dataset="DimSalesTerritory", right_column="terr_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimCustomer", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimReseller", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimSalesTerritory", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {
+            "fact_sales": "ds_f",
+            "DimCustomer": "ds_cu",
+            "DimReseller": "ds_re",
+            "DimSalesTerritory": "ds_st",
+            "DimGeography": "ds_geo",
+        }
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"fact_sales"},
+        )
+        id_to_alias = {n.node_id: n.alias for n in graph.nodes}
+        rel_aliases = {
+            (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
+            for r in graph.relations
+        }
+        geo_edges = {r for r in rel_aliases if "DimGeography" in r}
+        assert len(geo_edges) == 4  # direct fact edge + all 3 child joins
+        assert len(graph.relations) == 7
+
+    def test_role_playing_dimension_creates_alias_nodes(self):
+        """A fact joined to the same dimension on several FK columns gets
+        one DRD node per role — same dataset id, distinct node ids and
+        alias names (Kyvos rejects two relations on one node pair)."""
+        rels = [
+            SimpleRel(
+                left_dataset="fact_sales", left_column="orderdatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="duedatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="shipdatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+        ]
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id={"fact_sales": "ds_f", "DimDate": "ds_d"},
+            relationships=rels,
+            fact_dataset_names={"fact_sales"},
+        )
+        date_nodes = [n for n in graph.nodes if n.dataset_ref.name == "DimDate"]
+        # Same dataset id on every node, distinct node ids, role aliases —
+        # the "order" role keeps the un-aliased base node.
+        assert len(date_nodes) == 3
+        assert {n.dataset_ref.id for n in date_nodes} == {"ds_d"}
+        assert len({n.node_id for n in date_nodes}) == 3
+        assert {n.alias for n in date_nodes} == {
+            "DimDate", "DimDate (Due)", "DimDate (Ship)",
+        }
+        # Each relation targets a distinct node id — no two relations share
+        # the same (source, target) node pair.
+        pairs = {(r.source_node_id, r.target_node_id) for r in graph.relations}
+        assert len(pairs) == 3
+        assert len({t for _, t in pairs}) == 3
+
+    def test_duplicate_dim_join_keeps_first(self, capsys):
+        """Two dim->dim relationships between the same dataset pair cannot
+        be represented in Kyvos — only the first is kept."""
+        rels = [
+            SimpleRel(
+                left_dataset="fact_sales", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="fact_sales", left_column="cust_key",
+                right_dataset="DimCustomer", right_column="cust_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimCustomer", left_column="geo_key",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="DimCustomer", left_column="geo_key2",
+                right_dataset="DimGeography", right_column="geo_key",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {
+            "fact_sales": "ds_f",
+            "DimCustomer": "ds_cu",
+            "DimGeography": "ds_geo",
+        }
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"fact_sales"},
+        )
+        id_to_alias = {n.node_id: n.alias for n in graph.nodes}
+        rel_aliases = {
+            (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
+            for r in graph.relations
+        }
+        # DimGeography is conformed (direct fact edge) so the outrigger pass
+        # leaves it alone — the generic duplicate rule drops the second
+        # DimCustomer -> DimGeography join.
+        cust_geo = {r for r in rel_aliases if r == ("DimCustomer", "DimGeography")}
+        assert len(cust_geo) == 1
+        assert len(graph.relations) == 3
+        out = capsys.readouterr().out
+        assert "Snowflake prune:" in out
+        assert "Dropped duplicate join DimCustomer -> DimGeography" in out
+
     def test_dim_to_dim_relationship_oriented_child_to_parent(self):
         """Snowflake dim->dim relationships put the FK-holding child on
         node1/source and the referenced parent on node2 — matching the
