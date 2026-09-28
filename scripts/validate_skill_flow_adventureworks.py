@@ -104,11 +104,20 @@ class MockKyvosService:
         cid = self._next_id("conn")
         return (cid, True)
 
-    def create_or_update_connection_xml(self, name=None, host=None, port=None,
-                                        database=None, username=None, password=None,
-                                        db_type=None, db_version=None,
-                                        use_existing_if_found=False,
-                                        jdbc_url_override="", driver_override=""):
+    def create_or_update_connection_xml(
+        self,
+        name=None,
+        host=None,
+        port=None,
+        database=None,
+        username=None,
+        password=None,
+        db_type=None,
+        db_version=None,
+        use_existing_if_found=False,
+        jdbc_url_override="",
+        driver_override="",
+    ):
         cid = self._next_id("conn")
         return (cid, True)
 
@@ -121,7 +130,11 @@ class MockKyvosService:
         return (server_name, did)
 
     def create_dataset_from_compiled_json(
-        self, payload, *, dataset_name="", folder_name="",
+        self,
+        payload,
+        *,
+        dataset_name="",
+        folder_name="",
     ):
         ds_name = dataset_name or payload.get("name", "")
         server_name = _snake_to_camel(ds_name) if ds_name else f"Dataset_{self._counter}"
@@ -155,7 +168,7 @@ class MockKyvosService:
     # ── DRD operations ──
     def create_dataset_relationship_drd(self, drd_xml):
         drd_id = self._next_id("drd")
-        return f'<RESPONSE><CODE>0</CODE><ID>{drd_id}</ID></RESPONSE>'
+        return f"<RESPONSE><CODE>0</CODE><ID>{drd_id}</ID></RESPONSE>"
 
     def create_dataset_relationship_drd_json(self, payload):
         drd_id = self._next_id("drd")
@@ -164,7 +177,7 @@ class MockKyvosService:
     # ── Semantic model operations ──
     def create_semantic_model_xml(self, smodel_xml):
         sm_id = self._next_id("sm")
-        return f'<RESPONSE><CODE>0</CODE><ID>{sm_id}</ID></RESPONSE>'
+        return f"<RESPONSE><CODE>0</CODE><ID>{sm_id}</ID></RESPONSE>"
 
     def create_semantic_model_json(self, payload):
         sm_id = self._next_id("sm")
@@ -212,6 +225,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     _print_step(1, "Load config")
     try:
         from kyvos_sdk.config import KyvosConfig
+
         config = KyvosConfig.from_env_file(env_file)
         _ok(f"Config loaded from {env_file}")
     except Exception as exc:
@@ -224,15 +238,18 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     _print_step(2, "Parse XMLA + derive names")
     try:
         from datetime import datetime
+
         from kyvos_xmla_parser.xmla_parser import parse_xmla
 
         xmla_file_path = str(xmla_file)
         with open(xmla_file_path) as f:
             spec = parse_xmla(f.read())
 
-        print(f"Parsed: {len(spec.tables)} tables, "
-              f"{len(spec.semantic_model.relationships)} relationships, "
-              f"{len(spec.semantic_model.measures)} measures")
+        print(
+            f"Parsed: {len(spec.tables)} tables, "
+            f"{len(spec.semantic_model.relationships)} relationships, "
+            f"{len(spec.semantic_model.measures)} measures"
+        )
 
         _schema_name = spec.metadata.get("schema_name", "") if isinstance(spec.metadata, dict) else ""
         if _schema_name:
@@ -242,13 +259,13 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
 
         _ts = datetime.now().strftime("%m%d%y_%H%M")
 
-        smodel_name      = f"{spec.semantic_model.name}_{_ts}"
-        drd_name         = f"{smodel_name} DRD"
-        drd_id           = f"drd_{smodel_name}"
+        smodel_name = f"{spec.semantic_model.name}_{_ts}"
+        drd_name = f"{smodel_name} DRD"
+        drd_id = f"drd_{smodel_name}"
 
         dataset_folder_label = f"{base_name} {_ts}"
-        drd_folder_label     = f"{base_name} DRD {_ts}"
-        smodel_folder_label  = f"{base_name} SModel {_ts}"
+        drd_folder_label = f"{base_name} DRD {_ts}"
+        smodel_folder_label = f"{base_name} SModel {_ts}"
 
         print(f"Base name     : {base_name}")
         print(f"Timestamp     : {_ts}")
@@ -261,6 +278,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     except Exception as exc:
         _fail(f"XMLA parse failed: {exc}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -270,8 +288,8 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     _print_step(3, "Initialize Kyvos client")
     try:
         from kyvos_sdk.client import KyvosService
-        from kyvos_sdk.provisioning import ProvisioningClient
         from kyvos_sdk.contracts.identity import FolderType
+        from kyvos_sdk.provisioning import ProvisioningClient
 
         if live:
             svc = KyvosService(config=config)
@@ -299,9 +317,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
 
         drd_folder_result = prov.create_folder(drd_folder_label, FolderType.DATASET_RELATIONSHIP)
         if not drd_folder_result.succeeded:
-            raise RuntimeError(
-                f"DRD folder creation failed: {[d.message for d in drd_folder_result.diagnostics]}"
-            )
+            raise RuntimeError(f"DRD folder creation failed: {[d.message for d in drd_folder_result.diagnostics]}")
         drd_folder_id = drd_folder_result.primary_entity_id
         print(f"DRD folder: {drd_folder_label} (id={drd_folder_id})")
 
@@ -350,9 +366,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
             driver_override=driver,
         )
         if not conn_result.succeeded:
-            raise RuntimeError(
-                f"Connection creation failed: {[d.message for d in conn_result.diagnostics]}"
-            )
+            raise RuntimeError(f"Connection creation failed: {[d.message for d in conn_result.diagnostics]}")
         connection_id = conn_result.primary_entity_id
         print(f"Connection: {config.warehouse_connection_name} (id={connection_id})")
         _ok("Connection created")
@@ -369,8 +383,8 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     try:
         from kyvos_sm_skills.contract_adapter import compile_dataset_artifact
 
-        dataset_name_to_id = {}   # CamelCase server name → dataset ID
-        dataset_aliases = {}       # XMLA snake_case name → CamelCase server name
+        dataset_name_to_id = {}  # CamelCase server name → dataset ID
+        dataset_aliases = {}  # XMLA snake_case name → CamelCase server name
         created_entities = []
 
         for table in spec.tables:
@@ -400,11 +414,13 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
             if table.name != server_name:
                 dataset_aliases[table.name] = server_name
 
-            created_entities.append({
-                "entity_type": "DATASET",
-                "id": ds_id,
-                "name": server_name,
-            })
+            created_entities.append(
+                {
+                    "entity_type": "DATASET",
+                    "id": ds_id,
+                    "name": server_name,
+                }
+            )
 
             prov.refresh_dataset_columns(ds_id)
             print(f"  Dataset: {server_name} (id={ds_id})")
@@ -415,18 +431,13 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
             if ds_info["entity_type"] != "DATASET":
                 continue
             prov.refresh_dataset_columns(ds_info["id"])  # second sweep
-            val_result = prov.validate_dataset(
-                ds_info["id"], ds_info["name"], dataset_folder_label
-            )
+            val_result = prov.validate_dataset(ds_info["id"], ds_info["name"], dataset_folder_label)
             if not val_result.succeeded:
                 errs = [d.message for d in val_result.diagnostics if d.severity == "ERROR"]
                 validation_errors.append(f"{ds_info['name']}: {errs}")
 
         if validation_errors:
-            raise RuntimeError(
-                f"Dataset validation failed — pipeline halted:\n" +
-                "\n".join(validation_errors)
-            )
+            raise RuntimeError("Dataset validation failed — pipeline halted:\n" + "\n".join(validation_errors))
 
         # Fetch column details for semantic model compilation
         # Build a reverse map: server dataset name → spec TableSpec for fallback
@@ -469,6 +480,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     except Exception as exc:
         _fail(f"Dataset creation/validation failed: {exc}")
         import traceback
+
         traceback.print_exc()
         failures.append("Step 6: Dataset creation")
         _print_summary(failures)
@@ -498,15 +510,17 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
             skip = False
             if left_cols_raw is not None and rel.left_column.lower() not in {c["name"].lower() for c in left_cols_raw}:
                 failed_relationships.append(
-                    f"Column '{rel.left_column}' not found in dataset '{rel.left_dataset}' "
-                    f"(Kyvos: '{left_kyvos}')"
+                    f"Column '{rel.left_column}' not found in dataset '{rel.left_dataset}' (Kyvos: '{left_kyvos}')"
                 )
                 skip = True
 
-            if not skip and right_cols_raw is not None and rel.right_column.lower() not in {c["name"].lower() for c in right_cols_raw}:
+            if (
+                not skip
+                and right_cols_raw is not None
+                and rel.right_column.lower() not in {c["name"].lower() for c in right_cols_raw}
+            ):
                 failed_relationships.append(
-                    f"Column '{rel.right_column}' not found in dataset '{rel.right_dataset}' "
-                    f"(Kyvos: '{right_kyvos}')"
+                    f"Column '{rel.right_column}' not found in dataset '{rel.right_dataset}' (Kyvos: '{right_kyvos}')"
                 )
                 skip = True
 
@@ -549,19 +563,20 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
 
         drd_result = prov.apply_artifact(drd_artifact)
         if not drd_result.succeeded:
-            raise RuntimeError(
-                f"DRD creation failed: {[d.message for d in drd_result.diagnostics]}"
-            )
+            raise RuntimeError(f"DRD creation failed: {[d.message for d in drd_result.diagnostics]}")
 
         server_drd_id = drd_result.primary_entity_id
-        created_entities.append({
-            "entity_type": "DRD",
-            "id": server_drd_id,
-            "name": drd_name,
-        })
+        created_entities.append(
+            {
+                "entity_type": "DRD",
+                "id": server_drd_id,
+                "name": drd_name,
+            }
+        )
 
         # Validate DRD (pipeline gate) — retry up to 3 times with 5s delay
         import time as _time
+
         _max_validation_retries = 3
         _validation_delay = 5  # seconds between retries
         for _attempt in range(1, _max_validation_retries + 1):
@@ -569,7 +584,10 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
             if drd_val_result.succeeded:
                 break
             if _attempt < _max_validation_retries:
-                print(f"  DRD validation pending (attempt {_attempt}/{_max_validation_retries}), retrying in {_validation_delay}s...")
+                print(
+                    f"  DRD validation pending (attempt {_attempt}/{_max_validation_retries}), "
+                    f"retrying in {_validation_delay}s..."
+                )
                 _time.sleep(_validation_delay)
             else:
                 errs = [d.message for d in drd_val_result.diagnostics if d.severity == "ERROR"]
@@ -580,6 +598,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     except Exception as exc:
         _fail(f"DRD creation/validation failed: {exc}")
         import traceback
+
         traceback.print_exc()
         failures.append("Step 7: DRD creation")
         _print_summary(failures)
@@ -622,16 +641,16 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
 
         sm_result = prov.apply_artifact(sm_artifact)
         if not sm_result.succeeded:
-            raise RuntimeError(
-                f"Semantic model creation failed: {[d.message for d in sm_result.diagnostics]}"
-            )
+            raise RuntimeError(f"Semantic model creation failed: {[d.message for d in sm_result.diagnostics]}")
 
         smodel_id = sm_result.primary_entity_id
-        created_entities.append({
-            "entity_type": "SEMANTIC_MODEL",
-            "id": smodel_id,
-            "name": smodel_name,
-        })
+        created_entities.append(
+            {
+                "entity_type": "SEMANTIC_MODEL",
+                "id": smodel_id,
+                "name": smodel_name,
+            }
+        )
 
         # Validate semantic model — retry up to 3 times with 5s delay
         for _attempt in range(1, _max_validation_retries + 1):
@@ -639,7 +658,10 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
             if sm_val_result.succeeded:
                 break
             if _attempt < _max_validation_retries:
-                print(f"  SM validation pending (attempt {_attempt}/{_max_validation_retries}), retrying in {_validation_delay}s...")
+                print(
+                    f"  SM validation pending (attempt {_attempt}/{_max_validation_retries}), "
+                    f"retrying in {_validation_delay}s..."
+                )
                 _time.sleep(_validation_delay)
             else:
                 errs = [d.message for d in sm_val_result.diagnostics if d.severity == "ERROR"]
@@ -650,6 +672,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     except Exception as exc:
         _fail(f"SM creation/validation failed: {exc}")
         import traceback
+
         traceback.print_exc()
         failures.append("Step 8: SM creation")
         _print_summary(failures)
@@ -659,29 +682,7 @@ def run_validation(env_file: str, xmla_path: str | None = None, live: bool = Fal
     # Step 9: Report results  (skill Step 9 — verbatim)
     # ═══════════════════════════════════════════════════════════════════════
     _print_step(9, "Report results")
-    result = {
-        "success": True,
-        "spec_summary": {
-            "tables": len(spec.tables),
-            "relationships": len(spec.semantic_model.relationships),
-            "measures": len(spec.semantic_model.measures),
-            "hierarchies": len(spec.semantic_model.hierarchies),
-        },
-        "connection_name": config.warehouse_connection_name,
-        "dataset_name_to_id": dataset_name_to_id,
-        "drd_name": drd_name,
-        "drd_id": server_drd_id,
-        "smodel_name": smodel_name,
-        "created_entities": created_entities + [
-            {"entity_type": "FOLDER", "id": folder_id,        "name": dataset_folder_label},
-            {"entity_type": "FOLDER", "id": drd_folder_id,    "name": drd_folder_label},
-            {"entity_type": "FOLDER", "id": smodel_folder_id, "name": smodel_folder_label},
-            {"entity_type": "CONNECTION", "id": connection_id, "name": config.warehouse_connection_name},
-        ],
-        "errors": [],
-        "warnings": [],
-    }
-    print(f"\n✅ Deployment Successful")
+    print("\n✅ Deployment Successful")
     print(f"   XMLA model    : {spec.metadata.get('xmla_db_name', base_name)}")
     print(f"   Timestamp     : {_ts}")
     print(f"   Tables parsed : {len(spec.tables)}")
@@ -715,15 +716,19 @@ def main() -> int:
         description="Skill flow validation using AdventureWorks XMLA (mirrors deploy-from-xmla.md exactly)",
     )
     parser.add_argument(
-        "--env-file", default=".env",
+        "--env-file",
+        default=".env",
         help="Path to .env file (default: .env)",
     )
     parser.add_argument(
-        "--xmla-path", default=None,
+        "--xmla-path",
+        default=None,
         help="Path to AdventureWorks.xmla (auto-detected if omitted)",
     )
     parser.add_argument(
-        "--live", action="store_true", default=False,
+        "--live",
+        action="store_true",
+        default=False,
         help="Use live KyvosService (creates real entities on Kyvos server)",
     )
     args = parser.parse_args()

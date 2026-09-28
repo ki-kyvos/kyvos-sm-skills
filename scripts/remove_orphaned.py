@@ -7,8 +7,8 @@ Two-phase cleanup:
 These cause Kyvos validation errors:
 "Dimension X is invalid because it does not have valid relation with any measure"
 """
+
 import json
-from collections import defaultdict, deque
 
 
 def find_connected_to_measures(sm: dict) -> set[str]:
@@ -63,9 +63,9 @@ def remove_orphaned(sm_path: str) -> None:
     connected = find_connected_to_measures(sm)
     orphaned = all_rel_tables - connected
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"SM: {sm_name} ({sm_path})")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Fact tables with measures: {sorted(fact_with_measures)}")
     print(f"Connected tables: {sorted(connected)}")
     print(f"Orphaned tables: {sorted(orphaned)}")
@@ -77,9 +77,9 @@ def remove_orphaned(sm_path: str) -> None:
     # Remove orphaned relationships (any relationship involving an orphaned table)
     orig_rels = sm.get("relationships", [])
     new_rels = [
-        rel for rel in orig_rels
-        if rel["from_table"].lower() not in orphaned
-        and rel["to_table"].lower() not in orphaned
+        rel
+        for rel in orig_rels
+        if rel["from_table"].lower() not in orphaned and rel["to_table"].lower() not in orphaned
     ]
     removed_rels = len(orig_rels) - len(new_rels)
     print(f"Removing {removed_rels} relationships involving orphaned tables")
@@ -97,10 +97,7 @@ def remove_orphaned(sm_path: str) -> None:
 
     # Remove orphaned hierarchies (whose source_dataset is orphaned)
     orig_hiers = sm.get("hierarchies", [])
-    new_hiers = [
-        h for h in orig_hiers
-        if h.get("source_dataset", "").lower() not in orphaned
-    ]
+    new_hiers = [h for h in orig_hiers if h.get("source_dataset", "").lower() not in orphaned]
     removed_hiers = len(orig_hiers) - len(new_hiers)
     if removed_hiers:
         print(f"Removing {removed_hiers} hierarchies from orphaned tables")
@@ -108,7 +105,8 @@ def remove_orphaned(sm_path: str) -> None:
     # Remove orphaned measures (whose source_dataset is orphaned)
     orig_measures = sm.get("measures", [])
     new_measures = [
-        m for m in orig_measures
+        m
+        for m in orig_measures
         if m.get("source_dataset", "").lower() not in orphaned
         or not m.get("source_dataset")  # Keep calculated measures with no source_dataset
     ]

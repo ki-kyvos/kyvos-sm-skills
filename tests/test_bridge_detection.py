@@ -19,7 +19,6 @@ from __future__ import annotations
 from kyvos_sm_skills.bridge_detector import detect_bridges
 from kyvos_sm_skills.models import ColumnSpec, MeasureSpec, RelationshipSpec, TableSpec
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

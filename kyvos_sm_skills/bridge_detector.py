@@ -32,7 +32,6 @@ from typing import Any
 
 from kyvos_sm_skills.models import MeasureSpec, RelationshipSpec, TableSpec
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------

@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import sys
 from pathlib import Path
 
 from kyvos_sm_skills.generators.connection_json import generate_connection_json
@@ -60,8 +58,18 @@ def _retail_banking() -> dict:
             table_type="fact",
             columns=[
                 ColumnSpec(name="transaction_pk", data_type="BIGINT", is_primary_key=True),
-                ColumnSpec(name="customer_fk", data_type="INTEGER", is_foreign_key=True, references="retail_banking.dim_customer.customer_pk"),
-                ColumnSpec(name="date_fk", data_type="INTEGER", is_foreign_key=True, references="retail_banking.dim_date.date_pk"),
+                ColumnSpec(
+                    name="customer_fk",
+                    data_type="INTEGER",
+                    is_foreign_key=True,
+                    references="retail_banking.dim_customer.customer_pk",
+                ),
+                ColumnSpec(
+                    name="date_fk",
+                    data_type="INTEGER",
+                    is_foreign_key=True,
+                    references="retail_banking.dim_date.date_pk",
+                ),
                 ColumnSpec(name="transaction_amount", data_type="NUMERIC(15,2)"),
                 ColumnSpec(name="fee_amount", data_type="NUMERIC(15,2)"),
                 ColumnSpec(name="transaction_count", data_type="INTEGER"),
@@ -73,10 +81,37 @@ def _retail_banking() -> dict:
         SimpleRel("fact_transactions", "date_fk", "dim_date", "date_pk"),
     ]
     measures = [
-        MeasureSpec(name="Total Transaction Amount", expression="", source_dataset="FactTransactions", source_column="transaction_amount", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Total Fees", expression="", source_dataset="FactTransactions", source_column="fee_amount", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Transaction Count", expression="", source_dataset="FactTransactions", source_column="transaction_count", aggregation_type="sum", format_string="#,##0"),
-        MeasureSpec(name="Net Revenue", expression="[Measures].[Total Transaction Amount] + [Measures].[Total Fees]", is_calculated=True, source_dataset="FactTransactions", format_string="#,##0.00"),
+        MeasureSpec(
+            name="Total Transaction Amount",
+            expression="",
+            source_dataset="FactTransactions",
+            source_column="transaction_amount",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Total Fees",
+            expression="",
+            source_dataset="FactTransactions",
+            source_column="fee_amount",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Transaction Count",
+            expression="",
+            source_dataset="FactTransactions",
+            source_column="transaction_count",
+            aggregation_type="sum",
+            format_string="#,##0",
+        ),
+        MeasureSpec(
+            name="Net Revenue",
+            expression="[Measures].[Total Transaction Amount] + [Measures].[Total Fees]",
+            is_calculated=True,
+            source_dataset="FactTransactions",
+            format_string="#,##0.00",
+        ),
     ]
     hierarchies = [
         HierarchySpec(name="Calendar", levels=["year", "quarter", "month"], source_dataset="DimDate"),
@@ -124,8 +159,15 @@ def _healthcare() -> dict:
             table_type="fact",
             columns=[
                 ColumnSpec(name="admission_pk", data_type="BIGINT", is_primary_key=True),
-                ColumnSpec(name="patient_fk", data_type="INTEGER", is_foreign_key=True, references="healthcare.dim_patient.patient_pk"),
-                ColumnSpec(name="date_fk", data_type="INTEGER", is_foreign_key=True, references="healthcare.dim_date.date_pk"),
+                ColumnSpec(
+                    name="patient_fk",
+                    data_type="INTEGER",
+                    is_foreign_key=True,
+                    references="healthcare.dim_patient.patient_pk",
+                ),
+                ColumnSpec(
+                    name="date_fk", data_type="INTEGER", is_foreign_key=True, references="healthcare.dim_date.date_pk"
+                ),
                 ColumnSpec(name="admission_count", data_type="INTEGER"),
                 ColumnSpec(name="length_of_stay", data_type="NUMERIC(8,2)"),
                 ColumnSpec(name="total_cost", data_type="NUMERIC(15,2)"),
@@ -137,10 +179,37 @@ def _healthcare() -> dict:
         SimpleRel("fact_admissions", "date_fk", "dim_date", "date_pk"),
     ]
     measures = [
-        MeasureSpec(name="Total Admissions", expression="", source_dataset="FactAdmissions", source_column="admission_count", aggregation_type="sum", format_string="#,##0"),
-        MeasureSpec(name="Avg Length of Stay", expression="", source_dataset="FactAdmissions", source_column="length_of_stay", aggregation_type="average", format_string="#,##0.00"),
-        MeasureSpec(name="Total Cost", expression="", source_dataset="FactAdmissions", source_column="total_cost", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Cost per Admission", expression="[Measures].[Total Cost] / [Measures].[Total Admissions]", is_calculated=True, source_dataset="FactAdmissions", format_string="#,##0.00"),
+        MeasureSpec(
+            name="Total Admissions",
+            expression="",
+            source_dataset="FactAdmissions",
+            source_column="admission_count",
+            aggregation_type="sum",
+            format_string="#,##0",
+        ),
+        MeasureSpec(
+            name="Avg Length of Stay",
+            expression="",
+            source_dataset="FactAdmissions",
+            source_column="length_of_stay",
+            aggregation_type="average",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Total Cost",
+            expression="",
+            source_dataset="FactAdmissions",
+            source_column="total_cost",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Cost per Admission",
+            expression="[Measures].[Total Cost] / [Measures].[Total Admissions]",
+            is_calculated=True,
+            source_dataset="FactAdmissions",
+            format_string="#,##0.00",
+        ),
     ]
     hierarchies = [
         HierarchySpec(name="Calendar", levels=["year", "quarter", "month"], source_dataset="DimDate"),
@@ -190,8 +259,15 @@ def _retail_ecommerce() -> dict:
             table_type="fact",
             columns=[
                 ColumnSpec(name="sales_pk", data_type="BIGINT", is_primary_key=True),
-                ColumnSpec(name="product_fk", data_type="INTEGER", is_foreign_key=True, references="retail_ecom.dim_product.product_pk"),
-                ColumnSpec(name="date_fk", data_type="INTEGER", is_foreign_key=True, references="retail_ecom.dim_date.date_pk"),
+                ColumnSpec(
+                    name="product_fk",
+                    data_type="INTEGER",
+                    is_foreign_key=True,
+                    references="retail_ecom.dim_product.product_pk",
+                ),
+                ColumnSpec(
+                    name="date_fk", data_type="INTEGER", is_foreign_key=True, references="retail_ecom.dim_date.date_pk"
+                ),
                 ColumnSpec(name="sales_amount", data_type="NUMERIC(15,2)"),
                 ColumnSpec(name="quantity", data_type="INTEGER"),
                 ColumnSpec(name="discount_amount", data_type="NUMERIC(15,2)"),
@@ -203,16 +279,57 @@ def _retail_ecommerce() -> dict:
         SimpleRel("fact_sales", "date_fk", "dim_date", "date_pk"),
     ]
     measures = [
-        MeasureSpec(name="Total Sales", expression="", source_dataset="FactSales", source_column="sales_amount", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Total Quantity", expression="", source_dataset="FactSales", source_column="quantity", aggregation_type="sum", format_string="#,##0"),
-        MeasureSpec(name="Total Discount", expression="", source_dataset="FactSales", source_column="discount_amount", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Net Sales", expression="[Measures].[Total Sales] - [Measures].[Total Discount]", is_calculated=True, source_dataset="FactSales", format_string="#,##0.00"),
-        MeasureSpec(name="Avg Order Value", expression="[Measures].[Total Sales] / [Measures].[Total Quantity]", is_calculated=True, source_dataset="FactSales", format_string="#,##0.00"),
-        MeasureSpec(name="Discount Rate", expression="[Measures].[Total Discount] / [Measures].[Total Sales]", is_calculated=True, source_dataset="FactSales", format_string="0.00%"),
+        MeasureSpec(
+            name="Total Sales",
+            expression="",
+            source_dataset="FactSales",
+            source_column="sales_amount",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Total Quantity",
+            expression="",
+            source_dataset="FactSales",
+            source_column="quantity",
+            aggregation_type="sum",
+            format_string="#,##0",
+        ),
+        MeasureSpec(
+            name="Total Discount",
+            expression="",
+            source_dataset="FactSales",
+            source_column="discount_amount",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Net Sales",
+            expression="[Measures].[Total Sales] - [Measures].[Total Discount]",
+            is_calculated=True,
+            source_dataset="FactSales",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Avg Order Value",
+            expression="[Measures].[Total Sales] / [Measures].[Total Quantity]",
+            is_calculated=True,
+            source_dataset="FactSales",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Discount Rate",
+            expression="[Measures].[Total Discount] / [Measures].[Total Sales]",
+            is_calculated=True,
+            source_dataset="FactSales",
+            format_string="0.00%",
+        ),
     ]
     hierarchies = [
         HierarchySpec(name="Calendar", levels=["year", "quarter", "month"], source_dataset="DimDate"),
-        HierarchySpec(name="Product Hierarchy", levels=["category", "subcategory", "brand"], source_dataset="DimProduct"),
+        HierarchySpec(
+            name="Product Hierarchy", levels=["category", "subcategory", "brand"], source_dataset="DimProduct"
+        ),
     ]
     return {
         "tables": tables,
@@ -255,8 +372,15 @@ def _telecom() -> dict:
             table_type="fact",
             columns=[
                 ColumnSpec(name="usage_pk", data_type="BIGINT", is_primary_key=True),
-                ColumnSpec(name="region_fk", data_type="INTEGER", is_foreign_key=True, references="telecom.dim_region.region_pk"),
-                ColumnSpec(name="date_fk", data_type="INTEGER", is_foreign_key=True, references="telecom.dim_date.date_pk"),
+                ColumnSpec(
+                    name="region_fk",
+                    data_type="INTEGER",
+                    is_foreign_key=True,
+                    references="telecom.dim_region.region_pk",
+                ),
+                ColumnSpec(
+                    name="date_fk", data_type="INTEGER", is_foreign_key=True, references="telecom.dim_date.date_pk"
+                ),
                 ColumnSpec(name="call_minutes", data_type="NUMERIC(15,2)"),
                 ColumnSpec(name="data_usage_mb", data_type="NUMERIC(15,2)"),
                 ColumnSpec(name="sms_count", data_type="INTEGER"),
@@ -268,10 +392,37 @@ def _telecom() -> dict:
         SimpleRel("fact_usage", "date_fk", "dim_date", "date_pk"),
     ]
     measures = [
-        MeasureSpec(name="Total Call Minutes", expression="", source_dataset="FactUsage", source_column="call_minutes", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Total Data Usage", expression="", source_dataset="FactUsage", source_column="data_usage_mb", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Total SMS", expression="", source_dataset="FactUsage", source_column="sms_count", aggregation_type="sum", format_string="#,##0"),
-        MeasureSpec(name="Avg Data per SMS", expression="[Measures].[Total Data Usage] / [Measures].[Total SMS]", is_calculated=True, source_dataset="FactUsage", format_string="#,##0.00"),
+        MeasureSpec(
+            name="Total Call Minutes",
+            expression="",
+            source_dataset="FactUsage",
+            source_column="call_minutes",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Total Data Usage",
+            expression="",
+            source_dataset="FactUsage",
+            source_column="data_usage_mb",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Total SMS",
+            expression="",
+            source_dataset="FactUsage",
+            source_column="sms_count",
+            aggregation_type="sum",
+            format_string="#,##0",
+        ),
+        MeasureSpec(
+            name="Avg Data per SMS",
+            expression="[Measures].[Total Data Usage] / [Measures].[Total SMS]",
+            is_calculated=True,
+            source_dataset="FactUsage",
+            format_string="#,##0.00",
+        ),
     ]
     hierarchies = [
         HierarchySpec(name="Calendar", levels=["year", "quarter", "month"], source_dataset="DimDate"),
@@ -321,8 +472,18 @@ def _adventure_works() -> dict:
             table_type="fact",
             columns=[
                 ColumnSpec(name="sales_pk", data_type="BIGINT", is_primary_key=True),
-                ColumnSpec(name="product_fk", data_type="INTEGER", is_foreign_key=True, references="adventure_works.dim_product.product_pk"),
-                ColumnSpec(name="date_fk", data_type="INTEGER", is_foreign_key=True, references="adventure_works.dim_date.date_pk"),
+                ColumnSpec(
+                    name="product_fk",
+                    data_type="INTEGER",
+                    is_foreign_key=True,
+                    references="adventure_works.dim_product.product_pk",
+                ),
+                ColumnSpec(
+                    name="date_fk",
+                    data_type="INTEGER",
+                    is_foreign_key=True,
+                    references="adventure_works.dim_date.date_pk",
+                ),
                 ColumnSpec(name="sales_amount", data_type="NUMERIC(15,2)"),
                 ColumnSpec(name="order_quantity", data_type="INTEGER"),
                 ColumnSpec(name="unit_price", data_type="NUMERIC(12,2)"),
@@ -335,15 +496,51 @@ def _adventure_works() -> dict:
         SimpleRel("fact_internet_sales", "date_fk", "dim_date", "date_pk"),
     ]
     measures = [
-        MeasureSpec(name="Total Sales", expression="", source_dataset="FactInternetSales", source_column="sales_amount", aggregation_type="sum", format_string="#,##0.00"),
-        MeasureSpec(name="Total Order Quantity", expression="", source_dataset="FactInternetSales", source_column="order_quantity", aggregation_type="sum", format_string="#,##0"),
-        MeasureSpec(name="Avg Unit Price", expression="", source_dataset="FactInternetSales", source_column="unit_price", aggregation_type="average", format_string="#,##0.00"),
-        MeasureSpec(name="Avg Discount", expression="", source_dataset="FactInternetSales", source_column="discount_pct", aggregation_type="average", format_string="0.00%"),
-        MeasureSpec(name="Revenue per Unit", expression="[Measures].[Total Sales] / [Measures].[Total Order Quantity]", is_calculated=True, source_dataset="FactInternetSales", format_string="#,##0.00"),
+        MeasureSpec(
+            name="Total Sales",
+            expression="",
+            source_dataset="FactInternetSales",
+            source_column="sales_amount",
+            aggregation_type="sum",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Total Order Quantity",
+            expression="",
+            source_dataset="FactInternetSales",
+            source_column="order_quantity",
+            aggregation_type="sum",
+            format_string="#,##0",
+        ),
+        MeasureSpec(
+            name="Avg Unit Price",
+            expression="",
+            source_dataset="FactInternetSales",
+            source_column="unit_price",
+            aggregation_type="average",
+            format_string="#,##0.00",
+        ),
+        MeasureSpec(
+            name="Avg Discount",
+            expression="",
+            source_dataset="FactInternetSales",
+            source_column="discount_pct",
+            aggregation_type="average",
+            format_string="0.00%",
+        ),
+        MeasureSpec(
+            name="Revenue per Unit",
+            expression="[Measures].[Total Sales] / [Measures].[Total Order Quantity]",
+            is_calculated=True,
+            source_dataset="FactInternetSales",
+            format_string="#,##0.00",
+        ),
     ]
     hierarchies = [
         HierarchySpec(name="Calendar", levels=["year", "quarter", "month"], source_dataset="DimDate"),
-        HierarchySpec(name="Product Category", levels=["category", "subcategory", "color"], source_dataset="DimProduct"),
+        HierarchySpec(
+            name="Product Category", levels=["category", "subcategory", "color"], source_dataset="DimProduct"
+        ),
     ]
     return {
         "tables": tables,
@@ -383,12 +580,20 @@ def generate_vertical(name: str, spec: dict, output_dir: Path) -> None:
 
     # Connection
     conn_json = generate_connection_json(
-        name=conn_name, host="localhost", port=5432,
-        database=schema.replace("_", ""), username="demo_user", password="demo_pass",
+        name=conn_name,
+        host="localhost",
+        port=5432,
+        database=schema.replace("_", ""),
+        username="demo_user",
+        password="demo_pass",
     )
     conn_xml = generate_connection_xml(
-        name=conn_name, host="localhost", port=5432,
-        database=schema.replace("_", ""), username="demo_user", password="demo_pass",
+        name=conn_name,
+        host="localhost",
+        port=5432,
+        database=schema.replace("_", ""),
+        username="demo_user",
+        password="demo_pass",
     )
     (vdir / "connection.json").write_text(json.dumps(conn_json, indent=2))
     (vdir / "connection.xml").write_text(conn_xml)
@@ -411,7 +616,8 @@ def generate_vertical(name: str, spec: dict, output_dir: Path) -> None:
 
         cols_for_sm: list[dict] = []
         for col in table.columns:
-            from kyvos_sm_skills.type_mapping import resolve_sql_type, SQL_TO_KYVOS_XML_MAP
+            from kyvos_sm_skills.type_mapping import SQL_TO_KYVOS_XML_MAP, resolve_sql_type
+
             canonical = resolve_sql_type(col.data_type)
             dt_name = SQL_TO_KYVOS_XML_MAP.get(canonical, ("CHAR", "1", "", "1"))[0]
             cols_for_sm.append({"name": col.name, "datatype": dt_name})

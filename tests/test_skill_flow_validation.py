@@ -20,6 +20,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from kyvos_sm_skills.generators.drd_xml import SimpleRel
+from kyvos_sm_skills.models import (
+    ColumnSpec,
+    DatasetSpec,
+    HierarchySpec,
+    MeasureSpec,
+    RelationshipSpec,
+    SemanticModelSpec,
+    TableSpec,
+)
+
 try:
     from kyvos_sdk.client import KyvosServiceError
     from kyvos_sdk.contracts.artifacts import (
@@ -43,17 +54,6 @@ except ImportError:
     _has_sdk = False
 
 _sdk_required = pytest.mark.skipif(not _has_sdk, reason="requires kyvos-sdk-python")
-
-from kyvos_sm_skills.generators.drd_xml import SimpleRel
-from kyvos_sm_skills.models import (
-    ColumnSpec,
-    DatasetSpec,
-    HierarchySpec,
-    MeasureSpec,
-    RelationshipSpec,
-    SemanticModelSpec,
-    TableSpec,
-)
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 

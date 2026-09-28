@@ -1,11 +1,14 @@
 """Compile both Flow A and Flow B SM designs and compare the JSON structures."""
+
 import json
-from kyvos_sm_skills.contract_adapter import compile_smodel_artifact
-from kyvos_sm_skills.spec_builder import build_spec_from_recommendation
 
 # We need warehouse tables - let's load from the schema inspection output
 # or build a minimal version from the SM design
 import os
+
+from kyvos_sm_skills.contract_adapter import compile_smodel_artifact
+from kyvos_sm_skills.spec_builder import build_spec_from_recommendation
+
 
 def load_warehouse_tables():
     """Load warehouse tables from schema inspection output if available."""
@@ -25,14 +28,16 @@ def build_minimal_wh_tables(sm_rec):
     tables = []
     for t in sm_rec.get("tables", []):
         if isinstance(t, str):
-            tables.append({
-                "name": t,
-                "schema": "public",
-                "columns": [],
-                "estimated_table_type": "",
-                "outgoing_fk_count": 0,
-                "incoming_fk_count": 0,
-            })
+            tables.append(
+                {
+                    "name": t,
+                    "schema": "public",
+                    "columns": [],
+                    "estimated_table_type": "",
+                    "outgoing_fk_count": 0,
+                    "incoming_fk_count": 0,
+                }
+            )
         elif isinstance(t, dict):
             tables.append(t)
     return tables
@@ -73,4 +78,5 @@ for label, path in [
     except Exception as e:
         print(f"{label}: compilation error: {e}")
         import traceback
+
         traceback.print_exc()

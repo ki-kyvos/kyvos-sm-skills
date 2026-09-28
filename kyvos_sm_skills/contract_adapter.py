@@ -17,9 +17,9 @@ import hashlib
 import logging
 from typing import Any
 
-_log = logging.getLogger(__name__)
-
 from kyvos_sm_skills.generators.drd_xml import SimpleRel
+
+_log = logging.getLogger(__name__)
 
 
 def compile_connection_artifact(

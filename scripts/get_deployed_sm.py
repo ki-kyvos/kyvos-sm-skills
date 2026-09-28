@@ -1,8 +1,10 @@
 """Retrieve SM JSON from Kyvos server using raw API."""
+
 import json
+
 import requests
-from kyvos_sdk.config import KyvosConfig
 from kyvos_sdk.client import KyvosService
+from kyvos_sdk.config import KyvosConfig
 
 config = KyvosConfig.from_env_file(".env.discover")
 svc = KyvosService(config)
@@ -15,9 +17,9 @@ sm_ids = {
 folder_name = "awdw2019multidimensionalee_SModel"
 
 for label, sm_id in sm_ids.items():
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{label}: {sm_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for endpoint in [
         f"/rest/v2/semantic-models/{sm_id}?by=id&folderName={folder_name}",
         f"/rest/v2/semantic-models/{sm_id}?by=id",

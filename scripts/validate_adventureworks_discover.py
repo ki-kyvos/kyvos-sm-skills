@@ -11,16 +11,25 @@ With --live, connects to the real warehouse and Kyvos server.
 
 Usage:
     # Mock dry-run — Flow A (intent file + pre-approved SM design)
-    python scripts/validate_adventureworks_discover.py --intent-file intent-adventureworks.txt --sm-design samples/adventureworks-sm-design.json --domain adventure_works --dry-run
+    python scripts/validate_adventureworks_discover.py \
+        --intent-file intent-adventureworks.txt \
+        --sm-design samples/adventureworks-sm-design.json \
+        --domain adventure_works --dry-run
 
     # Mock dry-run — Flow B (generate intent, requires LLM API key)
-    python scripts/validate_adventureworks_discover.py --generate-intent --domain adventure_works --dry-run --env-file .env
+    python scripts/validate_adventureworks_discover.py \
+        --generate-intent --domain adventure_works --dry-run --env-file .env
 
     # Mock dry-run — compare both flows
-    python scripts/validate_adventureworks_discover.py --compare --intent-file intent-adventureworks.txt --sm-design samples/adventureworks-sm-design.json --domain adventure_works --dry-run
+    python scripts/validate_adventureworks_discover.py --compare \
+        --intent-file intent-adventureworks.txt \
+        --sm-design samples/adventureworks-sm-design.json \
+        --domain adventure_works --dry-run
 
     # Live E2E
-    python scripts/validate_adventureworks_discover.py --compare --intent-file intent-adventureworks.txt --domain adventure_works --live --env-file .env
+    python scripts/validate_adventureworks_discover.py --compare \
+        --intent-file intent-adventureworks.txt \
+        --domain adventure_works --live --env-file .env
 
 Prerequisites:
     pip install kyvos-sdk-python[env] kyvos-sm-skills[sdk]
@@ -29,9 +38,7 @@ Prerequisites:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -107,7 +114,9 @@ def _validate_level_fields(sm_json: dict) -> list[str]:
             for lvl in h.get("levels", []):
                 for field in ("dateDataType", "dateFormat", "format", "fieldDataType"):
                     if field not in lvl:
-                        errors.append(f"Level '{lvl.get('name', '?')}' in hierarchy '{h.get('name', '?')}' missing {field}")
+                        errors.append(
+                            f"Level '{lvl.get('name', '?')}' in hierarchy '{h.get('name', '?')}' missing {field}"
+                        )
     return errors
 
 
@@ -137,6 +146,7 @@ def _validate_mdx_expressions(sm_json: dict) -> list[str]:
 def _validate_sm_recommendation(sm_design: dict, schema_summary: dict) -> list[str]:
     try:
         from kyvos_sm_skills.llm_designer import validate_sm_recommendation
+
         return validate_sm_recommendation(sm_design, schema_summary)
     except ImportError:
         _warn("kyvos_sm_skills.llm_designer not available — skipping recommendation validation")
@@ -175,13 +185,43 @@ _MOCK_AW_TABLES = [
         "incoming_fk_count": 0,
         "columns": [
             {"name": "salesordernumber", "data_type": "VARCHAR(20)", "is_pk": True, "is_fk": False, "references": ""},
-            {"name": "productkey", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "dimproduct.productkey"},
-            {"name": "customerkey", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "dimcustomer.customerkey"},
-            {"name": "orderdatekey", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "dimdate.datekey"},
-            {"name": "salesterritorykey", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "dimsalesterritory.salesterritorykey"},
+            {
+                "name": "productkey",
+                "data_type": "INTEGER",
+                "is_pk": False,
+                "is_fk": True,
+                "references": "dimproduct.productkey",
+            },
+            {
+                "name": "customerkey",
+                "data_type": "INTEGER",
+                "is_pk": False,
+                "is_fk": True,
+                "references": "dimcustomer.customerkey",
+            },
+            {
+                "name": "orderdatekey",
+                "data_type": "INTEGER",
+                "is_pk": False,
+                "is_fk": True,
+                "references": "dimdate.datekey",
+            },
+            {
+                "name": "salesterritorykey",
+                "data_type": "INTEGER",
+                "is_pk": False,
+                "is_fk": True,
+                "references": "dimsalesterritory.salesterritorykey",
+            },
             {"name": "salesamount", "data_type": "NUMERIC(15,2)", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "orderquantity", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
-            {"name": "totalproductcost", "data_type": "NUMERIC(15,2)", "is_pk": False, "is_fk": False, "references": ""},
+            {
+                "name": "totalproductcost",
+                "data_type": "NUMERIC(15,2)",
+                "is_pk": False,
+                "is_fk": False,
+                "references": "",
+            },
             {"name": "taxamt", "data_type": "NUMERIC(15,2)", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "freight", "data_type": "NUMERIC(15,2)", "is_pk": False, "is_fk": False, "references": ""},
         ],
@@ -230,9 +270,27 @@ _MOCK_AW_TABLES = [
         "incoming_fk_count": 1,
         "columns": [
             {"name": "salesterritorykey", "data_type": "INTEGER", "is_pk": True, "is_fk": False, "references": ""},
-            {"name": "salesterritoryregion", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
-            {"name": "salesterritorycountry", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
-            {"name": "salesterritorygroup", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
+            {
+                "name": "salesterritoryregion",
+                "data_type": "VARCHAR(50)",
+                "is_pk": False,
+                "is_fk": False,
+                "references": "",
+            },
+            {
+                "name": "salesterritorycountry",
+                "data_type": "VARCHAR(50)",
+                "is_pk": False,
+                "is_fk": False,
+                "references": "",
+            },
+            {
+                "name": "salesterritorygroup",
+                "data_type": "VARCHAR(50)",
+                "is_pk": False,
+                "is_fk": False,
+                "references": "",
+            },
         ],
     },
 ]
@@ -246,10 +304,30 @@ _MOCK_AW_SM_DESIGN = {
             "rationale": "AdventureWorks star schema.",
             "tables": ["factinternetsales", "dimproduct", "dimcustomer", "dimdate", "dimsalesterritory"],
             "relationships": [
-                {"from_table": "factinternetsales", "from_column": "productkey", "to_table": "dimproduct", "to_column": "productkey"},
-                {"from_table": "factinternetsales", "from_column": "customerkey", "to_table": "dimcustomer", "to_column": "customerkey"},
-                {"from_table": "factinternetsales", "from_column": "orderdatekey", "to_table": "dimdate", "to_column": "datekey"},
-                {"from_table": "factinternetsales", "from_column": "salesterritorykey", "to_table": "dimsalesterritory", "to_column": "salesterritorykey"},
+                {
+                    "from_table": "factinternetsales",
+                    "from_column": "productkey",
+                    "to_table": "dimproduct",
+                    "to_column": "productkey",
+                },
+                {
+                    "from_table": "factinternetsales",
+                    "from_column": "customerkey",
+                    "to_table": "dimcustomer",
+                    "to_column": "customerkey",
+                },
+                {
+                    "from_table": "factinternetsales",
+                    "from_column": "orderdatekey",
+                    "to_table": "dimdate",
+                    "to_column": "datekey",
+                },
+                {
+                    "from_table": "factinternetsales",
+                    "from_column": "salesterritorykey",
+                    "to_table": "dimsalesterritory",
+                    "to_column": "salesterritorykey",
+                },
             ],
             "measures": [
                 {"name": "SalesAmount", "source_dataset": "factinternetsales", "aggregation_type": "sum"},
@@ -259,9 +337,26 @@ _MOCK_AW_SM_DESIGN = {
                 {"name": "Freight", "source_dataset": "factinternetsales", "aggregation_type": "sum"},
             ],
             "hierarchies": [
-                {"name": "ProductCategory", "levels": ["productkey", "productsubcategorykey", "productcategorykey"], "source_dataset": "dimproduct"},
-                {"name": "CalendarDate", "levels": ["datekey", "weeknumberofyear", "englishmonthname", "calendarquarter", "calendaryear"], "source_dataset": "dimdate"},
-                {"name": "SalesTerritory", "levels": ["salesterritorykey", "salesterritoryregion", "salesterritorycountry", "salesterritorygroup"], "source_dataset": "dimsalesterritory"},
+                {
+                    "name": "ProductCategory",
+                    "levels": ["productkey", "productsubcategorykey", "productcategorykey"],
+                    "source_dataset": "dimproduct",
+                },
+                {
+                    "name": "CalendarDate",
+                    "levels": ["datekey", "weeknumberofyear", "englishmonthname", "calendarquarter", "calendaryear"],
+                    "source_dataset": "dimdate",
+                },
+                {
+                    "name": "SalesTerritory",
+                    "levels": [
+                        "salesterritorykey",
+                        "salesterritoryregion",
+                        "salesterritorycountry",
+                        "salesterritorygroup",
+                    ],
+                    "source_dataset": "dimsalesterritory",
+                },
             ],
         }
     ],
@@ -282,13 +377,38 @@ def _mock_inspect_schema(config, schema_filter=None, max_tables=500):
         "table_count": len(_MOCK_AW_TABLES),
         "tables": _MOCK_AW_TABLES,
         "relationships": [
-            {"from_table": "factinternetsales", "from_column": "productkey", "to_table": "dimproduct", "to_column": "productkey"},
-            {"from_table": "factinternetsales", "from_column": "customerkey", "to_table": "dimcustomer", "to_column": "customerkey"},
-            {"from_table": "factinternetsales", "from_column": "orderdatekey", "to_table": "dimdate", "to_column": "datekey"},
-            {"from_table": "factinternetsales", "from_column": "salesterritorykey", "to_table": "dimsalesterritory", "to_column": "salesterritorykey"},
+            {
+                "from_table": "factinternetsales",
+                "from_column": "productkey",
+                "to_table": "dimproduct",
+                "to_column": "productkey",
+            },
+            {
+                "from_table": "factinternetsales",
+                "from_column": "customerkey",
+                "to_table": "dimcustomer",
+                "to_column": "customerkey",
+            },
+            {
+                "from_table": "factinternetsales",
+                "from_column": "orderdatekey",
+                "to_table": "dimdate",
+                "to_column": "datekey",
+            },
+            {
+                "from_table": "factinternetsales",
+                "from_column": "salesterritorykey",
+                "to_table": "dimsalesterritory",
+                "to_column": "salesterritorykey",
+            },
         ],
         "detected_patterns": {
-            "potential_star_schemas": [{"fact_table": "factinternetsales", "dimension_tables": ["dimproduct", "dimcustomer", "dimdate", "dimsalesterritory"]}],
+            "potential_star_schemas": [
+                {
+                    "fact_table": "factinternetsales",
+                    "dimension_tables": ["dimproduct", "dimcustomer", "dimdate", "dimsalesterritory"],
+                }
+            ],
             "potential_snowflake_schemas": [],
             "potential_multifact_schemas": [],
             "single_table_candidates": [],
@@ -330,9 +450,14 @@ def _run_flow(
         # and let the CLI's --generate-intent path handle it
         # For this script, we'll use the CLI directly
         import subprocess
+
         cmd = [
-            sys.executable, "-m", "kyvos_sm_skills.cli", "discover",
-            "--env-file", env_file,
+            sys.executable,
+            "-m",
+            "kyvos_sm_skills.cli",
+            "discover",
+            "--env-file",
+            env_file,
             "--generate-intent",
             "--auto-approve",
         ]
@@ -399,9 +524,17 @@ def _compare_models(flow_a: dict, flow_b: dict) -> None:
             print(f"  {'SM name':<40s} {a_sm.get('name', '?'):<25s} {b_sm.get('name', '?'):<25s}")
             print(f"  {'Schema type':<40s} {a_sm.get('schema_type', '?'):<25s} {b_sm.get('schema_type', '?'):<25s}")
             print(f"  {'Table count':<40s} {len(a_sm.get('tables', [])):<25d} {len(b_sm.get('tables', [])):<25d}")
-            print(f"  {'Relationship count':<40s} {len(a_sm.get('relationships', [])):<25d} {len(b_sm.get('relationships', [])):<25d}")
+            print(
+                f"  {'Relationship count':<40s} "
+                f"{len(a_sm.get('relationships', [])):<25d} "
+                f"{len(b_sm.get('relationships', [])):<25d}"
+            )
             print(f"  {'Measure count':<40s} {len(a_sm.get('measures', [])):<25d} {len(b_sm.get('measures', [])):<25d}")
-            print(f"  {'Hierarchy count':<40s} {len(a_sm.get('hierarchies', [])):<25d} {len(b_sm.get('hierarchies', [])):<25d}")
+            print(
+                f"  {'Hierarchy count':<40s} "
+                f"{len(a_sm.get('hierarchies', [])):<25d} "
+                f"{len(b_sm.get('hierarchies', [])):<25d}"
+            )
 
             a_tables = set(a_sm.get("tables", []))
             b_tables = set(b_sm.get("tables", []))
@@ -422,7 +555,10 @@ def _compare_models(flow_a: dict, flow_b: dict) -> None:
             if a_hierarchies == b_hierarchies:
                 _ok("Hierarchy names match between flows")
             else:
-                _warn(f"Hierarchies differ: A-only={a_hierarchies - b_hierarchies}, B-only={b_hierarchies - a_hierarchies}")
+                _warn(
+                    f"Hierarchies differ: A-only={a_hierarchies - b_hierarchies}, "
+                    f"B-only={b_hierarchies - a_hierarchies}"
+                )
 
     # Compare validation errors
     a_errors = flow_a.get("validation_errors", [])
@@ -462,7 +598,9 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="No API calls to Kyvos")
     parser.add_argument("--live", action="store_true", help="Use live warehouse + Kyvos server")
     parser.add_argument("--output-dir", default=".", help="Directory for output files")
-    parser.add_argument("--mock-schema", action="store_true", help="Use mock AdventureWorks schema (no warehouse connection needed)")
+    parser.add_argument(
+        "--mock-schema", action="store_true", help="Use mock AdventureWorks schema (no warehouse connection needed)"
+    )
     args = parser.parse_args()
 
     failures: list[str] = []
@@ -470,6 +608,7 @@ def main() -> int:
     # If --mock-schema, patch inspect_schema to use mock AdventureWorks data
     if args.mock_schema:
         from unittest.mock import patch
+
         _patch = patch("kyvos_sdk.warehouse_inspector.inspect_schema", side_effect=_mock_inspect_schema)
         _patch.start()
         _info("Using mock AdventureWorks schema (no warehouse connection)")

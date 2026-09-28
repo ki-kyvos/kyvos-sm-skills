@@ -1,6 +1,7 @@
 """Check validation status of SMs in the awdw2019multidimensionalee_SModel folder."""
-from kyvos_sdk.config import KyvosConfig
+
 from kyvos_sdk.client import KyvosService
+from kyvos_sdk.config import KyvosConfig
 from kyvos_sdk.inspection import InspectionClient
 
 config = KyvosConfig.from_env_file(".env.discover")

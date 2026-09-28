@@ -340,7 +340,6 @@ def _auto_include_bridge_tables(
     bridge_table → dimension_table (via FK)
     """
     spec_table_names = {ts.name.lower() for ts in table_specs}
-    fact_names = {ts.name.lower() for ts in table_specs if ts.table_type == "fact"}
     dim_names = {ts.name.lower() for ts in table_specs if ts.table_type == "dimension"}
 
     # Build fact table column sets for business key matching
@@ -620,12 +619,12 @@ def _connectivity_sweep(
         _existing_rel_keys: set[tuple[str, str, str, str]] = set()
         _existing_table_pairs: set[tuple[str, str]] = set()
         for rel in relationships:
-            l = rel.left_dataset.lower()
-            r = rel.right_dataset.lower()
-            _existing_rel_keys.add((l, rel.left_column.lower(), r, rel.right_column.lower()))
-            _existing_rel_keys.add((r, rel.right_column.lower(), l, rel.left_column.lower()))
-            _existing_table_pairs.add((l, r))
-            _existing_table_pairs.add((r, l))
+            left_ds = rel.left_dataset.lower()
+            right_ds = rel.right_dataset.lower()
+            _existing_rel_keys.add((left_ds, rel.left_column.lower(), right_ds, rel.right_column.lower()))
+            _existing_rel_keys.add((right_ds, rel.right_column.lower(), left_ds, rel.left_column.lower()))
+            _existing_table_pairs.add((left_ds, right_ds))
+            _existing_table_pairs.add((right_ds, left_ds))
 
         _new_rels: list[RelationshipSpec] = []
         _reconnected: set[str] = set()

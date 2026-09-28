@@ -7,6 +7,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from kyvos_sm_skills.skill_runner import (
+    _check_prefix_collision,
+    _collect_and_cleanup_entities,
+    _derive_cleanup_prefixes,
+    _get_protected_folders,
+    _write_audit_log,
+)
+
 try:
     import kyvos_sdk  # noqa: F401
 
@@ -15,14 +23,6 @@ except ImportError:
     _has_sdk = False
 
 _sdk_required = pytest.mark.skipif(not _has_sdk, reason="requires kyvos-sdk-python")
-
-from kyvos_sm_skills.skill_runner import (
-    _check_prefix_collision,
-    _collect_and_cleanup_entities,
-    _derive_cleanup_prefixes,
-    _get_protected_folders,
-    _write_audit_log,
-)
 
 # ── Protected folders tests ────────────────────────────────────────────────
 

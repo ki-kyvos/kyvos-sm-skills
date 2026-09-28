@@ -1,8 +1,9 @@
 """Check raw validation response using KyvosService client directly."""
+
 import json
-import requests
-from kyvos_sdk.config import KyvosConfig
+
 from kyvos_sdk.client import KyvosService
+from kyvos_sdk.config import KyvosConfig
 
 config = KyvosConfig.from_env_file(".env.discover")
 svc = KyvosService(config)
@@ -15,14 +16,14 @@ sm_ids = {
 folder_name = "awdw2019multidimensionalee_SModel"
 
 for label, sm_id in sm_ids.items():
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{label}: {sm_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     raw = svc.validate_semantic_model(smodel_id=sm_id, folder_name=folder_name)
     print(f"valid: {raw.get('valid')}")
     print(f"validation_status: {raw.get('validation_status')}")
     print(f"errors: {raw.get('errors')}")
     print(f"warnings: {raw.get('warnings')}")
-    print(f"raw response (first 5000 chars):")
+    print("raw response (first 5000 chars):")
     raw_json = raw.get("raw", {})
     print(json.dumps(raw_json, indent=2)[:5000])

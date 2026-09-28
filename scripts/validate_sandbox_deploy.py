@@ -50,13 +50,12 @@ Prerequisites:
 from __future__ import annotations
 
 import argparse
-import os
+import importlib.util
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -197,6 +196,7 @@ def main() -> int:
 
     try:
         import kyvos_sdk
+
         _ok(f"kyvos-sdk-python v{kyvos_sdk.__version__}")
     except ImportError:
         _fail("kyvos-sdk-python not installed. Run: pip install kyvos-sdk-python[env]")
@@ -204,17 +204,16 @@ def main() -> int:
 
     try:
         import kyvos_sm_skills
+
         _ok(f"kyvos-sm-skills v{kyvos_sm_skills.__version__}")
     except ImportError:
         _fail("kyvos-sm-skills not installed. Run: pip install kyvos-sm-skills[sdk]")
         return 1
 
-    try:
-        import kyvos_xmla_parser
-        _ok("kyvos-xmla-parser installed")
-    except ImportError:
+    if importlib.util.find_spec("kyvos_xmla_parser") is None:
         _fail("kyvos-xmla-parser not installed. Run: pip install kyvos-xmla-parser")
         return 1
+    _ok("kyvos-xmla-parser installed")
 
     # ── Create sandbox ─────────────────────────────────────────────────────
     _print_step(1, "Create sandbox directory")
@@ -230,7 +229,7 @@ def main() -> int:
     _ok(f"Sandbox created: {sandbox}")
 
     # ── Export skill files ─────────────────────────────────────────────────
-    _print_step(2, f"Export skill files from installed package")
+    _print_step(2, "Export skill files from installed package")
 
     # Find the kyvos-skills CLI
     kyvos_skills_bin = shutil.which("kyvos-skills")
@@ -293,7 +292,7 @@ def main() -> int:
     _ok("Workspace layout verified")
 
     # Print the tree
-    print(f"\n  Sandbox tree:")
+    print("\n  Sandbox tree:")
     for f in sorted(sandbox.rglob("*")):
         if f.is_file():
             rel = f.relative_to(sandbox)
@@ -309,8 +308,8 @@ def main() -> int:
     )
     prompt_file = sandbox / "prompt.txt"
     prompt_file.write_text(prompt_text + "\n")
-    _ok(f"Prompt file created: prompt.txt")
-    print(f"       Content: \"{prompt_text}\"")
+    _ok("Prompt file created: prompt.txt")
+    print(f'       Content: "{prompt_text}"')
 
     # ── Dry run ────────────────────────────────────────────────────────────
     _print_step(6, "Dry run (parse only, no API calls)")
@@ -318,8 +317,10 @@ def main() -> int:
     deploy_cmd = [
         kyvos_skills_bin,
         "deploy",
-        "--xmla-path", xmla_path.name,
-        "--env-file", ".env",
+        "--xmla-path",
+        xmla_path.name,
+        "--env-file",
+        ".env",
         "--dry-run",
     ]
     if args.payload_format:
@@ -341,8 +342,10 @@ def main() -> int:
         deploy_cmd_live = [
             kyvos_skills_bin,
             "deploy",
-            "--xmla-path", xmla_path.name,
-            "--env-file", ".env",
+            "--xmla-path",
+            xmla_path.name,
+            "--env-file",
+            ".env",
         ]
         if args.payload_format:
             deploy_cmd_live.extend(["--payload-format", args.payload_format])
@@ -367,8 +370,8 @@ def main() -> int:
   XMLA file    : {xmla_path.name}
   Skill        : {args.skill_name}.md
   Dry run      : ✅ Passed
-  Live deploy  : {'✅ Passed' if args.live else '⏭️  Skipped (--live not set)'}
-  Sandbox kept : {'Yes' if args.keep_sandbox else 'No (cleaned up)'}
+  Live deploy  : {"✅ Passed" if args.live else "⏭️  Skipped (--live not set)"}
+  Sandbox kept : {"Yes" if args.keep_sandbox else "No (cleaned up)"}
 
   To run with Claude Code non-interactive mode:
     cd {sandbox}

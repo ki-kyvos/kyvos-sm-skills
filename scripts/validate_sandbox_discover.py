@@ -45,8 +45,6 @@ Prerequisites:
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import shutil
 import subprocess
 import sys
@@ -90,11 +88,13 @@ def main() -> int:
         _print_err("Either --sm-design or --user-intent must be provided.")
         return 1
 
-    sandbox_dir = Path(args.sandbox_dir) if args.sandbox_dir else Path(tempfile.mkdtemp(prefix="kyvos-discover-sandbox-"))
+    sandbox_dir = (
+        Path(args.sandbox_dir) if args.sandbox_dir else Path(tempfile.mkdtemp(prefix="kyvos-discover-sandbox-"))
+    )
 
     try:
         # ── Step 1: Create sandbox ──
-        _print_step(1, f"Create sandbox directory")
+        _print_step(1, "Create sandbox directory")
         sandbox_dir.mkdir(parents=True, exist_ok=True)
         print(f"  Sandbox: {sandbox_dir}")
         _print_ok(f"Sandbox created at {sandbox_dir}")
@@ -119,8 +119,15 @@ def main() -> int:
         _print_ok(f"Skill files exported to {skills_dir}")
 
         # Also export the inspect-warehouse-schema skill
-        cmd_inspect = [sys.executable, "-m", "kyvos_sm_skills.cli", "export-skill",
-                       "inspect-warehouse-schema", "-o", str(skills_dir)]
+        cmd_inspect = [
+            sys.executable,
+            "-m",
+            "kyvos_sm_skills.cli",
+            "export-skill",
+            "inspect-warehouse-schema",
+            "-o",
+            str(skills_dir),
+        ]
         result_inspect = subprocess.run(cmd_inspect, capture_output=True, text=True)
         if result_inspect.returncode == 0:
             _print_ok("inspect-warehouse-schema skill exported")
@@ -161,8 +168,12 @@ def main() -> int:
         _print_step(5, "Run dry-run (inspect + build spec only)")
 
         cmd = [
-            sys.executable, "-m", "kyvos_sm_skills.cli", "discover",
-            "--env-file", str(env_dest),
+            sys.executable,
+            "-m",
+            "kyvos_sm_skills.cli",
+            "discover",
+            "--env-file",
+            str(env_dest),
             "--dry-run",
         ]
         if sm_design_dest:
@@ -186,7 +197,7 @@ def main() -> int:
 
         if not args.live:
             print(f"\n{'═' * 70}")
-            print(f"  ✅ Sandbox validation (dry run) complete!")
+            print("  ✅ Sandbox validation (dry run) complete!")
             print(f"  Sandbox: {sandbox_dir}")
             print(f"{'═' * 70}")
             return 0
@@ -195,8 +206,12 @@ def main() -> int:
         _print_step(6, "Run live deployment")
 
         cmd_live = [
-            sys.executable, "-m", "kyvos_sm_skills.cli", "discover",
-            "--env-file", str(env_dest),
+            sys.executable,
+            "-m",
+            "kyvos_sm_skills.cli",
+            "discover",
+            "--env-file",
+            str(env_dest),
             "--auto-approve",
         ]
         if sm_design_dest:
@@ -219,7 +234,7 @@ def main() -> int:
         _print_ok("Live deployment completed successfully")
 
         print(f"\n{'═' * 70}")
-        print(f"  ✅ Sandbox validation (live) complete!")
+        print("  ✅ Sandbox validation (live) complete!")
         print(f"  Sandbox: {sandbox_dir}")
         print(f"{'═' * 70}")
 
