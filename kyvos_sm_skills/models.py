@@ -30,6 +30,7 @@ class TableSpec(BaseModel):
 
     name: str
     schema_name: str = "public"
+    database_name: str | None = None  # catalog/database for sources like Databricks
     table_type: str = "dimension"  # "fact" | "dimension" | "bridge" | "snowflake_dimension"
     columns: list[ColumnSpec] = Field(default_factory=list)
     description: str = ""

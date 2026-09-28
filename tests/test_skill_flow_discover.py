@@ -36,7 +36,7 @@ _SM_DESIGN = {
                 {"name": "SalesAmount", "source_dataset": "fact_internet_sales", "aggregation_type": "sum"},
             ],
             "hierarchies": [
-                {"name": "ProductHierarchy", "levels": ["product_key", "category"], "source_dataset": "dim_product"},
+                {"name": "ProductHierarchy", "levels": ["category", "subcategory"], "source_dataset": "dim_product"},
             ],
         }
     ],
@@ -68,6 +68,7 @@ _WAREHOUSE_TABLES = [
         "columns": [
             {"name": "product_key", "data_type": "INTEGER", "is_pk": True, "is_fk": False, "references": ""},
             {"name": "category", "data_type": "VARCHAR(100)", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "subcategory", "data_type": "VARCHAR(100)", "is_pk": False, "is_fk": False, "references": ""},
         ],
     },
     {
@@ -257,7 +258,7 @@ _LLM_RESPONSE = {
                 {"name": "SalesAmount", "source_dataset": "fact_internet_sales", "aggregation_type": "sum"},
             ],
             "hierarchies": [
-                {"name": "ProductHierarchy", "levels": ["product_key", "category"], "source_dataset": "dim_product"},
+                {"name": "ProductHierarchy", "levels": ["category", "subcategory"], "source_dataset": "dim_product"},
             ],
         }
     ],

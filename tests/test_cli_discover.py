@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -132,3 +132,51 @@ class TestCliDiscover:
 
         call_kwargs = mock_runner.call_args
         assert call_kwargs.kwargs.get("max_tables") == 50
+
+
+class TestCliDiscoverKyvos:
+    """Tests for the discover-kyvos CLI subcommand."""
+
+    def test_discover_kyvos_help(self, capsys):
+        """discover-kyvos --help should show required Kyvos options."""
+        with pytest.raises(SystemExit) as exc_info:
+            _run_cli(["discover-kyvos", "--help"])
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "--connection-name" in captured.out
+        assert "--database-name" in captured.out
+        assert "--schema-name" in captured.out
+
+    def test_discover_kyvos_dry_run_passes_schema_summary(self, tmp_path):
+        """discover-kyvos should build a schema_summary and reuse the runner."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("KYVOS_BASE_URL=http://test\nKYVOS_WAREHOUSE_TYPE=POSTGRES\n")
+
+        fake_summary = {"warehouse_type": "KYVOS", "schema": "br_new", "table_count": 0, "tables": [], "relationships": [], "detected_patterns": {}}
+
+        with patch("kyvos_sm_skills.kyvos_api_inspector.inspect_schema_from_kyvos", return_value=fake_summary) as mock_inspector:
+            with patch("kyvos_sm_skills.skill_runner.run_discover_sm_from_warehouse", return_value=0) as mock_runner:
+                rc = _run_cli([
+                    "discover-kyvos",
+                    "--env-file", str(env_file),
+                    "--connection-name", "PSdatabricks",
+                    "--database-name", "kyvs_support_ps",
+                    "--schema-name", "br_new",
+                    "--user-intent", "Build a retail semantic model",
+                    "--domain", "retail",
+                    "--dry-run",
+                ])
+
+        assert rc == 0
+        mock_inspector.assert_called_once()
+        inspector_kwargs = mock_inspector.call_args.kwargs
+        assert inspector_kwargs["connection_name"] == "PSdatabricks"
+        assert inspector_kwargs["database_name"] == "kyvs_support_ps"
+        assert inspector_kwargs["schema_name"] == "br_new"
+
+        mock_runner.assert_called_once()
+        runner_kwargs = mock_runner.call_args.kwargs
+        assert runner_kwargs["schema_summary"] is fake_summary
+        assert runner_kwargs["user_intent"] == "Build a retail semantic model"
+        assert runner_kwargs["domain"] == "retail"
+        assert runner_kwargs["dry_run"] is True

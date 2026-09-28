@@ -48,6 +48,7 @@ def _make_warehouse_tables() -> list[dict]:
                 {"name": "product_name", "data_type": "VARCHAR(255)", "is_pk": False, "is_fk": False, "references": ""},
                 {"name": "category", "data_type": "VARCHAR(100)", "is_pk": False, "is_fk": False, "references": ""},
                 {"name": "subcategory", "data_type": "VARCHAR(100)", "is_pk": False, "is_fk": False, "references": ""},
+                {"name": "subcategory", "data_type": "VARCHAR(100)", "is_pk": False, "is_fk": False, "references": ""},
             ],
         },
         {
@@ -108,8 +109,8 @@ def _make_star_schema_rec() -> dict:
             {"name": "TotalProductCost", "source_dataset": "fact_internet_sales", "aggregation_type": "sum"},
         ],
         "hierarchies": [
-            {"name": "ProductCategory", "levels": ["product_key", "category", "subcategory"], "source_dataset": "dim_product"},
-            {"name": "CalendarDate", "levels": ["date_key", "month", "quarter", "year"], "source_dataset": "dim_date"},
+            {"name": "ProductCategory", "levels": ["category", "subcategory", "product_name"], "source_dataset": "dim_product"},
+            {"name": "CalendarDate", "levels": ["quarter", "month"], "source_dataset": "dim_date"},
         ],
     }
 
@@ -214,7 +215,7 @@ class TestBuildSpecFromRecommendation:
         h = spec.semantic_model.hierarchies[0]
         assert isinstance(h, HierarchySpec)
         assert h.name == "ProductCategory"
-        assert h.levels == ["product_key", "category", "subcategory"]
+        assert h.levels == ["category", "subcategory", "product_name"]
         assert h.source_dataset == "dim_product"
 
     def test_metadata_populated(self):
@@ -261,11 +262,15 @@ class TestBuildSpecFromRecommendation:
             build_spec_from_recommendation(rec, wh_tables)
 
     def test_empty_measures_handled(self):
+        """Empty LLM measures get auto-created count measures for each fact table."""
         wh_tables = _make_warehouse_tables()
         rec = _make_star_schema_rec()
         rec["measures"] = []
         spec = build_spec_from_recommendation(rec, wh_tables)
-        assert spec.semantic_model.measures == []
+        # Auto-created count measure for the single fact table
+        assert len(spec.semantic_model.measures) == 1
+        assert spec.semantic_model.measures[0].aggregation_type == "count"
+        assert spec.semantic_model.measures[0].source_dataset == "fact_internet_sales"
 
     def test_empty_hierarchies_handled(self):
         wh_tables = _make_warehouse_tables()
@@ -300,7 +305,7 @@ class TestBuildSpecFromRecommendation:
             {"name": "SalesAmount", "source_dataset": "FACT_Internet_Sales", "aggregation_type": "sum"},
         ]
         rec["hierarchies"] = [
-            {"name": "Test", "levels": ["product_key", "category"], "source_dataset": "DIM_Product"},
+            {"name": "Test", "levels": ["category", "subcategory"], "source_dataset": "DIM_Product"},
         ]
         spec = build_spec_from_recommendation(rec, wh_tables)
         assert len(spec.tables) == 2
@@ -344,3 +349,340 @@ class TestBuildSpecFromRecommendation:
         spec = build_spec_from_recommendation(rec, wh_tables)
         # Hierarchy with no levels is skipped — no hierarchies in the result
         assert len(spec.semantic_model.hierarchies) == 0
+
+    def test_bridge_relationship_direction_normalized(self):
+        """LLM-generated bridge -> fact relationships are flipped to fact -> bridge.
+
+        This keeps the bridge dimension reachable from the measure fact in the
+        connectivity sweep, preventing SM validation errors like *"Dimension ...
+        is invalid because it does not have valid relation with any measure"*.
+        """
+        wh_tables = [
+            {
+                "name": "fact_internet_sales",
+                "schema": "public",
+                "estimated_table_type": "fact",
+                "columns": [
+                    {"name": "sales_key", "data_type": "INTEGER"},
+                    {"name": "sales_order_number", "data_type": "VARCHAR"},
+                    {"name": "sales_amount", "data_type": "NUMERIC"},
+                ],
+            },
+            {
+                "name": "fact_internet_sales_reason",
+                "schema": "public",
+                "estimated_table_type": "bridge",
+                "columns": [
+                    {"name": "sales_order_number", "data_type": "VARCHAR"},
+                    {"name": "sales_reason_key", "data_type": "INTEGER"},
+                ],
+            },
+            {
+                "name": "dim_sales_reason",
+                "schema": "public",
+                "estimated_table_type": "dimension",
+                "columns": [
+                    {"name": "sales_reason_key", "data_type": "INTEGER"},
+                    {"name": "reason_name", "data_type": "VARCHAR"},
+                ],
+            },
+        ]
+        rec = {
+            "name": "InternetSalesWithReasons",
+            "schema_type": "star",
+            "rationale": "Star schema with many-to-many bridge to sales reasons",
+            "tables": ["fact_internet_sales", "fact_internet_sales_reason", "dim_sales_reason"],
+            "relationships": [
+                # LLM emits bridge -> fact (wrong direction)
+                {
+                    "from_table": "fact_internet_sales_reason",
+                    "from_column": "sales_order_number",
+                    "to_table": "fact_internet_sales",
+                    "to_column": "sales_order_number",
+                    "relationship_type": "many_to_many",
+                },
+                # bridge -> dimension (correct direction)
+                {
+                    "from_table": "fact_internet_sales_reason",
+                    "from_column": "sales_reason_key",
+                    "to_table": "dim_sales_reason",
+                    "to_column": "sales_reason_key",
+                    "relationship_type": "many_to_one",
+                },
+            ],
+            "measures": [{"name": "SalesAmount", "source_dataset": "fact_internet_sales", "aggregation_type": "sum"}],
+            "hierarchies": [],
+        }
+        spec = build_spec_from_recommendation(rec, wh_tables)
+
+        rel_pairs = {
+            (rel.left_dataset.lower(), rel.right_dataset.lower())
+            for rel in spec.semantic_model.relationships
+        }
+        # Fact -> bridge (normalized from bridge -> fact)
+        assert ("fact_internet_sales", "fact_internet_sales_reason") in rel_pairs
+        # Bridge -> dimension (preserved)
+        assert ("fact_internet_sales_reason", "dim_sales_reason") in rel_pairs
+        # The reverse/wrong direction must not survive
+        assert ("fact_internet_sales_reason", "fact_internet_sales") not in rel_pairs
+
+        # Bridge and its dimension must remain in the spec (reachable from fact)
+        remaining = {t.name.lower() for t in spec.tables}
+        assert "fact_internet_sales_reason" in remaining
+        assert "dim_sales_reason" in remaining
+
+
+class TestFactToFactRejection:
+    """Fact-to-fact relationships should be silently dropped by the spec builder."""
+
+    def test_fact_to_fact_relationship_dropped(self):
+        wh_tables = [
+            {
+                "name": "fact_internet_sales",
+                "schema": "dbo",
+                "estimated_table_type": "fact",
+                "columns": [
+                    {"name": "sales_key", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                    {"name": "product_key", "data_type": "INTEGER", "is_pk": False, "is_fk": True,
+                     "references": "dim_product.product_key"},
+                    {"name": "amount", "data_type": "DECIMAL", "is_pk": False, "is_fk": False},
+                ],
+                "outgoing_fk_count": 1, "incoming_fk_count": 0,
+            },
+            {
+                "name": "fact_reseller_sales",
+                "schema": "dbo",
+                "estimated_table_type": "fact",
+                "columns": [
+                    {"name": "sales_key", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                    {"name": "product_key", "data_type": "INTEGER", "is_pk": False, "is_fk": True,
+                     "references": "dim_product.product_key"},
+                    {"name": "amount", "data_type": "DECIMAL", "is_pk": False, "is_fk": False},
+                ],
+                "outgoing_fk_count": 1, "incoming_fk_count": 0,
+            },
+            {
+                "name": "dim_product",
+                "schema": "dbo",
+                "estimated_table_type": "dimension",
+                "columns": [
+                    {"name": "product_key", "data_type": "INTEGER", "is_pk": True, "is_fk": False},
+                    {"name": "product_name", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                ],
+                "outgoing_fk_count": 0, "incoming_fk_count": 2,
+            },
+        ]
+        rec = {
+            "name": "MultiFact SM",
+            "schema_type": "multifact",
+            "tables": ["fact_internet_sales", "fact_reseller_sales", "dim_product"],
+            "relationships": [
+                {"from_table": "fact_internet_sales", "from_column": "product_key",
+                 "to_table": "dim_product", "to_column": "product_key"},
+                # This fact-to-fact join should be silently dropped
+                {"from_table": "fact_internet_sales", "from_column": "sales_key",
+                 "to_table": "fact_reseller_sales", "to_column": "sales_key"},
+                {"from_table": "fact_reseller_sales", "from_column": "product_key",
+                 "to_table": "dim_product", "to_column": "product_key"},
+            ],
+            "measures": [
+                {"name": "Internet Amount", "source_dataset": "fact_internet_sales",
+                 "aggregation_type": "sum", "source_column": "amount"},
+                {"name": "Reseller Amount", "source_dataset": "fact_reseller_sales",
+                 "aggregation_type": "sum", "source_column": "amount"},
+            ],
+            "hierarchies": [],
+        }
+        spec = build_spec_from_recommendation(rec, wh_tables)
+
+        # Fact-to-fact join should be dropped
+        rel_pairs = {
+            (rel.left_dataset.lower(), rel.right_dataset.lower())
+            for rel in spec.semantic_model.relationships
+        }
+        assert ("fact_internet_sales", "fact_reseller_sales") not in rel_pairs
+        assert ("fact_reseller_sales", "fact_internet_sales") not in rel_pairs
+        # Valid fact->dim relationships should remain
+        assert ("fact_internet_sales", "dim_product") in rel_pairs
+        assert ("fact_reseller_sales", "dim_product") in rel_pairs
+
+    def test_llm_table_classifications_used(self):
+        """LLM table_classifications should override warehouse estimated_table_type."""
+        wh_tables = [
+            {
+                "name": "factinternetsalesreason",
+                "schema": "dbo",
+                "estimated_table_type": "fact",  # warehouse says fact
+                "columns": [
+                    {"name": "salesordernumber", "data_type": "VARCHAR", "is_pk": False, "is_fk": False},
+                    {"name": "salesreasonkey", "data_type": "INTEGER", "is_pk": False, "is_fk": False},
+                ],
+                "outgoing_fk_count": 0, "incoming_fk_count": 0,
+            },
+            {
+                "name": "factinternetsales",
+                "schema": "dbo",
+                "estimated_table_type": "fact",
+                "columns": [
+                    {"name": "salesordernumber", "data_type": "VARCHAR", "is_pk": True, "is_fk": False},
+                    {"name": "salesamount", "data_type": "DECIMAL", "is_pk": False, "is_fk": False},
+                ],
+                "outgoing_fk_count": 0, "incoming_fk_count": 0,
+            },
+        ]
+        rec = {
+            "name": "Sales SM",
+            "schema_type": "star",
+            "tables": ["factinternetsales", "factinternetsalesreason"],
+            "table_classifications": {
+                "factinternetsales": "fact",
+                "factinternetsalesreason": "bridge",  # LLM overrides to bridge
+            },
+            "relationships": [
+                {"from_table": "factinternetsales", "from_column": "salesordernumber",
+                 "to_table": "factinternetsalesreason", "to_column": "salesordernumber"},
+            ],
+            "measures": [
+                {"name": "Sales Amount", "source_dataset": "factinternetsales",
+                 "aggregation_type": "sum", "source_column": "salesamount"},
+            ],
+            "hierarchies": [],
+        }
+        spec = build_spec_from_recommendation(rec, wh_tables)
+
+        # factinternetsalesreason should be classified as bridge, not fact
+        type_map = {t.name.lower(): t.table_type for t in spec.tables}
+        assert type_map["factinternetsalesreason"] == "bridge"
+        assert type_map["factinternetsales"] == "fact"
+
+        # The relationship should NOT be dropped (fact->bridge is valid)
+        rel_pairs = {
+            (rel.left_dataset.lower(), rel.right_dataset.lower())
+            for rel in spec.semantic_model.relationships
+        }
+        assert ("factinternetsales", "factinternetsalesreason") in rel_pairs
+
+
+class TestMergeSpecsForReview:
+    """Tests for merging multiple per-SM specs into one for review display."""
+
+    def _make_two_sm_warehouse(self):
+        """Warehouse with tables for two separate SMs."""
+        return _make_warehouse_tables() + [
+            {
+                "name": "fact_inventory",
+                "schema": "public",
+                "estimated_table_type": "fact",
+                "outgoing_fk_count": 2,
+                "incoming_fk_count": 0,
+                "columns": [
+                    {"name": "inventory_key", "data_type": "INTEGER", "is_pk": True, "is_fk": False, "references": ""},
+                    {"name": "product_key", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "dim_product.product_key"},
+                    {"name": "date_key", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "dim_date.date_key"},
+                    {"name": "units_in", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
+                ],
+            },
+        ]
+
+    def test_merges_tables_from_multiple_sms(self):
+        """All tables from all SMs should appear in the merged spec."""
+        wh = self._make_two_sm_warehouse()
+
+        sm1 = _make_star_schema_rec()
+        sm2 = {
+            "name": "Inventory",
+            "schema_type": "star",
+            "tables": ["fact_inventory", "dim_product", "dim_date"],
+            "relationships": [
+                {"from_table": "fact_inventory", "from_column": "product_key", "to_table": "dim_product", "to_column": "product_key"},
+                {"from_table": "fact_inventory", "from_column": "date_key", "to_table": "dim_date", "to_column": "date_key"},
+            ],
+            "measures": [
+                {"name": "UnitsIn", "source_dataset": "fact_inventory", "aggregation_type": "sum", "source_column": "units_in"},
+            ],
+            "hierarchies": [],
+        }
+
+        from kyvos_sm_skills.spec_builder import merge_specs_for_review
+
+        spec1 = build_spec_from_recommendation(sm1, wh)
+        spec2 = build_spec_from_recommendation(sm2, wh)
+        merged = merge_specs_for_review([(sm1, spec1), (sm2, spec2)])
+
+        table_names = {t.name for t in merged.tables}
+        # Should contain all tables from both SMs
+        assert "fact_internet_sales" in table_names
+        assert "fact_inventory" in table_names
+        assert "dim_product" in table_names
+        assert "dim_date" in table_names
+        # Shared dims appear once
+        assert len([t for t in merged.tables if t.name == "dim_product"]) == 1
+        assert len([t for t in merged.tables if t.name == "dim_date"]) == 1
+        # Measures from both SMs
+        measure_names = {m.name for m in merged.semantic_model.measures}
+        assert "SalesAmount" in measure_names
+        assert "UnitsIn" in measure_names
+
+    def test_dedup_shared_dimensions(self):
+        """Shared dimensions appear once in the merged spec."""
+        wh = self._make_two_sm_warehouse()
+        sm1 = _make_star_schema_rec()
+        sm2 = {
+            "name": "Alt",
+            "schema_type": "star",
+            "tables": ["fact_inventory", "dim_product"],
+            "relationships": [
+                {"from_table": "fact_inventory", "from_column": "product_key", "to_table": "dim_product", "to_column": "product_key"},
+            ],
+            "measures": [
+                {"name": "X", "source_dataset": "fact_inventory", "aggregation_type": "sum", "source_column": "units_in"},
+            ],
+            "hierarchies": [],
+        }
+
+        from kyvos_sm_skills.spec_builder import merge_specs_for_review
+
+        spec1 = build_spec_from_recommendation(sm1, wh)
+        spec2 = build_spec_from_recommendation(sm2, wh)
+        merged = merge_specs_for_review([(sm1, spec1), (sm2, spec2)])
+
+        # dim_product appears once
+        dp_entries = [t for t in merged.tables if t.name == "dim_product"]
+        assert len(dp_entries) == 1
+        assert dp_entries[0].table_type == "dimension"
+
+
+class TestEnsurePkColumns:
+    """Tests for auto-assigning PK to bridge tables with no PK."""
+
+    def test_bridge_gets_composite_pk(self):
+        """A bridge table with no PK gets FK columns marked as composite PK."""
+        wh = _make_warehouse_tables() + [{
+            "name": "bridge_reasons",
+            "schema": "public",
+            "estimated_table_type": "dimension",
+            "outgoing_fk_count": 2,
+            "incoming_fk_count": 1,
+            "columns": [
+                {"name": "order_id", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "fact_internet_sales.sales_key"},
+                {"name": "reason_key", "data_type": "INTEGER", "is_pk": False, "is_fk": True, "references": "dim_date.date_key"},
+            ],
+        }]
+        rec = {
+            "name": "WithBridge",
+            "schema_type": "star",
+            "tables": ["fact_internet_sales", "bridge_reasons", "dim_date"],
+            "table_classifications": {"bridge_reasons": "bridge"},
+            "relationships": [
+                {"from_table": "fact_internet_sales", "from_column": "sales_key", "to_table": "bridge_reasons", "to_column": "order_id"},
+                {"from_table": "bridge_reasons", "from_column": "reason_key", "to_table": "dim_date", "to_column": "date_key"},
+            ],
+            "measures": [
+                {"name": "Sales", "source_dataset": "fact_internet_sales", "aggregation_type": "sum", "source_column": "sales_amount"},
+            ],
+            "hierarchies": [],
+        }
+        spec = build_spec_from_recommendation(rec, wh)
+        bridge = [t for t in spec.tables if t.name == "bridge_reasons"][0]
+        pk_cols = [c.name for c in bridge.columns if c.is_primary_key]
+        assert len(pk_cols) >= 1  # At least one column marked as PK

@@ -4,7 +4,7 @@
 
 ## System Prompt
 
-You are a Kyvos enterprise semantic model discovery agent. Given a user's analytics intent, an existing warehouse schema (from the inspect-warehouse-schema skill), and optionally a domain description, you first identify the domain (inferring it from the warehouse schema if not provided) and conduct deep domain research via web search for industry-standard data models, KPIs, and schema patterns. You then recommend one or more enterprise-quality semantic models based on the available tables, detected schema patterns, domain research findings, and user intent. Your recommendations must be production-grade — proper conformed dimensions, industry-standard measure definitions, correct fact table granularity, and named hierarchies reflecting real business rollups. For each SM, you choose the appropriate schema type (single table, star, snowflake, or multifact). You select which tables to include, which relationships to define, which measures to create from available numeric columns, and which hierarchies to define from dimension columns. You flag any standard dimensions or measures that are missing from the warehouse. You present your research findings and design recommendations to the user for approval before proceeding to deployment. You balance simplicity against normalization — avoid over-engineering when a simpler schema suffices, but do not compromise on enterprise standards when the domain requires them.
+You are a Kyvos enterprise semantic model discovery agent. Given a user's analytics intent, an existing warehouse schema (from the inspect-warehouse-schema skill), and optionally a domain description, you first identify the domain (inferring it from the warehouse schema if not provided) and conduct deep domain research via web search for industry-standard data models, KPIs, and schema patterns. You then recommend one or more enterprise-quality semantic models based on the available tables, detected schema patterns, domain research findings, and user intent. Your recommendations must be production-grade — proper conformed dimensions, industry-standard measure definitions, correct fact table granularity, and named hierarchies reflecting real business rollups. For each SM, you use the recommended schema pattern (star_schema, snowflake_schema, or multifact_star_schema) from the detected_patterns in the schema context. You select which tables to include, which relationships to define, which measures to create from available numeric columns, and which hierarchies to define from dimension columns. You flag any standard dimensions or measures that are missing from the warehouse. You present your research findings and design recommendations to the user for approval before proceeding to deployment. You balance simplicity against normalization — avoid over-engineering when a simpler schema suffices, but do not compromise on enterprise standards when the domain requires them.
 
 You understand:
 - The warehouse schema comes from the `inspect-warehouse-schema` skill — you do NOT connect to the warehouse yourself
@@ -56,13 +56,12 @@ You understand:
       "name": "string",
       "schema_type": "single_table|star|snowflake|multifact",
       "rationale": "why this schema type and table selection was chosen",
-      "tables": ["table names included in this SM"],
+      "tables": ["ALL warehouse table names — every table from the schema context must be included"],
       "relationships": [{"from_table": "string", "from_column": "string", "to_table": "string", "to_column": "string"}],
       "measures": [{"name": "string", "source_dataset": "string", "aggregation_type": "string"}],
       "hierarchies": [{"name": "string", "levels": ["string"], "source_dataset": "string"}]
     }
   ],
-  "shared_dimensions": ["dimension table names shared across SMs, if multiple SMs"],
   "identified_domain": "the domain identified from user input or inferred from warehouse schema",
   "domain_research_summary": "summary of web search findings: industry-standard patterns, KPIs, and dimension structures identified for this domain",
   "table_to_domain_mapping": {"warehouse_table_name": "domain_concept (e.g., fact, dimension, bridge)"},
@@ -78,13 +77,18 @@ You understand:
 3. **⏸ User approval gate 1** — User confirms the inferred domain (or corrects it). LLM may ask clarifying questions
 4. **Domain research phase** — LLM conducts web search on the confirmed domain, identifies industry-standard patterns, KPIs, and dimension structures. Maps warehouse tables to domain concepts. Identifies any gaps (missing standard dimensions/measures). Presents research summary to user
 5. **⏸ User approval gate 2** — User reviews domain research findings, table-to-domain mappings, and gap analysis. User confirms/adjusts scope
-6. **SM design phase** — LLM recommends one or more SMs with schema types, tables, measures, hierarchies:
-   - For each SM: schema type (single table, star, snowflake, multifact)
-   - Which tables to include (fact + dimension selection, filtered by user intent relevance + domain research)
-   - Which relationships to define (from FK metadata + LLM analysis)
-   - Which measures to create (from available numeric columns, mapped to industry-standard KPIs)
-   - Which hierarchies to define (from available dimension columns, reflecting real business rollups)
-   - Shared dimensions across SMs if multiple SMs recommended
+6. **SM design phase** — LLM recommends exactly ONE semantic model containing ALL tables from the warehouse schema:
+   - **MANDATORY: Include every table** from `existing_schema_context.tables` in the `tables` list. Do NOT filter or exclude any table. All facts, all dimensions, all bridges must appear in the SM.
+   - **MANDATORY: Exactly one SM** in `recommended_sms`. Do NOT split into multiple SMs per business domain — one comprehensive model covering the full warehouse schema.
+   - **Schema pattern:** Use the `recommended_pattern` from `detected_patterns` in the schema context. Do NOT invent your own pattern — use `star`, `snowflake`, or `multifact` as indicated.
+   - **Table classification:** Include `table_classifications` mapping EVERY table to `fact`, `dimension`, or `bridge`. The LLM decides the final classification based on the data structure and business logic.
+   - **Bridge tables:** Bridge/junction tables are ONLY used when a many-to-many relationship exists. Do NOT classify a table as bridge unless it genuinely resolves a many-to-many relationship.
+   - **NO fact-to-fact joins (CRITICAL):** Two fact tables must NEVER have a direct relationship between them. Each fact table connects ONLY to dimensions (or to a bridge table that connects to a dimension). If multiple fact tables exist, they share dimensions but do NOT join directly.
+   - **Relationships:** Define relationships for ALL tables so every table is connected. Relationships must follow: `fact -> dimension`, `fact -> bridge -> dimension`. For **snowflake schemas**, dimension-to-dimension relationships are allowed and required (e.g. `dimproduct -> dimproductsubcategory -> dimproductcategory`). Never `fact -> fact`.
+   - **Bridge table relationship direction (Kyvos requirement):** If the SM includes a bridge/junction table, the relationships MUST be emitted as `fact_table -> bridge_table` and `bridge_table -> dimension_table`. Do NOT emit `bridge_table -> fact_table`.
+   - **Measures (CRITICAL):** Every fact table MUST have at least one measure. If a fact table has natural numeric columns (amount, quantity, count, etc.), create SUM/AVG/COUNT measures on them. If a fact table has NO natural numeric fact column (e.g., a pure survey/response/junction table), create a COUNT measure on its primary key column. No fact table may be left without a measure.
+   - **Calculated measures:** You MAY create calculated measures for time intelligence, profitability, ratios, and cross-measure KPIs. Reference other measures by display name using standard MDX syntax (e.g., `[Measures].[Internet Sales Amount]`). The deployment pipeline automatically rewrites these references to Kyvos internal measure IDs before creating the semantic model.
+   - **Hierarchies:** Define hierarchies from available dimension columns, reflecting real business rollups. Numeric hierarchy levels and mixed-type levels are allowed in Kyvos.
    - Flagged gaps (standard dimensions/measures missing from warehouse)
 7. **⏸ User approval gate 3** — User reviews the full SM design. User can request changes (add/remove measures, change schema type, include/exclude tables). LLM iterates until user approves
 8. **Deployment phase** — Build `DomainDemoSpec` per SM from approved recommendation. Run deployment pipeline per SM
@@ -134,7 +138,7 @@ def build_spec_from_recommendation(sm_rec: dict, warehouse_tables: list[dict]) -
     Returns:
         DomainDemoSpec suitable for the deployment pipeline.
     """
-    from kyvos_xmla_parser.models import (
+    from kyvos_parser_common.models import (
         DomainDemoSpec, TableSpec, ColumnSpec,
         SemanticModelSpec, RelationshipSpec, MeasureSpec, HierarchySpec,
     )
