@@ -374,10 +374,12 @@ class TestBuildDrdGraph:
             (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
             for r in graph.relations
         }
-        # DimCalendar is directly joined to facts (depth 1) so it is
-        # node1; DimCustomer is the deeper snowflake dim on node2.
-        assert ("DimCalendar", "DimCustomer") in rel_aliases
-        assert ("DimSiteRegion", "DimCustomer") not in rel_aliases
+        # DimCustomer is the FK-holding child dim (DimCustomer.signup_date →
+        # DimCalendar.date_key), so it is node1/source; DimCalendar is the
+        # referenced parent, on node2/target.  The depth-based heuristic must
+        # not reverse this even though DimCalendar is closer to the facts.
+        assert ("DimCustomer", "DimCalendar") in rel_aliases
+        assert ("DimCustomer", "DimSiteRegion") not in rel_aliases  # pruned
 
     def test_prunes_shared_outrigger_children(self):
         """A shared outrigger (DimGeography joined from DimCustomer,
@@ -599,6 +601,66 @@ class TestBuildDrdGraph:
         assert len(pairs) == 3
         assert len({t for _, t in pairs}) == 3
 
+    def test_multi_fact_role_playing_no_duplicate_alias_nodes(self):
+        """When two facts role-play with the same dimension on the same FK
+        column names, each semantic role (Ship, Due) must produce exactly one
+        alias DRD node — not one per fact.  Duplicate nodes with identical
+        alias names are rejected by Kyvos."""
+        rels = [
+            # factinternetsales → DimDate (3 FK columns)
+            SimpleRel(
+                left_dataset="factinternetsales", left_column="orderdatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="factinternetsales", left_column="duedatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="factinternetsales", left_column="shipdatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+            # factresellersales → DimDate (same 3 FK columns — same roles)
+            SimpleRel(
+                left_dataset="factresellersales", left_column="orderdatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="factresellersales", left_column="duedatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="factresellersales", left_column="shipdatekey",
+                right_dataset="DimDate", right_column="datekey",
+                relationship_type="many_to_one",
+            ),
+        ]
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id={
+                "factinternetsales": "ds_fi",
+                "factresellersales": "ds_fr",
+                "DimDate": "ds_d",
+            },
+            relationships=rels,
+            fact_dataset_names={"factinternetsales", "factresellersales"},
+        )
+        date_nodes = [n for n in graph.nodes if n.dataset_ref.name == "DimDate"]
+        # Exactly 3 alias nodes regardless of how many facts role-play.
+        assert len(date_nodes) == 3, f"Expected 3 DimDate nodes, got {len(date_nodes)}: {[n.alias for n in date_nodes]}"
+        # All aliases are unique — no duplicates.
+        aliases = [n.alias for n in date_nodes]
+        assert len(aliases) == len(set(aliases)), f"Duplicate alias names: {aliases}"
+        assert set(aliases) == {"DimDate", "DimDate (Due)", "DimDate (Ship)"}
+        # All share the same underlying dataset id.
+        assert {n.dataset_ref.id for n in date_nodes} == {"ds_d"}
+
     def test_duplicate_dim_join_keeps_first(self, capsys):
         """Two dim->dim relationships between the same dataset pair cannot
         be represented in Kyvos — only the first is kept."""
@@ -679,6 +741,75 @@ class TestBuildDrdGraph:
         assert rel.relation_type == "ONE_TO_MANY"
         assert rel.source_column == "signup_store_id"
         assert rel.target_column == "site_relation_id"
+
+    def test_snowflake_child_not_reversed_when_parent_directly_joined_to_fact(self):
+        """Regression: when a snowflake parent dimension (DimSalesTerritory) is
+        ALSO directly joined to a fact, the depth-based heuristic must NOT
+        reverse the FK direction of the child→parent dim edge.
+
+        Schema:
+          fact → DimCustomer (depth 1) → DimGeography (depth 2) → DimSalesTerritory (depth 1)
+          fact → DimSalesTerritory (depth 1) directly
+
+        DimGeography.salesterritorykey is the FK (many/child side).
+        DimSalesTerritory.salesterritorykey is the PK (one/parent side).
+        The DRD relation must be:
+          source = DimGeography  (node1, FK holder)
+          target = DimSalesTerritory  (node2, PK holder)
+        Not the reverse.
+        """
+        rels = [
+            SimpleRel(
+                left_dataset="factinternetsales", left_column="customerkey",
+                right_dataset="DimCustomer", right_column="customerkey",
+                relationship_type="many_to_one",
+            ),
+            SimpleRel(
+                left_dataset="factinternetsales", left_column="salesterritorykey",
+                right_dataset="DimSalesTerritory", right_column="salesterritorykey",
+                relationship_type="many_to_one",
+            ),
+            # Snowflake: DimCustomer → DimGeography (dimcustomer has geographykey FK)
+            SimpleRel(
+                left_dataset="DimCustomer", left_column="geographykey",
+                right_dataset="DimGeography", right_column="geographykey",
+                relationship_type="many_to_one",
+            ),
+            # Snowflake: DimGeography → DimSalesTerritory
+            # (dimgeography has salesterritorykey FK pointing to dimsalesterritory)
+            SimpleRel(
+                left_dataset="DimGeography", left_column="salesterritorykey",
+                right_dataset="DimSalesTerritory", right_column="salesterritorykey",
+                relationship_type="many_to_one",
+            ),
+        ]
+        name_to_id = {
+            "factinternetsales": "ds_fi",
+            "DimCustomer": "ds_cu",
+            "DimGeography": "ds_geo",
+            "DimSalesTerritory": "ds_st",
+        }
+        graph = build_drd_graph(
+            drd_name="TestDRD",
+            drd_id="drd_001",
+            dataset_name_to_id=name_to_id,
+            relationships=rels,
+            fact_dataset_names={"factinternetsales"},
+        )
+        id_to_alias = {n.node_id: n.alias for n in graph.nodes}
+        rel_aliases = [
+            (id_to_alias[r.source_node_id], id_to_alias[r.target_node_id])
+            for r in graph.relations
+        ]
+        # DimGeography must be source (FK/child) → DimSalesTerritory must be target (PK/parent).
+        # The depth-swap must NOT reverse this even though DimSalesTerritory (depth 1)
+        # is closer to the fact than DimGeography (depth 2).
+        assert ("DimGeography", "DimSalesTerritory") in rel_aliases, (
+            f"Expected DimGeography→DimSalesTerritory edge. Got: {rel_aliases}"
+        )
+        assert ("DimSalesTerritory", "DimGeography") not in rel_aliases, (
+            f"Depth-swap incorrectly reversed FK direction: {rel_aliases}"
+        )
 
     def test_dimension_recorded_as_fk_side_into_fact_still_puts_fact_first(self):
         """A plain dimension can be recorded by the source parser as the FK
@@ -929,12 +1060,17 @@ class TestCompileSmodelArtifact:
 
         import json
         payload = json.loads(artifact.payload)
-        dimensions = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("dimensions", [])
-        assert len(dimensions) > 0
-        assert dimensions[0]["name"] == "DimCustomer"
+        all_dims = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("dimensions", [])
+        assert len(all_dims) > 0
+        # Filter out the built-in Measures dimension (id="Dim_Measures") to
+        # inspect only the data dimensions generated from the DRD graph.
+        data_dims = [d for d in all_dims if d.get("id") != "Dim_Measures"]
+        assert data_dims, "Expected at least one data dimension"
+        dim_customer = next((d for d in data_dims if d.get("name") == "DimCustomer"), None)
+        assert dim_customer is not None, "DimCustomer dimension not found"
         # In Simplified JSON format, dataset reference is in dataSources[0].id.
         # The id is a DRD node id of the form "{dataset_id}_{idx}".
-        data_sources = dimensions[0].get("dataSources", [])
+        data_sources = dim_customer.get("dataSources", [])
         assert len(data_sources) > 0
         assert data_sources[0]["id"].startswith("ds_002")
 

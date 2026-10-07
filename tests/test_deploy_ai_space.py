@@ -229,6 +229,10 @@ class TestDeploySpecAiSpace:
         assert result["ai_space_name"].endswith("_Space")
         assert result["ai_space_name"].startswith(result["smodel_name"])
 
+        # Each dataset is refreshed once and validated once (not twice).
+        assert prov.refresh_dataset_columns.call_count == 2
+        assert prov.validate_dataset.call_count == 2
+
         prov.create_ai_space.assert_called_once()
         _, kwargs = prov.create_ai_space.call_args
         assert kwargs["folder_name"] == f"{BASE_NAME}_Space"

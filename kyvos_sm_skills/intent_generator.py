@@ -292,6 +292,7 @@ def generate_intent_from_file(
         **kwargs,
     )
 
+    Path(intent_path).parent.mkdir(parents=True, exist_ok=True)
     with open(intent_path, "w") as f:
         f.write(intent)
 

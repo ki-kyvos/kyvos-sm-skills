@@ -376,6 +376,8 @@ def _validate_hierarchy_fields(sm_json: dict):
 
 def _validate_level_fields(sm_json: dict):
     for dim in sm_json["specific"]["smObject"]["dimensions"]:
+        if dim.get("id") == "Dim_Measures":
+            continue  # built-in Measures dimension has its own fixed level structure
         for h in dim["hierarchies"]:
             # First level must be the mandatory ALL level (fixed export shape,
             # no bound column — the conformity fields below apply to data levels).
@@ -468,7 +470,9 @@ class TestFlowAIntentFile:
     def test_compiled_sm_has_correct_table_count(self, tmp_path):
         """Flow A should produce 4 dimensions (one per dim table) and 5 measures."""
         spec, sm_json = _build_spec_and_compile(_AW_SM_DESIGN, tmp_path)
-        dims = sm_json["specific"]["smObject"]["dimensions"]
+        all_dims = sm_json["specific"]["smObject"]["dimensions"]
+        # Exclude the built-in Measures dimension (always present in compiled SM).
+        dims = [d for d in all_dims if d.get("id") != "Dim_Measures"]
         measures = sm_json["specific"]["smObject"]["measures"]["measure"]
         assert len(dims) == 4  # dimproduct, dimcustomer, dimdate, dimsalesterritory
         assert len(measures) == 5  # SalesAmount, OrderQuantity, TotalProductCost, TaxAmt, Freight

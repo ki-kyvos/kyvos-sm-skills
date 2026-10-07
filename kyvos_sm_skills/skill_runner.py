@@ -18,6 +18,7 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,15 @@ except ImportError:
 from kyvos_sm_skills.spec_builder import DiscoveredSpec
 
 _MIN_PREFIX_LEN = 8
+
+
+def _env_int(name: str, default: int, *, minimum: int = 1, maximum: int = 32) -> int:
+    """Read a bounded integer setting from the environment."""
+    try:
+        value = int(os.environ.get(name, "") or default)
+    except ValueError:
+        value = default
+    return max(minimum, min(maximum, value))
 
 
 def _safe_input(prompt: str) -> str:
@@ -523,26 +533,47 @@ def _deploy_spec(
         return None
 
     # --- Helper: clean up entities in a folder ---
-    def _cleanup_folder_entities(folder_type, folder_name):
+    def _cleanup_folder_entities(folder_type, folder_name) -> int:
         """Delete all entities in a folder before reusing it."""
+        deleted = 0
         if folder_type == FolderType.RDATASET:
             list_result = insp.list_datasets_in_folder(folder_name)
             if list_result.succeeded and list_result.entity_refs:
                 for ref in list_result.entity_refs:
                     print(f"    Deleting existing dataset: {ref.name} (id={ref.id})")
                     prov.delete_dataset(ref.id)
+                    deleted += 1
         elif folder_type == FolderType.DATASET_RELATIONSHIP:
             list_result = insp.list_drds_in_folder(folder_name)
             if list_result.succeeded and list_result.entity_refs:
                 for ref in list_result.entity_refs:
                     print(f"    Deleting existing DRD: {ref.name} (id={ref.id})")
                     prov.delete_drd(ref.id)
+                    deleted += 1
         elif folder_type == FolderType.SMODEL:
             list_result = insp.list_smodels_in_folder(folder_name)
             if list_result.succeeded and list_result.entity_refs:
                 for ref in list_result.entity_refs:
                     print(f"    Deleting existing SM: {ref.name} (id={ref.id})")
                     prov.delete_smodel(ref.id)
+                    deleted += 1
+        return deleted
+
+    def _wait_for_folder_empty(folder_type, folder_name, timeout_seconds: float = 10.0) -> bool:
+        """Poll until a reused folder is empty, instead of sleeping fixed time."""
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            if folder_type == FolderType.RDATASET:
+                list_result = insp.list_datasets_in_folder(folder_name)
+            elif folder_type == FolderType.DATASET_RELATIONSHIP:
+                list_result = insp.list_drds_in_folder(folder_name)
+            else:
+                list_result = insp.list_smodels_in_folder(folder_name)
+            if list_result.succeeded and not list_result.entity_refs:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.25)
 
     # --- Clean up old entities from previous runs ---
     # Uses the shared helper with prefixes derived from base_name AND the SM name.
@@ -570,8 +601,7 @@ def _deploy_spec(
         folder_suffix=sm_folder_suffix,
     )
     if _did_cleanup:
-        print("  Waiting 10s for server to process deletions...")
-        time.sleep(10)
+        print("  Deletions submitted; reused folders are polled until empty.")
 
     # --- Dataset folder: find or create ---
     existing_ds_folder_id = _find_existing_folder(FolderType.RDATASET, dataset_folder_label)
@@ -579,7 +609,9 @@ def _deploy_spec(
         folder_id = existing_ds_folder_id
         print(f"Dataset folder: {dataset_folder_label} (id={folder_id}) — reusing existing")
         print("  Cleaning up existing datasets...")
-        _cleanup_folder_entities(FolderType.RDATASET, dataset_folder_label)
+        if _cleanup_folder_entities(FolderType.RDATASET, dataset_folder_label):
+            if not _wait_for_folder_empty(FolderType.RDATASET, dataset_folder_label):
+                print(f"  WARNING: dataset folder '{dataset_folder_label}' still contains entities")
     else:
         dataset_folder_result = prov.create_folder(dataset_folder_label, FolderType.RDATASET)
         if not dataset_folder_result.succeeded:
@@ -595,7 +627,9 @@ def _deploy_spec(
         drd_folder_id = existing_drd_folder_id
         print(f"DRD folder: {drd_folder_label} (id={drd_folder_id}) — reusing existing")
         print("  Cleaning up existing DRDs...")
-        _cleanup_folder_entities(FolderType.DATASET_RELATIONSHIP, drd_folder_label)
+        if _cleanup_folder_entities(FolderType.DATASET_RELATIONSHIP, drd_folder_label):
+            if not _wait_for_folder_empty(FolderType.DATASET_RELATIONSHIP, drd_folder_label):
+                print(f"  WARNING: DRD folder '{drd_folder_label}' still contains entities")
     else:
         drd_folder_result = prov.create_folder(drd_folder_label, FolderType.DATASET_RELATIONSHIP)
         if not drd_folder_result.succeeded:
@@ -611,7 +645,9 @@ def _deploy_spec(
         smodel_folder_id = existing_sm_folder_id
         print(f"Semantic model folder: {smodel_folder_label} (id={smodel_folder_id}) — reusing existing")
         print("  Cleaning up existing semantic models...")
-        _cleanup_folder_entities(FolderType.SMODEL, smodel_folder_label)
+        if _cleanup_folder_entities(FolderType.SMODEL, smodel_folder_label):
+            if not _wait_for_folder_empty(FolderType.SMODEL, smodel_folder_label):
+                print(f"  WARNING: semantic model folder '{smodel_folder_label}' still contains entities")
     else:
         smodel_folder_result = prov.create_folder(smodel_folder_label, FolderType.SMODEL)
         if not smodel_folder_result.succeeded:
@@ -621,11 +657,8 @@ def _deploy_spec(
         smodel_folder_id = smodel_folder_result.primary_entity_id
         print(f"Semantic model folder: {smodel_folder_label} (id={smodel_folder_id}) — created")
 
-    # Brief delay after cleanup to let Kyvos server process deletions
-    if existing_ds_folder_id or existing_drd_folder_id or existing_sm_folder_id:
-        print("  Waiting 10s for server to process folder entity deletions...")
-        time.sleep(10)
-
+    # Reused folders were polled until their entity listings were empty; no
+    # unconditional cleanup delay is needed here.
     # ═══════════════════════════════════════════════════════════════════════
     # Step 5: Create connection
     # ═══════════════════════════════════════════════════════════════════════
@@ -695,33 +728,79 @@ def _deploy_spec(
     print(f"{'─' * 70}")
 
     from kyvos_sm_skills.contract_adapter import compile_dataset_artifact
+    from kyvos_sm_skills.role_playing import split_role_playing_dimensions
+
+    # Role-playing (custom rollup) dimensions: each non-base role gets its
+    # own dataset over the same SQL (e.g. Dimdate_Ship / Dimdate_Due from
+    # SELECT * FROM <schema>.dimdate) instead of DRD alias nodes sharing
+    # one dataset.
+    role_split = split_role_playing_dimensions(
+        tables=list(tables),
+        relationships=semantic_model.relationships,
+        hierarchies=semantic_model.hierarchies,
+        datasets=semantic_model.datasets,
+    )
+    if role_split.changed:
+        tables = role_split.tables
+        semantic_model.relationships = role_split.relationships
+        semantic_model.hierarchies = role_split.hierarchies
+        semantic_model.datasets = role_split.datasets
+        _rp_lines = [
+            f"{role_split.dataset_name[n]} (role {role_split.role[n]} of {role_split.source_table[n]})"
+            for n in role_split.source_table
+        ]
+        print("  Role-playing datasets: " + ", ".join(_rp_lines))
+        if tracer:
+            tracer.note("Role-playing datasets", "\n".join(_rp_lines))
 
     dataset_name_to_id = {}
     dataset_aliases = {}
     created_entities = []
+    deployment_workers = _env_int("KYVOS_DEPLOYMENT_WORKERS", 8, maximum=8)
 
+    # Compile locally first; only the remote Kyvos calls are parallelised.
+    dataset_items = []
     for table in tables:
         if skip_hidden_tables and table.is_hidden:
             continue
 
+        _source_table = role_split.source_table.get(table.name)
         ds_artifact = compile_dataset_artifact(
-            table,
+            table.model_copy(update={"name": _source_table}) if _source_table else table,
             connection_name=connection_name,
             folder_id=folder_id,
             folder_name=dataset_folder_label,
             fmt=config.payload_format,
             db_type=kyvos_db_type,
+            dataset_name=role_split.dataset_name.get(table.name),
         )
         if payload_dump_dir:
             _dump_payload(payload_dump_dir, table.name, "dataset", ds_artifact.payload, config.payload_format)
-        ds_result = prov.apply_artifact(ds_artifact)
+        dataset_items.append((table, ds_artifact))
 
+    def _parallel(items, operation):
+        if deployment_workers <= 1 or len(items) <= 1:
+            return [operation(item) for item in items]
+        with ThreadPoolExecutor(max_workers=min(deployment_workers, len(items))) as executor:
+            return list(executor.map(operation, items))
+
+    def _create_dataset(item):
+        table, artifact = item
+        try:
+            return table, prov.apply_artifact(artifact), None
+        except Exception as exc:
+            return table, None, exc
+
+    create_errors = []
+    for table, ds_result, exc in _parallel(dataset_items, _create_dataset):
+        if exc is not None:
+            create_errors.append(f"{table.name}: {exc}")
+            continue
         if not ds_result.succeeded:
-            raise RuntimeError(
-                f"Dataset creation failed for {table.name}: "
-                f"{[d.message for d in ds_result.diagnostics]}\n"
-                f"Created so far: {dataset_name_to_id}"
+            create_errors.append(
+                f"{table.name}: {[d.message for d in ds_result.diagnostics]}"
             )
+            continue
 
         server_name = ds_result.primary_entity_name
         ds_id = ds_result.primary_entity_id
@@ -735,9 +814,14 @@ def _deploy_spec(
             "id": ds_id,
             "name": server_name,
         })
-
-        prov.refresh_dataset_columns(ds_id)
         print(f"  Dataset: {server_name} (id={ds_id})")
+
+    if create_errors:
+        raise RuntimeError(
+            "Dataset creation failed — pipeline halted:\n"
+            + "\n".join(create_errors)
+            + f"\nCreated so far: {dataset_name_to_id}"
+        )
 
     # Fallback: if any datasets were created with empty IDs (Kyvos API sometimes
     # returns empty entityId on creation), fetch actual IDs by listing the folder.
@@ -761,13 +845,34 @@ def _deploy_spec(
                 else:
                     print(f"  WARNING: Could not resolve dataset ID for '{ds_info['name']}' from folder listing")
 
-    # Second refresh sweep + validate all datasets
+    # Refresh columns and validate datasets in parallel. This used to run two
+    # sequential passes (create+refresh, then refresh+validate); one refresh is
+    # sufficient before validation and fetching column details.
+    dataset_entities = [
+        ds for ds in created_entities if ds["entity_type"] == "DATASET"
+    ]
+
+    def _refresh_and_validate(ds_info):
+        try:
+            refresh_result = prov.refresh_dataset_columns(ds_info["id"])
+        except Exception as exc:
+            refresh_result = exc
+        try:
+            validation_result = prov.validate_dataset(
+                ds_info["id"], ds_info["name"], dataset_folder_label
+            )
+        except Exception as exc:
+            validation_result = exc
+        return ds_info, refresh_result, validation_result
+
     validation_errors = []
-    for ds_info in created_entities:
-        if ds_info["entity_type"] != "DATASET":
-            continue
-        refresh_result = prov.refresh_dataset_columns(ds_info["id"])
-        if refresh_result.status == OperationStatus.TIMED_OUT:
+    for ds_info, refresh_result, val_result in _parallel(dataset_entities, _refresh_and_validate):
+        if isinstance(refresh_result, Exception):
+            print(
+                f"  WARNING: Column refresh failed for {ds_info['name']}: "
+                f"{refresh_result}"
+            )
+        elif refresh_result.status == OperationStatus.TIMED_OUT:
             print(
                 f"  WARNING: Column refresh timed out for {ds_info['name']} "
                 f"(id={ds_info['id']}) — continuing with spec columns."
@@ -776,10 +881,9 @@ def _deploy_spec(
             errs = [d.message for d in refresh_result.diagnostics if d.severity == Severity.ERROR]
             print(f"  WARNING: Column refresh failed for {ds_info['name']}: {errs}")
 
-        val_result = prov.validate_dataset(
-            ds_info["id"], ds_info["name"], dataset_folder_label
-        )
-        if val_result.status == OperationStatus.TIMED_OUT:
+        if isinstance(val_result, Exception):
+            validation_errors.append(f"{ds_info['name']}: {val_result}")
+        elif val_result.status == OperationStatus.TIMED_OUT:
             print(
                 f"  WARNING: Dataset validation timed out for {ds_info['name']} "
                 f"(id={ds_info['id']}) — continuing. Kyvos may still be processing the dataset."
@@ -801,32 +905,35 @@ def _deploy_spec(
         server_to_spec_table[server_name] = table
         server_to_spec_table[server_name.lower()] = table
 
-    dataset_cols = {}
-    for ds_info in created_entities:
-        if ds_info["entity_type"] != "DATASET":
-            continue
+    def _fetch_columns(ds_info):
         try:
-            cols = prov.get_dataset_column_details(dataset_folder_label, ds_info["name"])
-            if cols:
-                dataset_cols[ds_info["name"]] = cols
-            else:
-                raise ValueError("empty column list")
-        except Exception:
-            tbl = server_to_spec_table.get(ds_info["name"]) or server_to_spec_table.get(ds_info["name"].lower())
-            if tbl and tbl.columns:
-                dataset_cols[ds_info["name"]] = [
-                    {
-                        "name": c.name,
-                        "datatype": c.data_type,
-                        "original_name": c.name,
-                        "isPrimaryKey": c.is_primary_key,
-                        "isForeignKey": c.is_foreign_key,
-                    }
-                    for c in tbl.columns
-                ]
-                print(f"  Column details from spec fallback: {ds_info['name']} ({len(tbl.columns)} cols)")
-            else:
-                print(f"  WARNING: No column details for {ds_info['name']} — no spec fallback available")
+            return ds_info, prov.get_dataset_column_details(
+                dataset_folder_label, ds_info["name"]
+            ), None
+        except Exception as exc:
+            return ds_info, [], exc
+
+    dataset_cols = {}
+    for ds_info, cols, exc in _parallel(dataset_entities, _fetch_columns):
+        if cols:
+            dataset_cols[ds_info["name"]] = cols
+            continue
+        tbl = server_to_spec_table.get(ds_info["name"]) or server_to_spec_table.get(ds_info["name"].lower())
+        if tbl and tbl.columns:
+            dataset_cols[ds_info["name"]] = [
+                {
+                    "name": c.name,
+                    "datatype": c.data_type,
+                    "original_name": c.name,
+                    "isPrimaryKey": c.is_primary_key,
+                    "isForeignKey": c.is_foreign_key,
+                }
+                for c in tbl.columns
+            ]
+            print(f"  Column details from spec fallback: {ds_info['name']} ({len(tbl.columns)} cols)")
+        else:
+            detail = f": {exc}" if exc else ""
+            print(f"  WARNING: No column details for {ds_info['name']} — no spec fallback available{detail}")
 
     print(f"Datasets validated and column details fetched for {len(dataset_cols)} datasets")
 
@@ -1128,11 +1235,10 @@ def _deploy_spec(
         "name": ai_space_name,
     })
 
-    # Validate semantic model — retry up to 8 times with 30s delay (large
-    # models may hit server capacity limits). Validation failure is NOT
-    # fatal: the model, AI space and all artifacts were already created.
-    _sm_max_retries = 8
-    _sm_retry_delay = 30
+    # Validate semantic model — retry on transient capacity failures, but keep
+    # the delay bounded so slow validation cannot dominate the whole flow.
+    _sm_max_retries = _env_int("KYVOS_SM_VALIDATION_RETRIES", 8, maximum=20)
+    _sm_retry_delay = _env_int("KYVOS_SM_VALIDATION_RETRY_DELAY", 5, minimum=0, maximum=30)
     _sm_validated = False
     _sm_val_errs: list[str] = []
     _sm_val_kind = ""
@@ -1148,7 +1254,11 @@ def _deploy_spec(
             time.sleep(_sm_retry_delay)
             continue
 
-        _sm_val_errs = [d.message for d in sm_val_result.diagnostics if d.severity in (Severity.ERROR, Severity.WARNING)]
+        _sm_val_errs = [
+            d.message
+            for d in sm_val_result.diagnostics
+            if d.severity in (Severity.ERROR, Severity.WARNING)
+        ]
         if not _sm_val_errs:
             _sm_val_errs = [d.message for d in sm_val_result.diagnostics]
 

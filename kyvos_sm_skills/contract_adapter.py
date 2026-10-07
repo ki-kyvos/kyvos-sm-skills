@@ -83,6 +83,7 @@ def compile_dataset_artifact(
     folder_name: str = "Demo Automation",
     fmt: str = "xml",
     db_type: str = "POSTGRES",
+    dataset_name: str | None = None,
 ) -> Any:
     """Compile a dataset into a ``CompiledArtifact`` via SDK compiler.
 
@@ -93,6 +94,9 @@ def compile_dataset_artifact(
         folder_name: Folder name for dataset category.
         fmt: "xml" or "json".
         db_type: Database/connection type for the dataset (e.g. "POSTGRES", "DATABRICKSSQL").
+        dataset_name: Override the Kyvos dataset name while keeping the SQL
+            built from ``table`` (used for role-playing dimension copies such
+            as ``Dimdate_Ship`` over ``SELECT * FROM <schema>.dimdate``).
 
     Returns:
         ``kyvos_sdk.contracts.artifacts.CompiledArtifact``.
@@ -112,7 +116,7 @@ def compile_dataset_artifact(
 
     contract_table = adapt_table(table)
     artifact_fmt = ArtifactFormat.JSON if fmt.lower() == "json" else ArtifactFormat.XML
-    return compile_dataset(
+    artifact = compile_dataset(
         contract_table,
         connection_name=connection_name,
         folder_id=folder_id,
@@ -120,6 +124,29 @@ def compile_dataset_artifact(
         fmt=artifact_fmt,
         db_type=db_type,
     )
+    if not dataset_name:
+        return artifact
+
+    import json
+    import xml.etree.ElementTree as ET
+
+    if artifact_fmt == ArtifactFormat.JSON:
+        obj = json.loads(artifact.payload)
+        obj["name"] = dataset_name
+        payload = json.dumps(obj, indent=2)
+    else:
+        root = ET.fromstring(artifact.payload)
+        root.set("NAME", dataset_name)
+        # The IRO ID is derived from the source table; make it unique per name.
+        seed = int(hashlib.sha256(dataset_name.encode("utf-8")).hexdigest(), 16) % (10**16)
+        root.set("ID", f"ds_{seed}")
+        payload = ET.tostring(root, encoding="unicode", method="xml")
+    return artifact.model_copy(update={
+        "payload": payload,
+        "content_hash": f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}",
+        "preview": payload[:500],
+        "compiler_metadata": {**(artifact.compiler_metadata or {}), "dataset_name": dataset_name},
+    })
 
 
 def _resolve_alias(name: str, aliases: dict[str, str], aliases_ci: dict[str, str]) -> str:
@@ -464,7 +491,14 @@ def build_drd_graph(
     # The first join keeps the base dimension node; each subsequent join
     # gets an alias node whose dataset_ref.name stays the real dataset
     # name so column lookups keep working.
+    #
+    # When several facts role-play with the SAME dimension (e.g. both
+    # factinternetsales and factresellersales → dimdate via Ship/Due FK
+    # columns), the semantic role is the same across facts, so a single
+    # alias node is shared.  Duplicate nodes with identical alias names
+    # would confuse the DRD and are never valid.
     alias_node_for_rel: dict[int, tuple[str, str]] = {}  # rel idx -> (dim name, alias node_id)
+    _alias_name_to_node_id: dict[str, str] = {}  # f"{dim_name} ({role})" -> node_id
     next_node_idx = len(used_names) + 1
     for _key in sorted(_roleplay_pairs, key=lambda k: (k[0].lower(), k[1].lower())):
         _a, _b = _key
@@ -491,19 +525,26 @@ def build_drd_graph(
         for i in ordered:
             if i == base_i:
                 continue
-            alias_node_id = f"{ds_id}_{next_node_idx}"
-            next_node_idx += 1
-            nodes.append(DrdNode(
-                node_id=alias_node_id,
-                dataset_ref=EntityRef(
-                    entity_type=EntityType.DATASET,
-                    id=ds_id,
-                    name=dim_name,
-                ),
-                alias=f"{dim_name} ({roles[i]})",
-                node_type="",
-            ))
-            alias_node_for_rel[i] = (dim_name, alias_node_id)
+            alias_label = f"{dim_name} ({roles[i]})"
+            if alias_label in _alias_name_to_node_id:
+                # Reuse the existing alias node created by another fact's
+                # role-playing group — avoids duplicate DRD nodes.
+                alias_node_for_rel[i] = (dim_name, _alias_name_to_node_id[alias_label])
+            else:
+                alias_node_id = f"{ds_id}_{next_node_idx}"
+                next_node_idx += 1
+                nodes.append(DrdNode(
+                    node_id=alias_node_id,
+                    dataset_ref=EntityRef(
+                        entity_type=EntityType.DATASET,
+                        id=ds_id,
+                        name=dim_name,
+                    ),
+                    alias=alias_label,
+                    node_type="",
+                ))
+                _alias_name_to_node_id[alias_label] = alias_node_id
+                alias_node_for_rel[i] = (dim_name, alias_node_id)
 
     # BFS depth of each node from the nearest fact node (undirected). Used
     # to order snowflake dim->dim edges so the dim closer to a fact sits on
@@ -606,11 +647,23 @@ def build_drd_graph(
             )
             rel_type = "ONE_TO_MANY"
 
-        # For resolved ONE_TO_MANY edges, keep the endpoint closer to a fact
-        # on node1. Facts (depth 0) and bridges (depth 1) always stay first;
-        # for snowflake dim -> dim edges this puts the fact-adjacent dim on
-        # the left so the chain reads fact -> dim -> dim.
-        if rel_type == "ONE_TO_MANY" and _depth.get(target, 1 << 30) < _depth.get(source, 1 << 30):
+        # For ONE_TO_MANY edges where a fact table ended up on the wrong
+        # side (target/node2), swap it back to node1.  This corrects the
+        # case where the LLM declared the relationship as ONE_TO_MANY with
+        # the fact on the left (e.g. "fact -> [ONE_TO_MANY] -> dim"), so
+        # the ONE_TO_MANY handler above placed the dim on source.
+        #
+        # The swap is intentionally limited to the case where `target` is
+        # a fact table.  Applying it to pure dim→dim snowflake edges would
+        # reverse the FK direction when the parent dimension happens to be
+        # directly joined to facts (lower depth than its child), producing
+        # erroneous DRD relationships (e.g. dimsalesterritory incorrectly
+        # appearing as the FK/many side of its dimgeography outrigger).
+        if (
+            rel_type == "ONE_TO_MANY"
+            and target in fact_set
+            and _depth.get(target, 1 << 30) < _depth.get(source, 1 << 30)
+        ):
             source, target, source_col, target_col = target, source, target_col, source_col
 
         # A role-playing join points its dimension endpoint at the alias

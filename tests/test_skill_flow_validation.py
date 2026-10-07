@@ -355,12 +355,15 @@ class TestGap7MeasureRemappingAndFactDetection:
         )
 
         payload = json.loads(artifact.payload)
-        dimensions = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("dimensions", [])
-        assert len(dimensions) > 0, "No dimensions placed — hierarchy remapping failed"
-        assert dimensions[0]["name"] == "DimCustomer"
+        all_dims = payload.get("iro", {}).get("specific", {}).get("smObject", {}).get("dimensions", [])
+        # Filter out the built-in Measures dimension when inspecting data dimensions.
+        data_dims = [d for d in all_dims if d.get("id") != "Dim_Measures"]
+        assert len(data_dims) > 0, "No dimensions placed — hierarchy remapping failed"
+        dim_customer = next((d for d in data_dims if d.get("name") == "DimCustomer"), None)
+        assert dim_customer is not None, "DimCustomer dimension not found"
         # In Simplified JSON format, dataset reference is in dataSources[0].id.
         # The id is a DRD node id of the form "{dataset_id}_{idx}".
-        data_sources = dimensions[0].get("dataSources", [])
+        data_sources = dim_customer.get("dataSources", [])
         assert len(data_sources) > 0
         assert data_sources[0]["id"].startswith("ds_002")
 

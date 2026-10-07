@@ -287,12 +287,36 @@ class TestDesignSmFromSchema:
         assert len(result["recommended_sms"]) == 1
         assert result["recommended_sms"][0]["name"] == "SalesAnalytics"
 
+    def test_validated_response_is_cached(self, tmp_path, monkeypatch):
+        """A repeated identical schema+intent should not call the LLM again."""
+        monkeypatch.setenv("KYVOS_LLM_CACHE_DIR", str(tmp_path))
+        response_text = f"```json\n{json.dumps(_LLM_RESPONSE)}\n```"
+        mock_client = MagicMock()
+        mock_client.messages.stream.return_value = _make_mock_stream(response_text)
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            first = design_sm_from_schema(
+                schema_summary=_SCHEMA_SUMMARY,
+                user_intent="cache test",
+                api_key="test-key",
+            )
+
+        with patch("anthropic.Anthropic", side_effect=AssertionError("LLM should not be called")):
+            second = design_sm_from_schema(
+                schema_summary=_SCHEMA_SUMMARY,
+                user_intent="cache test",
+                api_key="test-key",
+            )
+
+        assert second == first
+
     def test_missing_api_key_raises(self):
         with patch.dict("os.environ", {}, clear=True):
             with pytest.raises(ValueError, match="API key required"):
                 design_sm_from_schema(
                     schema_summary=_SCHEMA_SUMMARY,
                     user_intent="test",
+                    use_cache=False,
                 )
 
     def test_invalid_json_response_raises(self):
@@ -305,6 +329,7 @@ class TestDesignSmFromSchema:
                     schema_summary=_SCHEMA_SUMMARY,
                     user_intent="test",
                     api_key="test-key",
+                    use_cache=False,
                 )
 
     def test_api_key_from_env(self):
@@ -318,6 +343,7 @@ class TestDesignSmFromSchema:
                 design_sm_from_schema(
                     schema_summary=_SCHEMA_SUMMARY,
                     user_intent="test",
+                    use_cache=False,
                 )
                 # Verify Anthropic was called with the env key
                 mock_anthropic.assert_called_with(api_key="env-key")
@@ -947,6 +973,43 @@ class TestValidateFactBridgeHierarchy:
         }
         errors = validate_sm_recommendation(rec, _FACT_HIER_SCHEMA)
         assert any("unknown hierarchy 'nonexistent_hier'" in e for e in errors)
+
+    def _attr_rec(self, expression: str, hierarchies: list | None = None) -> dict:
+        return {
+            "recommended_sms": [{
+                "name": "LoanSM",
+                "tables": ["fact_loan", "dim_region"],
+                "relationships": [],
+                "measures": [
+                    {"name": "TotalAmount", "source_dataset": "fact_loan", "aggregation_type": "sum"},
+                    {"name": "Calc", "is_calculated": True, "expression": expression},
+                ],
+                "hierarchies": hierarchies or [],
+            }],
+        }
+
+    def test_calc_measure_dimension_attribute_reference_allowed(self):
+        """Regression (job e55e5308): [dimscenario].[scenarioname].CurrentMember on a
+        dimension with no hierarchy is a valid Kyvos attribute reference."""
+        expr = (
+            'IIF([dim_region].[region_name].CurrentMember.Name = "West", '
+            "[Measures].[TotalAmount], NULL)"
+        )
+        errors = validate_sm_recommendation(self._attr_rec(expr), _FACT_HIER_SCHEMA)
+        assert not any("unknown hierarchy" in e or "unknown level" in e for e in errors)
+
+    def test_calc_measure_attribute_member_reference_allowed(self):
+        expr = "([dim_region].[region_name].[West], [Measures].[TotalAmount])"
+        errors = validate_sm_recommendation(self._attr_rec(expr), _FACT_HIER_SCHEMA)
+        assert not any("unknown hierarchy" in e or "unknown level" in e for e in errors)
+
+    def test_hierarchy_level_column_is_not_an_attribute(self):
+        """A column used as a hierarchy level is not exposed as an attribute by the
+        SM compiler, so [dim].[level_column] must still be rejected."""
+        hiers = [{"name": "Region", "levels": ["region_key", "region_name"], "source_dataset": "dim_region"}]
+        expr = "[dim_region].[region_name].CurrentMember.Name"
+        errors = validate_sm_recommendation(self._attr_rec(expr, hiers), _FACT_HIER_SCHEMA)
+        assert any("unknown hierarchy 'region_name'" in e for e in errors)
 
 
 # ── Test repair/validator — referenced single-level hierarchy exemption ─────

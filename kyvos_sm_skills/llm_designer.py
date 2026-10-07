@@ -20,16 +20,20 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 from kyvos_sm_skills.knowledge_base import get_knowledge_base_summary
 from kyvos_sm_skills.mdx_reference import get_mdx_prompt_summary
 from kyvos_sm_skills.prompt_loader import get_system_prompt, get_user_prompt
 from kyvos_sm_skills.spec_builder import _hierarchy_type_family
+
 
 def _ensure_anthropic() -> None:
     """Import anthropic lazily and raise a helpful error if not installed."""
@@ -51,6 +55,70 @@ def _ensure_openai() -> None:
             "openai is required for Azure OpenAI-based SM design. "
             "Install with: pip install openai"
         ) from exc
+
+
+_LLM_CACHE_VERSION = "v1"
+
+
+def _llm_cache_enabled(use_cache: bool | None) -> bool:
+    """Return whether deterministic LLM-response caching is enabled."""
+    if use_cache is not None:
+        return use_cache
+    return os.environ.get("KYVOS_LLM_CACHE_ENABLED", "1").lower() not in {
+        "0", "false", "no", "off",
+    }
+
+
+def _llm_cache_file(scope: str, *parts: Any) -> Path:
+    """Return the cache file for a prompt/response pair.
+
+    The cache stores only schema metadata and parsed model output — never API
+    keys or connection credentials.
+    """
+    key = hashlib.sha256(
+        json.dumps(
+            [_LLM_CACHE_VERSION, scope, *parts],
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    safe_scope = re.sub(r"[^A-Za-z0-9_.-]+", "_", scope).strip("_") or "llm"
+    cache_dir = Path(
+        os.environ.get(
+            "KYVOS_LLM_CACHE_DIR",
+            str(Path(tempfile.gettempdir()) / "kyvos_llm_cache"),
+        )
+    )
+    return cache_dir / f"{safe_scope}_{key}.json"
+
+
+def _llm_cache_get(scope: str, *parts: Any) -> dict[str, Any] | None:
+    """Load a cached parsed LLM result if present."""
+    try:
+        path = _llm_cache_file(scope, *parts)
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        result = payload.get("result")
+        return result if isinstance(result, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _llm_cache_set(scope: str, result: dict[str, Any], *parts: Any) -> None:
+    """Persist a parsed LLM result atomically, on a best-effort basis."""
+    try:
+        path = _llm_cache_file(scope, *parts)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = path.with_suffix(".tmp")
+        tmp_path.write_text(
+            json.dumps({"result": result}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        tmp_path.replace(path)
+    except OSError:
+        pass
 
 
 def _load_skill_system_prompt() -> str:
@@ -98,7 +166,8 @@ def _build_user_message(
         "relationships": schema_summary.get("relationships", []),
         "detected_patterns": schema_summary.get("detected_patterns", {}),
     }
-    parts.append(f"## Existing Schema Context\n```json\n{json.dumps(schema_compact, indent=2)}\n```\n")
+    schema_json = json.dumps(schema_compact, separators=(",", ":"))
+    parts.append(f"## Existing Schema Context\n```json\n{schema_json}\n```\n")
 
     instructions = get_user_prompt("discover_sm_from_warehouse")
     instructions = instructions.replace("{mdx_reference}", get_mdx_prompt_summary())
@@ -423,6 +492,7 @@ def design_sm_from_schema(
     max_tokens: int | None = None,
     llm_provider: str | None = None,
     trace_path: str | None = None,
+    use_cache: bool | None = None,
 ) -> dict[str, Any]:
     """Generate an SM recommendation from warehouse schema + user intent via LLM.
 
@@ -457,6 +527,8 @@ def design_sm_from_schema(
         llm_provider: "anthropic" or "azure_openai". If None, reads LLM_PROVIDER env var.
         trace_path: Optional path to a trace file to append the SM design prompts
             and response to.
+        use_cache: Override for the deterministic response cache. Defaults to
+            ``KYVOS_LLM_CACHE_ENABLED`` (enabled unless explicitly disabled).
 
     Returns:
         SM recommendation dict matching the skill's output schema.
@@ -502,6 +574,14 @@ def design_sm_from_schema(
             f"Intent: {user_intent[:120]}"
         )
 
+    cache_parts = (
+        provider,
+        model,
+        max_tokens,
+        system_prompt,
+        user_message,
+    )
+
     # Resolve provider-specific config
     if provider == "azure_openai":
         resolved_key = api_key or os.environ.get("AZURE_OPENAI_API_KEY", "") or os.environ.get("LLM_API_KEY", "")
@@ -546,6 +626,25 @@ def design_sm_from_schema(
                 model=model,
                 max_tokens=max_tokens,
             )
+
+    # Resolve credentials before using the cache so a cache hit cannot mask a
+    # missing or invalid provider configuration.
+    if _llm_cache_enabled(use_cache):
+        cached = _llm_cache_get("sm_design", *cache_parts)
+        if cached is not None:
+            if tracer:
+                tracer.note("SM Design cache hit", "Reusing a previously validated recommendation")
+            if trace_path:
+                _append_sm_design_trace(
+                    trace_path=trace_path,
+                    system_prompt=system_prompt,
+                    user_message=user_message,
+                    response_text=json.dumps(cached, indent=2),
+                    recommendation=cached,
+                    provider=provider,
+                    model=model,
+                )
+            return cached
 
     # Call LLM with retry on validation failure
     max_retries = 2
@@ -639,6 +738,8 @@ def design_sm_from_schema(
                     provider=provider,
                     model=model,
                 )
+            if _llm_cache_enabled(use_cache):
+                _llm_cache_set("sm_design", recommendation, *cache_parts)
             return recommendation
 
         if tracer:
@@ -847,8 +948,6 @@ def repair_sm_hierarchies(
             levels: list[str] = h.get("levels", [])
             source_lower = source.lower()
             cols = table_col_map.get(source_lower, set())
-            col_types = table_col_type_map.get(source_lower, {})
-            actual_names = table_col_actual_name.get(source_lower, {})
 
             # ── Repair 1: relocate if source_dataset is wrong ──────────
             if source_lower not in table_col_map:
@@ -861,8 +960,6 @@ def repair_sm_hierarchies(
                         source_lower = candidate
                         h["source_dataset"] = candidate
                         cols = cand_cols
-                        col_types = table_col_type_map.get(candidate, {})
-                        actual_names = table_col_actual_name.get(candidate, {})
                         repairs.append(
                             f"Hierarchy '{h_name}': relocated source_dataset "
                             f"'{old_source}' -> '{candidate}'"
@@ -1137,6 +1234,25 @@ def validate_sm_recommendation(
             if isinstance(child_col, str):
                 valid_dim_hier_levels.add((source.lower(), h_name.lower(), child_col.lower()))
 
+        # Dimension attributes: the SM compiler exposes every column that is
+        # not a hierarchy level as an attribute, which Kyvos MDX addresses as
+        # [dim].[column] (e.g. [dimscenario].[scenarioname].CurrentMember).
+        # Single-attribute dims like dimscenario can never carry a 2+ level
+        # hierarchy, so attributes are their only valid MDX handle.
+        level_cols: dict[str, set[str]] = {}
+        for dim, _h, lvl in valid_dim_hier_levels:
+            level_cols.setdefault(dim, set()).add(lvl)
+        for h in sm.get("hierarchies", []):
+            display_col = h.get("display_column")
+            if isinstance(display_col, str):
+                level_cols.setdefault(h.get("source_dataset", "").strip().lower(), set()).add(display_col.lower())
+        valid_dim_attrs: set[tuple[str, str]] = {
+            (t, col)
+            for t in valid_dims
+            for col in table_col_map.get(t, set())
+            if col not in level_cols.get(t, set())
+        }
+
         _mdx_ref_re = re.compile(
             r"\[\s*([^\]]+?)\s*\]\s*\.\s*\[\s*([^\]]+?)\s*\](?:\s*\.\s*\[\s*([^\]]+?)\s*\])?",
             re.IGNORECASE,
@@ -1168,6 +1284,10 @@ def validate_sm_recommendation(
                         seen.add(msg)
                         errors.append(msg)
                     continue
+                # [dim].[attribute] / [dim].[attribute].[member] — attribute
+                # members are data values, so they cannot be checked here.
+                if (part1.lower(), part2.lower()) in valid_dim_attrs:
+                    continue
                 if part3:
                     if (part1.lower(), part2.lower(), part3.lower()) not in valid_dim_hier_levels:
                         msg = (
@@ -1183,7 +1303,9 @@ def validate_sm_recommendation(
                         msg = (
                             f"SM '{sm_name}': calculated measure '{measure.get('name', '?')}' "
                             f"references unknown hierarchy '{part2}' on dimension '{part1}'. "
-                            f"Use hierarchy names defined in the SM design."
+                            f"Use hierarchy names defined in the SM design, or a column of "
+                            f"'{part1}' that is not a hierarchy level (dimension attribute, "
+                            f"e.g. [{part1}].[<column>].CurrentMember)."
                         )
                         if msg not in seen:
                             seen.add(msg)
@@ -1427,6 +1549,7 @@ def infer_schema_metadata(
     model: str | None = None,
     max_tokens: int | None = None,
     trace_path: str | None = None,
+    use_cache: bool | None = None,
 ) -> dict[str, Any]:
     """Infer PK/FK, table types, relationships, and patterns from Kyvos metadata via LLM.
 
@@ -1443,10 +1566,13 @@ def infer_schema_metadata(
         schema_name: Schema selected in Kyvos.
         llm_provider: "anthropic" or "azure_openai". Defaults to ``LLM_PROVIDER`` env var.
         api_key: Optional API key; otherwise read from env vars.
-        model: Optional model/deployment override.
-        max_tokens: Optional token limit; defaults to 32768.
+        model: Optional model/deployment override. ``LLM_SCHEMA_MODEL`` may be
+            used to select a faster model for this classification-only call.
+        max_tokens: Optional token limit; defaults to 8192.
         trace_path: Optional path to write a debug trace file containing the raw
             metadata, LLM prompts, raw response, and parsed result.
+        use_cache: Override for the deterministic response cache. Defaults to
+            ``KYVOS_LLM_CACHE_ENABLED`` (enabled unless explicitly disabled).
 
     Returns:
         Dict matching the schema_summary table/relationship/pattern structure
@@ -1458,17 +1584,36 @@ def infer_schema_metadata(
         model = os.environ.get("LLM_MODEL", "") or os.environ.get("ANTHROPIC_MODEL", "")
         if not model:
             model = "claude-sonnet-4-20250514"
+    model = os.environ.get("LLM_SCHEMA_MODEL") or model
 
     if max_tokens is None:
-        env_max = os.environ.get("LLM_MAX_TOKENS", "")
-        max_tokens = int(env_max) if env_max else 32768
+        env_max = os.environ.get("LLM_SCHEMA_MAX_TOKENS") or os.environ.get("LLM_MAX_TOKENS", "")
+        max_tokens = int(env_max) if env_max else 8192
 
     system_prompt = get_system_prompt("infer_schema_from_kyvos_metadata")
+    # Keep the LLM context minimal: the model only needs names and simplified
+    # types, not Kyvos' original type/subtype/precision/scale fields. Compact
+    # JSON also removes thousands of whitespace-only characters.
+    prompt_metadata = {
+        "connection_name": raw_metadata.get("connection_name", connection_name),
+        "database_name": raw_metadata.get("database_name", database_name),
+        "schema_name": raw_metadata.get("schema_name", schema_name),
+        "tables": [
+            {
+                "name": t.get("name"),
+                "columns": [
+                    {"name": c.get("name"), "data_type": c.get("data_type")}
+                    for c in t.get("columns", [])
+                ],
+            }
+            for t in raw_metadata.get("tables", [])
+        ],
+    }
     user_message = get_user_prompt("infer_schema_from_kyvos_metadata").format(
         connection_name=connection_name,
         database_name=database_name,
         schema_name=schema_name,
-        raw_metadata=json.dumps(raw_metadata, indent=2),
+        raw_metadata=json.dumps(prompt_metadata, separators=(",", ":")),
     )
 
     from kyvos_sm_skills.pipeline_tracer import get_tracer
@@ -1480,6 +1625,14 @@ def infer_schema_metadata(
             f"Connection: {connection_name}  Database: {database_name}  "
             f"Schema: {schema_name}  Tables: {len(raw_metadata.get('tables', []))}"
         )
+
+    cache_parts = (
+        provider,
+        model,
+        max_tokens,
+        system_prompt,
+        user_message,
+    )
 
     if provider == "azure_openai":
         resolved_key = api_key or os.environ.get("AZURE_OPENAI_API_KEY", "") or os.environ.get("LLM_API_KEY", "")
@@ -1498,28 +1651,40 @@ def infer_schema_metadata(
         )
         api_version = os.environ.get("AZURE_API_VERSION", "2024-12-01-preview")
 
-        response_text = _call_azure_openai(
-            system_prompt=system_prompt,
-            user_message=user_message,
-            api_key=resolved_key,
-            endpoint=endpoint,
-            deployment_name=deployment,
-            api_version=api_version,
-            max_tokens=max_tokens,
-        )
+        def _call_llm(msg: str) -> str:
+            return _call_azure_openai(
+                system_prompt=system_prompt,
+                user_message=msg,
+                api_key=resolved_key,
+                endpoint=endpoint,
+                deployment_name=deployment,
+                api_version=api_version,
+                max_tokens=max_tokens,
+            )
     else:
         resolved_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         if not resolved_key:
             raise ValueError(
                 "Anthropic API key required. Set ANTHROPIC_API_KEY env var or pass api_key parameter."
             )
-        response_text = _call_anthropic(
-            system_prompt=system_prompt,
-            user_message=user_message,
-            api_key=resolved_key,
-            model=model,
-            max_tokens=max_tokens,
-        )
+
+        def _call_llm(msg: str) -> str:
+            return _call_anthropic(
+                system_prompt=system_prompt,
+                user_message=msg,
+                api_key=resolved_key,
+                model=model,
+                max_tokens=max_tokens,
+            )
+
+    if _llm_cache_enabled(use_cache):
+        cached = _llm_cache_get("schema_inference", *cache_parts)
+        if cached is not None:
+            if tracer:
+                tracer.note("Schema inference cache hit", "Reusing inferred metadata")
+            return cached
+
+    response_text = _call_llm(user_message)
 
     if tracer:
         tracer.llm_exchange(
@@ -1571,6 +1736,9 @@ def infer_schema_metadata(
             )
         except OSError:
             pass
+
+    if _llm_cache_enabled(use_cache):
+        _llm_cache_set("schema_inference", result, *cache_parts)
 
     return result
 

@@ -16,7 +16,8 @@ pipeline can be reused unchanged.
 
 from __future__ import annotations
 
-import json
+import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from kyvos_sm_skills.llm_designer import infer_schema_metadata
@@ -40,14 +41,30 @@ def _simplify_data_type(col: dict[str, Any]) -> str:
     return base
 
 
-def _fetch_raw_metadata(
+def _env_int(name: str, default: int, *, minimum: int = 1, maximum: int = 32) -> int:
+    """Read a bounded integer worker count from the environment."""
+    try:
+        value = int(os.environ.get(name, "") or default)
+    except ValueError:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def fetch_kyvos_metadata(
     service: Any,
     connection_name: str,
     database_name: str,
     schema_name: str,
     max_tables: int = 500,
+    metadata_workers: int | None = None,
 ) -> dict[str, Any]:
-    """Fetch the raw table/column metadata from Kyvos v2 connection APIs."""
+    """Fetch the raw table/column metadata from Kyvos v2 connection APIs.
+
+    Column metadata is fetched with bounded parallelism. Kyvos exposes one
+    request per table, and each request typically takes several seconds; keeping
+    these sequential adds minutes to larger schemas. ``KYVOS_METADATA_WORKERS``
+    controls the worker count when ``metadata_workers`` is not supplied.
+    """
     tables = service.list_connection_tables(connection_name, database_name, schema_name)
     if len(tables) > max_tables:
         raise ValueError(
@@ -55,11 +72,24 @@ def _fetch_raw_metadata(
             f"(> max_tables={max_tables}); narrow the selection."
         )
 
-    table_metadata: list[dict[str, Any]] = []
-    for table_name in tables:
-        columns = service.get_table_columns(
+    workers = metadata_workers or _env_int("KYVOS_METADATA_WORKERS", 8, maximum=16)
+
+    def _columns_for(table_name: str) -> list[dict[str, Any]]:
+        return service.get_table_columns(
             connection_name, database_name, schema_name, table_name
         )
+
+    # Authenticate once before workers run so concurrent requests do not race
+    # through the session-refresh path. httpx.Client itself is safe to share.
+    if workers > 1 and tables and hasattr(service, "ensure_authenticated"):
+        service.ensure_authenticated()
+        with ThreadPoolExecutor(max_workers=min(workers, len(tables))) as executor:
+            table_columns = list(executor.map(_columns_for, tables))
+    else:
+        table_columns = [_columns_for(table_name) for table_name in tables]
+
+    table_metadata: list[dict[str, Any]] = []
+    for table_name, columns in zip(tables, table_columns):
         table_metadata.append({
             "name": table_name,
             "columns": [
@@ -84,7 +114,11 @@ def _fetch_raw_metadata(
     }
 
 
-def _build_schema_summary(
+# Backward-compatible alias for callers/tests that used the private helper.
+_fetch_raw_metadata = fetch_kyvos_metadata
+
+
+def build_schema_summary(
     raw_metadata: dict[str, Any],
     inferred: dict[str, Any],
 ) -> dict[str, Any]:
@@ -94,6 +128,20 @@ def _build_schema_summary(
 
     inferred_tables = {t["name"].lower(): t for t in inferred.get("tables", [])}
     relationships: list[dict[str, str]] = inferred.get("relationships", [])
+    fk_by_column = {
+        (r.get("from_table", "").lower(), r.get("from_column", "").lower()): r
+        for r in relationships
+    }
+
+    def _inferred_pk_names(table: dict[str, Any]) -> set[str]:
+        names = table.get("primary_keys") or []
+        if table.get("primary_key"):
+            names = [*names, table["primary_key"]]
+        names.extend(
+            c["name"] for c in table.get("columns", [])
+            if c.get("is_pk") and c.get("name")
+        )
+        return {str(name).lower() for name in names}
 
     tables: list[dict[str, Any]] = []
     for raw_table in raw_metadata["tables"]:
@@ -102,12 +150,16 @@ def _build_schema_summary(
 
         raw_columns = raw_table["columns"]
         inferred_columns = {c["name"].lower(): c for c in inferred_table.get("columns", [])}
+        pk_names = _inferred_pk_names(inferred_table)
 
         columns: list[dict[str, Any]] = []
         for raw_col in raw_columns:
             col_name = raw_col["name"]
             inf_col = inferred_columns.get(col_name.lower(), {})
             references = inf_col.get("references", "")
+            rel = fk_by_column.get((table_name.lower(), col_name.lower()))
+            if not references and rel:
+                references = f"{rel.get('to_table')}.{rel.get('to_column')}"
             if references and "." not in references:
                 # LLM may return just a table name; normalise to table.column if we can guess the PK.
                 referenced_table = references
@@ -122,8 +174,8 @@ def _build_schema_summary(
             columns.append({
                 "name": col_name,
                 "data_type": inf_col.get("data_type") or raw_col.get("data_type") or "UNKNOWN",
-                "is_pk": bool(inf_col.get("is_pk", False)),
-                "is_fk": bool(inf_col.get("is_fk", False)),
+                "is_pk": bool(inf_col.get("is_pk", col_name.lower() in pk_names)),
+                "is_fk": bool(inf_col.get("is_fk", rel is not None)),
                 "references": references,
             })
 
@@ -170,6 +222,10 @@ def _build_schema_summary(
     }
 
 
+# Backward-compatible alias for callers/tests that used the private helper.
+_build_schema_summary = build_schema_summary
+
+
 def inspect_schema_from_kyvos(
     config: Any,
     connection_name: str,
@@ -183,6 +239,7 @@ def inspect_schema_from_kyvos(
     max_tokens: int | None = None,
     service: Any = None,
     trace_path: str | None = None,
+    metadata_workers: int | None = None,
 ) -> dict[str, Any]:
     """Build a schema_summary by reading metadata from Kyvos APIs + LLM inference.
 
@@ -206,6 +263,7 @@ def inspect_schema_from_kyvos(
         and ``build_spec_from_recommendation``.
     """
     from kyvos_sdk.client import KyvosService
+
     from kyvos_sm_skills.pipeline_tracer import get_tracer
 
     svc = service or KyvosService(config=config)
@@ -224,12 +282,13 @@ def inspect_schema_from_kyvos(
             f"(max_tables={max_tables})",
         )
 
-    raw_metadata = _fetch_raw_metadata(
+    raw_metadata = fetch_kyvos_metadata(
         service=svc,
         connection_name=connection_name,
         database_name=database_name,
         schema_name=schema_name,
         max_tables=max_tables,
+        metadata_workers=metadata_workers,
     )
 
     if tracer:
@@ -251,10 +310,10 @@ def inspect_schema_from_kyvos(
         api_key=api_key,
         model=model,
         max_tokens=max_tokens,
-        trace_path=trace_path,
+        trace_path=trace_path if tracer is None else None,
     )
 
-    schema_summary = _build_schema_summary(raw_metadata, inferred)
+    schema_summary = build_schema_summary(raw_metadata, inferred)
 
     if tracer:
         tracer.json_dump("Schema summary (final)", schema_summary)
