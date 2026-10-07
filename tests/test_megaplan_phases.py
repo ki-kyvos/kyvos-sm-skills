@@ -304,8 +304,8 @@ class TestConnectivitySweep:
         result_tables, _, _ = _connectivity_sweep(tables, rels, measures)
         assert len(result_tables) == 2
 
-    def test_transitive_dimension_connectivity_is_pruned(self):
-        """fact → dim_a → dim_b is not a valid Kyvos measure path."""
+    def test_transitive_dimension_connectivity_is_kept_for_snowflake(self):
+        """fact → dim_a → dim_b is a valid snowflake dimension chain."""
         tables = [
             TableSpec(name="fact", schema_name="public", table_type="fact", columns=[]),
             TableSpec(name="dim_a", schema_name="public", table_type="dimension", columns=[]),
@@ -317,7 +317,7 @@ class TestConnectivitySweep:
         ]
         measures = []
         result_tables, _, _ = _connectivity_sweep(tables, rels, measures)
-        assert {table.name for table in result_tables} == {"fact", "dim_a"}
+        assert {table.name for table in result_tables} == {"fact", "dim_a", "dim_b"}
 
     def test_measures_on_removed_table_are_dropped(self):
         tables = [
@@ -377,26 +377,27 @@ class TestConnectivitySweep:
         assert "fact_a" in table_names
         assert "dim_a" in table_names
 
-    def test_dimension_chain_is_not_a_valid_measure_path(self):
+    def test_dimension_chain_is_a_valid_snowflake_path(self):
+        """Snowflake dimension chains (fact → dim → parent dim) are kept."""
         tables = [
             TableSpec(name="fact_sales", schema_name="public", table_type="fact", columns=[]),
             TableSpec(name="dim_employee", schema_name="public", table_type="dimension", columns=[]),
-            TableSpec(name="sales_targets", schema_name="public", table_type="dimension", columns=[]),
+            TableSpec(name="dim_employee_department", schema_name="public", table_type="dimension", columns=[]),
         ]
         rels = [
             RelationshipSpec(left_dataset="fact_sales", left_column="employee_key",
                              right_dataset="dim_employee", right_column="employee_key",
                              relationship_type="many_to_one"),
-            RelationshipSpec(left_dataset="dim_employee", left_column="employee_key",
-                             right_dataset="sales_targets", right_column="employee_key",
+            RelationshipSpec(left_dataset="dim_employee", left_column="department_key",
+                             right_dataset="dim_employee_department", right_column="department_key",
                              relationship_type="many_to_one"),
         ]
         measures = [
             MeasureSpec(name="sales_amount", expression="amount", source_dataset="fact_sales", aggregation_type="sum"),
         ]
         result_tables, result_rels, _ = _connectivity_sweep(tables, rels, measures)
-        assert {table.name for table in result_tables} == {"fact_sales", "dim_employee"}
-        assert len(result_rels) == 1
+        assert {table.name for table in result_tables} == {"fact_sales", "dim_employee", "dim_employee_department"}
+        assert len(result_rels) == 2
 
     def test_bridge_chain_is_a_valid_measure_path(self):
         tables = [

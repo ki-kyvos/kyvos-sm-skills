@@ -121,6 +121,32 @@ class TestSModelJsonGenerator:
         payload = gen.generate()
         assert payload["specific"]["attrs"]["rawDataConnectionName"] == "MyConn"
 
+    def test_measures_dimension_present_and_first(self):
+        """Kyvos validation fails without the built-in Measures dimension."""
+        gen = SModelJsonGenerator(**_common_kwargs())
+        payload = gen.generate()
+        dims = payload["specific"]["smObject"]["dimensions"]
+        assert dims[0]["id"] == "Dim_Measures"
+        assert dims[0]["type"] == "MEASURE"
+        assert dims[0]["uniqueName"] == "Measures"
+        assert dims[0]["name"] == "Measures"
+        assert dims[0]["defaultHierarchyUniqueName"] == "Measures"
+        # exactly one Measures dimension, dataset dims still follow it
+        assert sum(d.get("id") == "Dim_Measures" for d in dims) == 1
+        assert {d["name"] for d in dims[1:]} == {"DimProduct", "DimDate"}
+
+    def test_measures_dimension_structure(self):
+        gen = SModelJsonGenerator(**_common_kwargs())
+        payload = gen.generate()
+        dim = payload["specific"]["smObject"]["dimensions"][0]
+        hiers = dim["hierarchies"]
+        assert len(hiers) == 1
+        assert hiers[0]["uniqueName"] == "Measures"
+        levels = hiers[0]["levels"]
+        assert len(levels) == 1
+        assert levels[0]["uniqueName"] == "MeasuresLevel"
+        assert levels[0]["dataType"] == "Regular"
+
 
 class TestSModelXmlGenerator:
     def test_basic_generation(self):

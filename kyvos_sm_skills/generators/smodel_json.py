@@ -406,6 +406,133 @@ class SModelJsonGenerator:
             "attrs": attrs_json,
         }
 
+    @staticmethod
+    def _build_measures_dimension() -> dict[str, Any]:
+        """Build the built-in Measures dimension (mirrors SModelXmlGenerator).
+
+        Kyvos requires it: without it, semantic model validation fails with
+        "Due to some internal error, Analytical server could not perform
+        semantic model validations" — the fact-dataset validator hits an NPE
+        looking up the Measures dimension. The Kyvos designer adds this
+        dimension automatically on save; the field set below mirrors a
+        UI-saved model exactly.
+        """
+        empty_field = {"fieldName": "", "queryName": "", "queryId": ""}
+        empty_field_pre = {"fieldName": "", "queryName": "", "queryIdPre": "", "queryId": ""}
+        return {
+            "dataField": dict(empty_field),
+            "isAccessible": True,
+            "isGisEnabled": False,
+            "materialize": "",
+            "restrictValues": False,
+            "description": "",
+            "isVisible": True,
+            "scdType": 2,
+            "restrict": False,
+            "type": "MEASURE",
+            "incrementalUpdateProperties": {"processingMode": 1},
+            "predefTimeHierarchy": "",
+            "tags": "",
+            "dimToFactMapping": "ONE_TO_MANY",
+            "uniqueName": "Measures",
+            "name": "Measures",
+            "defaultHierarchyUniqueName": "Measures",
+            "id": "Dim_Measures",
+            "smViewType": "",
+            "calcMembers": [],
+            "dataSources": [],
+            "hierarchies": [{
+                "qualifyMembers": {"type": "ALL_PARENTS", "value": ""},
+                "dataField": dict(empty_field),
+                "isAccessible": True,
+                "hasAll": False,
+                "materialize": "",
+                "description": "",
+                "isVisible": True,
+                "isCustomCalendar": False,
+                "allMemberUniqueName": "",
+                "predefTimeHierarchy": "",
+                "tags": "",
+                "isDefault": False,
+                "hasAlternatePath": False,
+                "uniqueName": "Measures",
+                "hasParentChildRelation": False,
+                "defaultMemberUniqueName": "",
+                "pcLevelCount": -1,
+                "name": "",
+                "smViewType": "",
+                "displayFolder": "",
+                "levels": [{
+                    "isKeyElement": False,
+                    "dataField": dict(empty_field_pre),
+                    "showValues": 0,
+                    "aggregationType": "BOTH",
+                    "dateDataType": "",
+                    "materialize": "",
+                    "dateFormat": "",
+                    "description": "",
+                    "displayFieldSubDataType": "NONE",
+                    "mapLevel": "",
+                    "isDeleted": False,
+                    "subDataType": "",
+                    "geoRole": "",
+                    "processType": "DATA_AND_METADATA",
+                    "formatType": "",
+                    "fieldDataType": "",
+                    "isAccessible": True,
+                    "hideMember": 0,
+                    "dataType": "Regular",
+                    "displayFieldDataType": "",
+                    "mapType": "",
+                    "isAll": False,
+                    "isVisible": True,
+                    "fullyQualifiedName": "",
+                    "parentField": {
+                        "fieldName": "", "dataType": "", "queryName": "", "queryId": "",
+                    },
+                    "tags": "",
+                    "uniqueName": "MeasuresLevel",
+                    "isVisibleConversational": True,
+                    "name": "",
+                    "hasTimeInDateFormat": False,
+                    "displayField": dict(empty_field_pre),
+                    "memberProperties": [],
+                    "properties": [],
+                }],
+            }],
+            "attrs": [{
+                "isKeyElement": False,
+                "dataField": dict(empty_field_pre),
+                "aggregationType": "BOTH",
+                "dateDataType": "",
+                "materialize": "",
+                "dateFormat": "",
+                "description": "",
+                "type": "",
+                "displayFieldSubDataType": "NONE",
+                "mapLevel": "",
+                "isDeleted": False,
+                "subDataType": "",
+                "geoRole": "",
+                "processType": "DATA_AND_METADATA",
+                "formatType": "",
+                "fieldDataType": "",
+                "isAccessible": True,
+                "dataType": "",
+                "displayFieldDataType": "",
+                "isVisible": True,
+                "tags": "",
+                "uniqueName": "Attribute",
+                "isVisibleConversational": True,
+                "name": "Attribute",
+                "hasTimeInDateFormat": False,
+                "displayField": dict(empty_field_pre),
+                "processMetadata": "YES",
+                "memberProperties": [],
+                "displayFolder": "",
+            }],
+        }
+
     def generate(self) -> dict[str, Any]:
         """Generate Simplified JSON payload for semantic model creation.
 
@@ -430,7 +557,7 @@ class SModelJsonGenerator:
         # ------------------------------------------------------------------
         # Build dimensions from dataset columns
         # ------------------------------------------------------------------
-        dimensions_json: list[dict[str, Any]] = []
+        dimensions_json: list[dict[str, Any]] = [self._build_measures_dimension()]
         for ds_name, cols in self.dataset_columns.items():
             # Skip fact tables — they become measure groups, not dimensions
             kyvos_ds_name = self._resolve_kyvos_name(ds_name)
@@ -592,6 +719,25 @@ class SModelJsonGenerator:
 
                 # Resolve dataField.content from the physical Kyvos dataset schema
                 physical_source_column = self._resolve_physical_column_name(kyvos_ds_name, effective_source_column)
+
+                # Defensive fallback: if the resolved column doesn't exist, pick a
+                # real column so the measure doesn't reference a missing field.
+                cols = self._cols_for(kyvos_ds_name) or self._cols_for(ds_name)
+                if cols and not any(
+                    (c.get("name") or "").lower() == (physical_source_column or "").lower()
+                    for c in cols
+                ):
+                    if agg_lower in ("count", "distinct_count"):
+                        pk_cols = [c for c in cols if c.get("isPrimaryKey", False)]
+                        non_fk_cols = [c for c in cols if not c.get("isForeignKey", False)]
+                        fallback_col = (pk_cols or non_fk_cols or cols)[0]
+                        physical_source_column = fallback_col.get("name", physical_source_column)
+                        logger.warning(
+                            "smodel_json_datafield_fallback",
+                            measure=measure_name,
+                            fallback_column=physical_source_column,
+                            dataset=kyvos_ds_name,
+                        )
 
                 measure_obj: dict[str, Any] = {
                     "id": measure_id,

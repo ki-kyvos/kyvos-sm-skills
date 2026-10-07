@@ -140,7 +140,7 @@ class DrdJsonGenerator:
 
         # Re-orient dim→dim relationships (same logic as XML generator)
         relationships = self._orient_dim_relationships(
-            relationships, fact_datasets, semantic_to_kyvos
+            relationships, fact_datasets, semantic_to_kyvos, bridge_datasets
         )
 
         # ------------------------------------------------------------------
@@ -315,15 +315,14 @@ class DrdJsonGenerator:
         return bridges
 
     def _normalize_relationship_type(self, rel_type: str | None) -> str:
+        # Kyvos DRD convention: node1/source is the FK-holding "many" side
+        # and every resolved FK join is labeled ONE_TO_MANY. Only genuine
+        # M:M edges (fact -> bridge) keep MANY_TO_MANY.
         value = (rel_type or "").strip().lower().replace("_", "")
         if value in {"manytomany"}:
             return "MANY_TO_MANY"
         if value in {"onetoone", "onetone"}:
             return "ONE_TO_ONE"
-        if value in {"manytoone"}:
-            return "MANY_TO_ONE"
-        if value in {"onetomany"}:
-            return "ONE_TO_MANY"
         return "ONE_TO_MANY"
 
     def _orient_dim_relationships(
@@ -331,42 +330,69 @@ class DrdJsonGenerator:
         relationships: list[SimpleRel],
         fact_datasets: set[str],
         semantic_to_kyvos: dict[str, str],
+        bridge_datasets: set[str] | None = None,
     ) -> list[SimpleRel]:
-        """Re-orient dim→dim relationships that point INTO a fact-adjacent dimension.
+        """Ensure the FK-holding ("many") side is the left/node1 side.
 
-        Detects: Fact → DimX ← DimY  (wrong: DimY points TO a fact-connected dim)
-        Fixes:   Fact → DimX → DimY  (correct: snowflake chain)
+        Kyvos DRDs put the many side (fact or snowflake child dim) on
+        node1/source and the referenced one side on node2 — displayed as
+        ``fact -> dim`` and ``fact -> dim -> dim``. Relationships declared
+        ``one_to_many`` carry the one side on the left, so swap those so
+        the many side stays first.
+
+        For dim -> dim edges the endpoint closer to a fact (BFS depth over
+        the undirected graph) is kept on node1, so a dim that joins facts
+        directly always precedes a deeper snowflake dim.
         """
-        fact_adjacent_semantic: set[str] = set()
-        fact_adjacent_kyvos: set[str] = set()
-
-        for rel in relationships:
-            left_kyvos = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
-            if left_kyvos in fact_datasets:
-                fact_adjacent_semantic.add(rel.right_dataset)
-                fact_adjacent_kyvos.add(
-                    semantic_to_kyvos.get(rel.right_dataset, rel.right_dataset)
-                )
-
         oriented: list[SimpleRel] = []
         for rel in relationships:
-            left_kyvos = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
-            right_kyvos = semantic_to_kyvos.get(rel.right_dataset, rel.right_dataset)
-
-            is_dim_to_dim = (
-                left_kyvos not in fact_datasets and right_kyvos not in fact_datasets
-            )
-            right_is_fact_adjacent = (
-                rel.right_dataset in fact_adjacent_semantic
-                or right_kyvos in fact_adjacent_kyvos
-            )
-            left_is_not_fact_adjacent = (
-                rel.left_dataset not in fact_adjacent_semantic
-                and left_kyvos not in fact_adjacent_kyvos
-            )
-
-            if is_dim_to_dim and right_is_fact_adjacent and left_is_not_fact_adjacent:
+            raw_type = (rel.relationship_type or "").strip().lower().replace("_", "")
+            if raw_type == "onetomany":
                 oriented.append(
+                    SimpleRel(
+                        left_dataset=rel.right_dataset,
+                        left_column=rel.right_column,
+                        right_dataset=rel.left_dataset,
+                        right_column=rel.left_column,
+                        relationship_type="many_to_one",
+                    )
+                )
+            else:
+                oriented.append(rel)
+
+        bridge_datasets = bridge_datasets or set()
+        adj: dict[str, set[str]] = {}
+        for rel in oriented:
+            left = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
+            right = semantic_to_kyvos.get(rel.right_dataset, rel.right_dataset)
+            adj.setdefault(left, set()).add(right)
+            adj.setdefault(right, set()).add(left)
+        depth: dict[str, int] = {}
+        queue: deque[str] = deque(sorted(n for n in adj if n in fact_datasets))
+        for n in queue:
+            depth[n] = 0
+        while queue:
+            cur = queue.popleft()
+            for nb in adj.get(cur, ()):
+                if nb not in depth:
+                    depth[nb] = depth[cur] + 1
+                    queue.append(nb)
+
+        result: list[SimpleRel] = []
+        for rel in oriented:
+            raw_type = (rel.relationship_type or "").strip().lower().replace("_", "")
+            left = semantic_to_kyvos.get(rel.left_dataset, rel.left_dataset)
+            right = semantic_to_kyvos.get(rel.right_dataset, rel.right_dataset)
+            is_dim_dim = (
+                left not in fact_datasets and right not in fact_datasets
+                and left not in bridge_datasets and right not in bridge_datasets
+            )
+            if (
+                is_dim_dim
+                and raw_type != "manytomany"
+                and depth.get(right, 1 << 30) < depth.get(left, 1 << 30)
+            ):
+                result.append(
                     SimpleRel(
                         left_dataset=rel.right_dataset,
                         left_column=rel.right_column,
@@ -376,9 +402,9 @@ class DrdJsonGenerator:
                     )
                 )
             else:
-                oriented.append(rel)
+                result.append(rel)
 
-        return oriented
+        return result
 
     def _build_node_positions(
         self,

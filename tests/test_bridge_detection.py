@@ -389,6 +389,41 @@ class TestAutoDetection:
         assert "SalesReasons" in result.bridge_names
         assert len(result.bridge_names) == 1
 
+    def test_fact_prefixed_junction_table_kept_as_bridge(self):
+        """factinternetsalesreason in AdventureWorks is a junction table
+        (all-PK, incoming from fact, outgoing to dim). When the LLM classifies
+        it as bridge, that classification is kept despite the "fact" prefix."""
+        tables = [
+            _fact_table("factinternetsales", [_pk_col("salesordernumber"), _pk_col("salesorderlinenumber"), _reg_col("orderqty")]),
+            TableSpec(
+                name="factinternetsalesreason",
+                table_type="bridge",
+                columns=[
+                    _fk_col("salesordernumber", "factinternetsales.salesordernumber"),
+                    _fk_col("salesorderlinenumber", "factinternetsales.salesorderlinenumber"),
+                    _fk_col("salesreasonkey", "dimsalesreason.salesreasonkey"),
+                ],
+            ),
+            _dim_table("dimsalesreason", [_pk_col("salesreasonkey"), _reg_col("salesreasonname")]),
+        ]
+        rels = [
+            # after _normalize_bridge_relationships the edge is: fact → factinternetsalesreason
+            RelationshipSpec(
+                left_dataset="factinternetsales", left_column="salesordernumber",
+                right_dataset="factinternetsalesreason", right_column="salesordernumber",
+                relationship_type="many_to_many",
+            ),
+            RelationshipSpec(
+                left_dataset="factinternetsalesreason", left_column="salesreasonkey",
+                right_dataset="dimsalesreason", right_column="salesreasonkey",
+                relationship_type="many_to_one",
+            ),
+        ]
+        result = detect_bridges(tables=tables, relationships=rels, measures=[])
+        assert "factinternetsalesreason" in result.bridge_names
+        assert "factinternetsalesreason" not in result.fact_names
+        assert "factinternetsalesreason" not in result.reclassified
+
 
 class TestResultStructure:
     def test_summary_string_contains_bridge_names(self):

@@ -313,14 +313,14 @@ class TestBuildHierarchiesParentChild:
         hierarchies = [
             {
                 "name": "Product Category",
-                "levels": ["category", "product_key"],
+                "levels": ["category", "product_name"],
                 "source_dataset": "dim_product",
             }
         ]
         result = _build_hierarchies(hierarchies, wh_map)
         assert len(result) == 1
         assert result[0].is_parent_child is False
-        assert result[0].levels == ["category", "product_key"]
+        assert result[0].levels == ["category", "product_name"]
 
     def test_multiple_parent_child_hierarchies(self):
         """Multiple parent-child hierarchies on different tables should all work."""

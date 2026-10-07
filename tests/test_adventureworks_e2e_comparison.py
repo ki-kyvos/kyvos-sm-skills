@@ -55,6 +55,9 @@ _AW_TABLES = [
             {"name": "productkey", "data_type": "INTEGER", "is_pk": True, "is_fk": False, "references": ""},
             {"name": "productsubcategorykey", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "productcategorykey", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "productname", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "productsubcategoryname", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "productcategoryname", "data_type": "VARCHAR(50)", "is_pk": False, "is_fk": False, "references": ""},
         ],
     },
     {
@@ -79,6 +82,7 @@ _AW_TABLES = [
             {"name": "englishmonthname", "data_type": "VARCHAR(20)", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "calendarquarter", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
             {"name": "calendaryear", "data_type": "INTEGER", "is_pk": False, "is_fk": False, "references": ""},
+            {"name": "fulldatealternatekey", "data_type": "DATE", "is_pk": False, "is_fk": False, "references": ""},
         ],
     },
     {
@@ -143,9 +147,9 @@ _AW_SM_DESIGN = {
                 {"name": "Freight", "source_dataset": "factinternetsales", "aggregation_type": "sum"},
             ],
             "hierarchies": [
-                {"name": "ProductCategory", "levels": ["productkey", "productsubcategorykey", "productcategorykey"], "source_dataset": "dimproduct"},
-                {"name": "CalendarDate", "levels": ["datekey", "weeknumberofyear", "englishmonthname", "calendarquarter", "calendaryear"], "source_dataset": "dimdate"},
-                {"name": "SalesTerritory", "levels": ["salesterritorykey", "salesterritoryregion", "salesterritorycountry", "salesterritorygroup"], "source_dataset": "dimsalesterritory"},
+                {"name": "ProductCategory", "levels": ["productcategoryname", "productsubcategoryname", "productname"], "source_dataset": "dimproduct"},
+                {"name": "CalendarDate", "levels": ["calendaryear", "calendarquarter", "englishmonthname", "fulldatealternatekey"], "source_dataset": "dimdate"},
+                {"name": "SalesTerritory", "levels": ["salesterritorygroup", "salesterritorycountry", "salesterritoryregion"], "source_dataset": "dimsalesterritory"},
             ],
         }
     ],
@@ -195,9 +199,9 @@ _AW_SM_DESIGN_WITH_KPIS = {
                 },
             ],
             "hierarchies": [
-                {"name": "ProductCategory", "levels": ["productkey", "productsubcategorykey", "productcategorykey"], "source_dataset": "dimproduct"},
-                {"name": "CalendarDate", "levels": ["datekey", "weeknumberofyear", "englishmonthname", "calendarquarter", "calendaryear"], "source_dataset": "dimdate"},
-                {"name": "SalesTerritory", "levels": ["salesterritorykey", "salesterritoryregion", "salesterritorycountry", "salesterritorygroup"], "source_dataset": "dimsalesterritory"},
+                {"name": "ProductCategory", "levels": ["productcategoryname", "productsubcategoryname", "productname"], "source_dataset": "dimproduct"},
+                {"name": "CalendarDate", "levels": ["calendaryear", "calendarquarter", "englishmonthname", "fulldatealternatekey"], "source_dataset": "dimdate"},
+                {"name": "SalesTerritory", "levels": ["salesterritorygroup", "salesterritorycountry", "salesterritoryregion"], "source_dataset": "dimsalesterritory"},
             ],
         }
     ],
@@ -227,8 +231,8 @@ sales territory dimensions.
 - dimsalesterritory: Sales territory with group/country/region hierarchy
 
 ## Hierarchy Requirements
-- ProductCategory: productkey → productsubcategorykey → productcategorykey
-- CalendarDate: datekey → weeknumberofyear → englishmonthname → calendarquarter → calendaryear
+- ProductCategory: productname → productsubcategoryname → productcategoryname
+- CalendarDate: fulldatealternatekey → englishmonthname → calendarquarter → calendaryear
 - SalesTerritory: salesterritorykey → salesterritoryregion → salesterritorycountry → salesterritorygroup
 
 ## KPI Requirements
@@ -312,7 +316,7 @@ def _compile_sm_json(smodel, dataset_name_to_id: dict[str, str], dataset_columns
         dataset_columns=dataset_columns,
         fmt=ArtifactFormat.JSON,
     )
-    return json.loads(art.payload)
+    return json.loads(art.payload)["iro"]
 
 
 def _build_spec_and_compile(sm_design: dict, tmp_path):
@@ -372,8 +376,19 @@ def _validate_hierarchy_fields(sm_json: dict):
 
 def _validate_level_fields(sm_json: dict):
     for dim in sm_json["specific"]["smObject"]["dimensions"]:
+        if dim.get("id") == "Dim_Measures":
+            continue  # built-in Measures dimension has its own fixed level structure
         for h in dim["hierarchies"]:
+            # First level must be the mandatory ALL level (fixed export shape,
+            # no bound column — the conformity fields below apply to data levels).
+            assert h["levels"], f"Hierarchy '{h['name']}' has no levels"
+            all_lvl = h["levels"][0]
+            assert all_lvl["name"] == "Hierarchy.ALL", \
+                f"Hierarchy '{h['name']}' first level is '{all_lvl['name']}', expected 'Hierarchy.ALL'"
+            assert all_lvl["isAll"] is True
             for lvl in h["levels"]:
+                if lvl.get("isAll"):
+                    continue
                 assert "dateDataType" in lvl, f"Level '{lvl['name']}' missing dateDataType"
                 assert "dateFormat" in lvl, f"Level '{lvl['name']}' missing dateFormat"
                 assert "format" in lvl, f"Level '{lvl['name']}' missing format"
@@ -455,7 +470,9 @@ class TestFlowAIntentFile:
     def test_compiled_sm_has_correct_table_count(self, tmp_path):
         """Flow A should produce 4 dimensions (one per dim table) and 5 measures."""
         spec, sm_json = _build_spec_and_compile(_AW_SM_DESIGN, tmp_path)
-        dims = sm_json["specific"]["smObject"]["dimensions"]
+        all_dims = sm_json["specific"]["smObject"]["dimensions"]
+        # Exclude the built-in Measures dimension (always present in compiled SM).
+        dims = [d for d in all_dims if d.get("id") != "Dim_Measures"]
         measures = sm_json["specific"]["smObject"]["measures"]["measure"]
         assert len(dims) == 4  # dimproduct, dimcustomer, dimdate, dimsalesterritory
         assert len(measures) == 5  # SalesAmount, OrderQuantity, TotalProductCost, TaxAmt, Freight
@@ -472,7 +489,9 @@ class TestFlowAIntentFile:
         """Flow A with calculated KPIs should compile with MDX expressions."""
         spec, sm_json = _build_spec_and_compile(_AW_SM_DESIGN_WITH_KPIS, tmp_path)
         measures = sm_json["specific"]["smObject"]["measures"]["measure"]
-        calc_measures = [m for m in measures if "expression" in m]
+        # All measures now carry an expression object; calculated measures are
+        # the ones with non-empty expression.content (type is STANDARD).
+        calc_measures = [m for m in measures if m.get("expression", {}).get("content")]
         assert len(calc_measures) == 2  # GrossMargin, MarginPct
         _validate_mdx_expressions(sm_json)
 
@@ -480,7 +499,8 @@ class TestFlowAIntentFile:
         """Calculated measures should have empty summaryFunction and actualSummaryFunction."""
         _, sm_json = _build_spec_and_compile(_AW_SM_DESIGN_WITH_KPIS, tmp_path)
         measures = sm_json["specific"]["smObject"]["measures"]["measure"]
-        calc = [m for m in measures if "expression" in m]
+        calc = [m for m in measures if m.get("expression", {}).get("content")]
+        assert len(calc) == 2
         for m in calc:
             assert m["summaryFunction"] == ""
             assert m["actualSummaryFunction"] == ""

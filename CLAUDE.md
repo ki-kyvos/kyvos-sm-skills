@@ -59,7 +59,7 @@ driver = config.warehouse_driver or get_warehouse_profile(config.warehouse_type)
 from kyvos_xmla_parser.xmla_parser import parse_xmla
 spec = parse_xmla(xmla_text)  # Returns DomainDemoSpec
 
-from kyvos_xmla_parser.pbit_adapter import enrich_spec_from_pbit
+from kyvos_pbit_parser.pbit_adapter import enrich_spec_from_pbit
 with open(pbit_path, "rb") as f:
     spec = enrich_spec_from_pbit(f.read(), filename=pbit_path, skip_conversion=True)
 ```

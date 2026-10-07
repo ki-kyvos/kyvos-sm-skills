@@ -22,14 +22,20 @@ dependencies = ["pydantic>=2.0", "structlog>=24.1.0"]
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-cov", "ruff", "mypy"]
 sdk = ["kyvos-sdk-python>=0.6.0"]
-# Optional: for multi-PBIT deployment workflows
-parser = ["kyvos-xmla-parser>=0.2.0"]
+# Optional: for XMLA/PBIT deployment workflows (parser monorepo >=1.1 splits
+# kyvos_parser_common / kyvos_xmla_parser / kyvos_pbit_parser into separate
+# packages — all three are needed).
+parser = [
+    "kyvos-xmla-parser>=1.1.0",
+    "kyvos-pbit-parser>=1.0.0",
+]
 datagen = ["kyvos-data-gen>=0.2.0"]
 anthropic = ["anthropic>=0.40.0"]
 # All workflow dependencies in one extra
 all = [
     "kyvos-sdk-python>=0.6.0",
-    "kyvos-xmla-parser>=0.2.0",
+    "kyvos-xmla-parser>=1.1.0",
+    "kyvos-pbit-parser>=1.0.0",
     "kyvos-data-gen>=0.2.0",
 ]
 
